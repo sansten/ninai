@@ -10,10 +10,6 @@ ENTERPRISE ONLY - AdmissionController is an enterprise feature.
 raise ImportError(
     "AdmissionController is an enterprise feature. Install the private 'ninai-enterprise' package to use it."
 )
-
-    """Result of an admission control decision."""
-
-    def __init__(
         self,
         *,
         admitted: bool,

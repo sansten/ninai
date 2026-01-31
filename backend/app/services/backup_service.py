@@ -10,10 +10,6 @@ ENTERPRISE ONLY - BackupService is an enterprise feature.
 raise ImportError(
     "BackupService is an enterprise feature. Install the private 'ninai-enterprise' package to use it."
 )
-
-    """Service for creating and managing memory snapshots."""
-
-    def __init__(self, db: AsyncSession):
         self.db = db
         self.audit = AuditService(db)
 
