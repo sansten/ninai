@@ -1,0 +1,38 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ninai-backend-sa
+  labels:
+    app: ninai
+    component: backend
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: ninai-backend-role
+  labels:
+    app: ninai
+rules:
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["get"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: ninai-backend-rolebinding
+  labels:
+    app: ninai
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: ninai-backend-role
+subjects:
+- kind: ServiceAccount
+  name: ninai-backend-sa
+  namespace: default

@@ -1,0 +1,83 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ninai-ingress
+  labels:
+    app: ninai
+  annotations:
+    # NGINX Ingress Controller annotations
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+    
+    # Rate limiting (global - adjust as needed)
+    nginx.ingress.kubernetes.io/limit-rps: "100"
+    nginx.ingress.kubernetes.io/limit-connections: "50"
+    
+    # CORS headers
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "https://ninai.example.com"
+    
+    # TLS/SSL settings
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+spec:
+  ingressClassName: nginx
+  
+  tls:
+  - hosts:
+    - ninai.example.com
+    - api.ninai.example.com
+    secretName: ninai-tls-cert
+  
+  rules:
+  - host: ninai.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: ninai-frontend
+            port:
+              number: 80
+  
+  - host: api.ninai.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: ninai-backend
+            port:
+              number: 8000
+
+---
+# Alternative: Traefik Ingress example
+# apiVersion: traefik.containo.us/v1alpha1
+# kind: IngressRoute
+# metadata:
+#   name: ninai-ingress
+#   labels:
+#     app: ninai
+# spec:
+#   entryPoints:
+#     - websecure
+#   routes:
+#   - kind: Rule
+#     match: Host(`ninai.example.com`)
+#     services:
+#     - name: ninai-frontend
+#       port: 80
+#   - kind: Rule
+#     match: Host(`api.ninai.example.com`)
+#     services:
+#     - name: ninai-backend
+#       port: 8000
+#     middlewares:
+#     - name: rate-limit
+#   tls:
+#     certResolver: letsencrypt

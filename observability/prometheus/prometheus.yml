@@ -1,0 +1,181 @@
+# Prometheus Configuration for NINAI Observability Stack
+# Maps directly to PERFORMANCE_BASELINE.md metrics
+
+global:
+  scrape_interval: 15s              # Default scrape interval
+  evaluation_interval: 15s           # Rule evaluation interval
+  external_labels:
+    monitor: 'ninai-observability'
+    environment: 'local'             # Override per environment
+
+# Alertmanager configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ['localhost:9093']  # AlertManager
+
+# Load rules once and periodically evaluate them
+rule_files:
+  - '/etc/prometheus/alerts.yml'
+
+scrape_configs:
+  # ============================================================================
+  # FASTAPI BACKEND - Main application metrics
+  # ============================================================================
+  - job_name: 'ninai-backend'
+    scrape_interval: 10s              # More frequent for critical metrics
+    scrape_timeout: 5s
+    static_configs:
+      - targets: ['localhost:8000']
+    metrics_path: '/metrics'          # FastAPI Prometheus exporter endpoint
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'backend-primary'
+
+  # ============================================================================
+  # QUEUE OPERATIONS - Queue pause/resume/update metrics
+  # ============================================================================
+  - job_name: 'queue-operations'
+    scrape_interval: 10s
+    static_configs:
+      - targets: ['localhost:8000']
+    metrics_path: '/metrics'
+    metric_relabel_configs:
+      # Only scrape queue-related metrics
+      - source_labels: [__name__]
+        regex: '(queue_.*|operation_queue_.*)'
+        action: keep
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: operation_type
+        replacement: 'queue'
+
+  # ============================================================================
+  # ALERT OPERATIONS - Alert create/disable/auto-create metrics
+  # ============================================================================
+  - job_name: 'alert-operations'
+    scrape_interval: 10s
+    static_configs:
+      - targets: ['localhost:8000']
+    metrics_path: '/metrics'
+    metric_relabel_configs:
+      # Only scrape alert-related metrics
+      - source_labels: [__name__]
+        regex: '(alert_.*|operation_alert_.*)'
+        action: keep
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: operation_type
+        replacement: 'alert'
+
+  # ============================================================================
+  # SNAPSHOT OPERATIONS - Snapshot create/verify/list metrics
+  # ============================================================================
+  - job_name: 'snapshot-operations'
+    scrape_interval: 15s              # Slower interval for I/O heavy operations
+    static_configs:
+      - targets: ['localhost:8000']
+    metrics_path: '/metrics'
+    metric_relabel_configs:
+      # Only scrape snapshot-related metrics
+      - source_labels: [__name__]
+        regex: '(snapshot_.*|operation_snapshot_.*)'
+        action: keep
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: operation_type
+        replacement: 'snapshot'
+
+  # ============================================================================
+  # DATABASE METRICS - PostgreSQL monitoring
+  # ============================================================================
+  - job_name: 'postgres'
+    scrape_interval: 30s              # Database metrics less frequent
+    static_configs:
+      - targets: ['localhost:9187']   # postgres_exporter default port
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'postgres-primary'
+
+  # ============================================================================
+  # REDIS METRICS - Redis cache monitoring
+  # ============================================================================
+  - job_name: 'redis'
+    scrape_interval: 30s
+    static_configs:
+      - targets: ['localhost:9121']   # redis_exporter default port
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'redis-cache'
+
+  # ============================================================================
+  # NODE METRICS - System-level metrics (CPU, Memory, Disk, Network)
+  # ============================================================================
+  - job_name: 'node'
+    scrape_interval: 15s
+    static_configs:
+      - targets: ['localhost:9100']   # node_exporter default port
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'host-primary'
+
+  # ============================================================================
+  # K6 LOAD TEST RESULTS - Performance test metrics
+  # ============================================================================
+  - job_name: 'k6-results'
+    scrape_interval: 30s              # Load test results less frequent
+    static_configs:
+      - targets: ['localhost:8090']   # K6 Prometheus pushgateway
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: test_runner
+        replacement: 'k6-local'
+
+  # ============================================================================
+  # PROMETHEUS SELF-MONITORING
+  # ============================================================================
+  - job_name: 'prometheus'
+    scrape_interval: 15s
+    static_configs:
+      - targets: ['localhost:9090']   # Prometheus itself
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'prometheus-primary'
+
+---
+# ENVIRONMENT-SPECIFIC OVERRIDES
+# ============================================================================
+# For Staging Environment (override global labels in deployment):
+# global:
+#   external_labels:
+#     environment: 'staging'
+#
+# Backend scrape config override:
+# - job_name: 'ninai-backend'
+#   static_configs:
+#     - targets: ['staging-api.ninai.local:8000']
+
+# For Production Environment:
+# global:
+#   external_labels:
+#     environment: 'production'
+#
+# Backend scrape config with service discovery:
+# - job_name: 'ninai-backend'
+#   consul_sd_configs:
+#     - server: 'consul.ninai.local:8500'
+#       datacenter: 'us-east-1'
+#       services: ['ninai-backend']
+#
+# Use Kubernetes service discovery:
+# - job_name: 'ninai-backend'
+#   kubernetes_sd_configs:
+#     - role: pod
+#       namespaces:
+#         names:
+#           - 'ninai'

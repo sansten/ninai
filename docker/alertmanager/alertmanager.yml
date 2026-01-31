@@ -1,0 +1,97 @@
+# AlertManager Configuration
+# Routes and manages alerts from Prometheus
+
+global:
+  resolve_timeout: 5m
+  slack_api_url: ''  # Set your Slack webhook URL here for notifications
+
+# Root routing rules
+route:
+  receiver: 'default'
+  group_by: ['alertname', 'cluster', 'service', 'severity']
+  group_wait: 10s
+  group_interval: 10s
+  repeat_interval: 12h
+  
+  # Routes for specific alert types
+  routes:
+    # Critical alerts get immediate notification
+    - match:
+        severity: critical
+      receiver: 'critical'
+      group_wait: 0s
+      repeat_interval: 1h
+
+    # Warning alerts routed to default
+    - match:
+        severity: warning
+      receiver: 'default'
+      group_wait: 10s
+      repeat_interval: 4h
+
+    # Info alerts with longer repeat
+    - match:
+        severity: info
+      receiver: 'default'
+      group_wait: 30s
+      repeat_interval: 24h
+
+# Receiver configurations
+receivers:
+  # Default receiver (logs to stdout)
+  - name: 'default'
+
+  # Critical alerts receiver (could send to PagerDuty, etc)
+  - name: 'critical'
+
+  # Slack integration example (uncomment and configure)
+  # - name: 'slack'
+  #   slack_configs:
+  #     - channel: '#alerts'
+  #       title: 'Alert: {{ .GroupLabels.alertname }}'
+  #       text: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
+
+  # Email integration example (uncomment and configure)
+  # - name: 'email'
+  #   email_configs:
+  #     - to: 'ops@example.com'
+  #       from: 'alertmanager@example.com'
+  #       smarthost: 'smtp.example.com:587'
+  #       auth_username: 'username'
+  #       auth_password: 'password'
+  #       headers:
+  #         Subject: 'Alert: {{ .GroupLabels.alertname }}'
+
+# Inhibition rules - suppress certain alerts when others are firing
+inhibit_rules:
+  # Don't alert on high error rate if service is down
+  - source_match:
+      severity: 'critical'
+      alertname: 'ServiceDown'
+    target_match:
+      severity: 'warning'
+      component: 'api'
+    equal: ['instance']
+
+  # Don't alert on slow queries if database is down
+  - source_match:
+      severity: 'critical'
+      alertname: 'ServiceDown'
+      component: 'database'
+    target_match:
+      severity: 'warning'
+      alertname: 'SlowDatabaseQueries'
+    equal: ['instance']
+
+  # Don't alert on high memory if service is down
+  - source_match:
+      severity: 'critical'
+      alertname: 'ServiceDown'
+    target_match:
+      severity: 'warning'
+      alertname: 'HighMemoryUsage'
+    equal: ['instance']
+
+# Templates
+templates:
+  - '/etc/alertmanager/templates/*.tmpl'
