@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="650" viewBox="0 0 1100 650">
+  <defs>
+    <style>
+      .h{font:700 18px "Segoe UI",Arial,sans-serif;fill:#111}
+      .t{font:15px "Segoe UI",Arial,sans-serif;fill:#111}
+      .s{font:13px "Segoe UI",Arial,sans-serif;fill:#334155}
+      .box{fill:#fff;stroke:#cbd5e1;stroke-width:2;rx:14;ry:14}
+      .tag{fill:#f8fafc;stroke:#cbd5e1;stroke-width:2;rx:10;ry:10}
+      .arrow{stroke:#334155;stroke-width:2.5;fill:none;marker-end:url(#m)}
+    </style>
+    <marker id="m" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M0,0 L12,6 L0,12 z" fill="#334155"/>
+    </marker>
+  </defs>
+
+  <text x="28" y="42" class="h">Junior developer pattern library (cross-domain)</text>
+  <text x="28" y="68" class="s">Same patterns, different tools and policies.</text>
+
+  <rect x="40" y="110" width="1020" height="120" class="box"/>
+  <text x="60" y="146" class="h">Pattern A: Evidence-first answers</text>
+  <text x="60" y="174" class="t">Retrieve relevant memories → answer with citations/evidence → store outcome</text>
+  <rect x="60" y="190" width="160" height="28" class="tag"/>
+  <text x="74" y="210" class="s">support • nasa</text>
+
+  <rect x="40" y="250" width="1020" height="120" class="box"/>
+  <text x="60" y="286" class="h">Pattern B: Human-in-the-loop approvals</text>
+  <text x="60" y="314" class="t">Plan actions → classify risk → require approval for high-risk tools</text>
+  <rect x="60" y="330" width="210" height="28" class="tag"/>
+  <text x="74" y="350" class="s">banking • aiops • retail</text>
+
+  <rect x="40" y="390" width="1020" height="120" class="box"/>
+  <text x="60" y="426" class="h">Pattern C: Incremental automation</text>
+  <text x="60" y="454" class="t">Start read-only → add write tools behind policy → expand blast radius gradually</text>
+  <rect x="60" y="470" width="210" height="28" class="tag"/>
+  <text x="74" y="490" class="s">all domains</text>
+
+  <rect x="40" y="530" width="1020" height="96" class="box"/>
+  <text x="60" y="566" class="h">Pattern D: Memory hygiene</text>
+  <text x="60" y="594" class="t">TTL + promotion rules + classifications + tenant scoping</text>
+
+  <path d="M860 170 L980 170" class="arrow"/>
+  <text x="790" y="166" class="s">reliability</text>
+
+  <path d="M860 310 L980 310" class="arrow"/>
+  <text x="790" y="306" class="s">safety</text>
+
+  <path d="M860 450 L980 450" class="arrow"/>
+  <text x="790" y="446" class="s">scalability</text>
+</svg>

@@ -1,0 +1,7 @@
+@startuml
+package "Security Measures" {
+  [Encryption Service] --> [Memory Storage]
+  [Audit Logs] --> [Compliance Dashboard]
+  [Access Control] --> [User Authentication]
+}
+@enduml

@@ -1,0 +1,20 @@
+version: "3.9"
+
+services:
+  ocr:
+    build:
+      context: ./docker/ocr
+      dockerfile: Dockerfile
+    container_name: ninai-ocr
+    ports:
+      - "8010:8000"
+    environment:
+      - TESSERACT_LANG=eng
+      - TESSERACT_PSM=3
+    networks:
+      - ninai-network
+
+  backend:
+    environment:
+      - OCR_SERVICE_URL=http://ocr:8000
+      - OCR_SERVICE_TIMEOUT_SECONDS=5

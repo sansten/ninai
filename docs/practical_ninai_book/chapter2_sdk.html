@@ -1,0 +1,303 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Chapter 2 — Ninai Python SDK</title>
+  <link rel="stylesheet" href="assets/book.css">
+</head>
+<body>
+  <header class="book">
+    <div class="kicker">Practical Ninai - Chapter 2</div>
+    <h1>Ninai Python SDK</h1>
+    <p class="lead">This chapter teaches the Ninai Python SDK as a production client: authentication, resources, error handling, memory hygiene, and practical usage patterns. Examples align to the SDK in <code>sdk/python/ninai</code>.</p>
+  </header>
+
+  <nav class="toc no-print" aria-label="Chapter contents">
+    <strong>In this chapter</strong>
+    <ul>
+      <li><a href="#install">Install and configure</a></li>
+      <li><a href="#auth">Authentication</a></li>
+      <li><a href="#client">NinaiClient mental model</a></li>
+      <li><a href="#resources">Resources and response models</a></li>
+      <li><a href="#memories">Memories: create, list, update, delete</a></li>
+      <li><a href="#search">Search patterns</a></li>
+      <li><a href="#attachments">Attachments (multimodal)</a></li>
+      <li><a href="#errors">Errors, rate limits, and retries</a></li>
+      <li><a href="#governance">Scopes, classifications, and hygiene</a></li>
+      <li><a href="#recipes">Recipes you will reuse</a></li>
+    </ul>
+  </nav>
+
+  <h2 id="install">Install and configure</h2>
+  <p>Install from PyPI:</p>
+  <pre><code>pip install ninai</code></pre>
+
+  <p>Or install from this repository (editable) so you can iterate on the SDK:</p>
+  <pre><code># from repo root
+pip install -e ./sdk/python</code></pre>
+
+  <p>Environment variables commonly used in development:</p>
+  <ul>
+    <li><code>NINAI_API_URL</code> (often <code>http://localhost:8000/api/v1</code>)</li>
+    <li><code>NINAI_API_KEY</code></li>
+    <li><code>NINAI_ORGANIZATION_ID</code></li>
+  </ul>
+
+  <div class="callout note">
+    <div class="title">Practical setup tip</div>
+    <p>Keep your client construction in one place (a small helper module), so switching environments and auth models is a one-line change.</p>
+  </div>
+
+  <h2 id="auth">Authentication</h2>
+  <p>Use API keys for services and long-lived integrations.</p>
+  <pre><code>from ninai import NinaiClient
+
+client = NinaiClient(api_key="nai_your_api_key")</code></pre>
+
+  <p>For interactive development, you can also authenticate via email/password:</p>
+  <pre><code>from ninai import NinaiClient
+
+client = NinaiClient()
+client.login(email="user@example.com", password="your_password")</code></pre>
+
+  <h3>Organization context</h3>
+  <p>In multi-tenant deployments you will typically scope operations to an organization:</p>
+  <pre><code>client = NinaiClient(
+    api_key="nai_your_key",
+    organization_id="org_abc123",
+)</code></pre>
+
+  <div class="callout warn">
+    <div class="title">Do not hardcode secrets</div>
+    <p>Keep API keys out of notebooks and source control. Prefer env vars, CI secrets, or a secret manager in production.</p>
+  </div>
+
+  <h2 id="client">NinaiClient mental model</h2>
+  <p><code>NinaiClient</code> is a reliable boundary over HTTP APIs. It gives you resource objects (for example <code>client.memories</code>) and predictable exceptions. The big idea is to make the edge deterministic:</p>
+  <ul>
+    <li><strong>Inputs are validated</strong>: avoid “best effort” writes that later corrupt retrieval.</li>
+    <li><strong>Calls are tenant-scoped</strong>: identity and org context flow end-to-end.</li>
+    <li><strong>Outcomes are observable</strong>: you can log responses, exceptions, and latencies.</li>
+  </ul>
+
+  <figure>
+    <img src="assets/diagrams/sdk_client_request_flow.svg" alt="Ninai SDK client request flow">
+    <figcaption>Figure 2-1. An SDK call becomes a tenant-scoped, audited backend operation.</figcaption>
+  </figure>
+
+  <h3>Context manager (recommended)</h3>
+  <pre><code>from ninai import NinaiClient
+
+with NinaiClient(api_key="nai_your_key") as client:
+    memory = client.memories.create(content="Hello world")
+    print(memory.id)</code></pre>
+
+  <h2 id="resources">Resources and response models</h2>
+  <p>Resources are thin wrappers around endpoints. Response bodies are mapped to Python models, which gives you stable fields (and predictable serialization).</p>
+
+  <div class="callout tip">
+    <div class="title">Production-friendly pattern</div>
+    <p>Log identifiers, not full content. For example, log <code>memory.id</code>, tags, and classification rather than the entire memory body.</p>
+  </div>
+
+  <h2 id="memories">Memories: create, list, update, delete</h2>
+  <p>Memories are the core storage unit. Treat them like durable context with governance. The most useful memories are:</p>
+  <ul>
+    <li>structured (tags and entities)</li>
+    <li>scoped (personal/team/org)</li>
+    <li>classified (internal/confidential/restricted)</li>
+    <li>searchable (clear titles and content)</li>
+  </ul>
+
+  <h3>Create</h3>
+  <pre><code>from ninai import NinaiClient
+
+client = NinaiClient(api_key="nai_your_key")
+
+memory = client.memories.create(
+    title="Billing Support Call",
+    content="Customer called about billing issue. Resolved by applying 20% discount.",
+    tags=["support", "billing", "resolved"],
+    entities={"customer_id": "CUST-12345", "resolution": "discount_applied"},
+    scope="organization",
+    classification="internal",
+    source_type="manual",
+)
+
+print(memory.id)</code></pre>
+
+  <h3>Get and list</h3>
+  <pre><code>mem = client.memories.get(memory.id)
+
+page = client.memories.list(
+    scope="organization",
+    tags=["support"],
+    page=1,
+    page_size=20,
+)
+
+print(page.total)
+for m in page.items:
+    print(m.title)</code></pre>
+
+  <h3>Update and delete</h3>
+  <pre><code>updated = client.memories.update(
+    memory_id=memory.id,
+    tags=["support", "billing", "escalated"],
+    classification="confidential",
+    metadata={"ticket_id": "INC-12093"},
+)
+
+client.memories.delete(memory.id)</code></pre>
+
+  <h2 id="search">Search patterns</h2>
+  <p>Search is how Ninai becomes useful quickly. Use semantic search with lightweight filters, and tune your tagging strategy before you tune thresholds.</p>
+  <pre><code>results = client.memories.search(
+    "billing problems with discounts",
+    scope="organization",
+    tags=["billing"],
+    limit=10,
+)
+
+for item in results.items:
+    print(f"[{item.score:.2f}] {item.title}")
+    print(item.content_preview)</code></pre>
+
+  <div class="callout tip">
+    <div class="title">Tagging strategy that scales</div>
+    <p>Use a small controlled vocabulary: domain tags (billing, incident, mission), lifecycle tags (draft, validated), and sensitivity tags (pii, secrets). Avoid one-off tags that never repeat.</p>
+  </div>
+
+  <h2 id="attachments">Attachments (multimodal)</h2>
+  <p>Memories can carry attachments (for example PDFs, screenshots, documents) stored as artifacts. Treat attachments as sensitive by default.</p>
+  <pre><code># Upload a file attachment
+client.memories.upload_attachment(memory_id="mem_...", file_path="./docs/runbook.pdf")
+
+# List attachments
+client.memories.list_attachments("mem_...")
+
+# Download attachment
+client.memories.download_attachment(
+    memory_id="mem_...",
+    attachment_id="att_...",
+    dest_path="./downloaded_runbook.pdf",
+)</code></pre>
+
+  <h2 id="errors">Errors, rate limits, and retries</h2>
+  <p>Production code handles predictable failures explicitly. The SDK exposes structured exceptions such as <code>AuthenticationError</code>, <code>NotFoundError</code>, and <code>RateLimitError</code>.</p>
+  <pre><code>from ninai import NinaiClient, AuthenticationError, NotFoundError, RateLimitError
+
+client = NinaiClient(api_key="nai_your_key")
+
+try:
+    client.memories.get("non_existent_id")
+except NotFoundError:
+    print("Memory not found")
+except AuthenticationError:
+    print("Invalid credentials")
+except RateLimitError as e:
+    print(f"Rate limited. Retry after {e.retry_after} seconds")</code></pre>
+
+  <div class="callout note">
+    <div class="title">Retry guidance</div>
+    <p>Retry reads on transient failures. For writes, prefer an idempotent pattern (server-side dedupe) and never retry blindly if the action is not safe.</p>
+  </div>
+
+  <h2 id="governance">Scopes, classifications, and hygiene</h2>
+  <p>When you build agentic workflows on top of memory, governance is not optional. Two fields drive most safety outcomes:</p>
+  <ul>
+    <li><strong>scope</strong>: who can see it (personal/team/department/organization)</li>
+    <li><strong>classification</strong>: how sensitive it is (public/internal/confidential/restricted)</li>
+  </ul>
+
+  <h3>Memory types</h3>
+  <p>Memory types let you distinguish “facts” from “how-to”. A common, practical mapping:</p>
+  <ul>
+    <li><code>short_term</code>: ephemeral context (expires)</li>
+    <li><code>long_term</code>: durable narrative</li>
+    <li><code>semantic</code>: validated facts/knowledge</li>
+    <li><code>procedural</code>: runbooks and step-by-step instructions</li>
+  </ul>
+
+  <div class="callout warn">
+    <div class="title">The fastest way to create a prompt leak</div>
+    <p>Mixing restricted memories into broad-scope retrieval. Ensure your retrieval layer respects both tenant and classification gates.</p>
+  </div>
+
+  <h2 id="recipes">Recipes you will reuse</h2>
+  <h3>Recipe: ticket → durable knowledge</h3>
+  <ol>
+    <li>Create a memory for the ticket summary.</li>
+    <li>Attach artifacts (logs, screenshots) if needed.</li>
+    <li>Tag with stable categories (service name, error class).</li>
+    <li>Promote to a validated playbook only after review.</li>
+  </ol>
+
+  <h3>Recipe: personal drafts → organizational truth</h3>
+  <p>Use <code>scope="personal"</code> for scratch notes and drafts. Move to <code>scope="organization"</code> only after validation or peer review.</p>
+
+  <div class="footer">
+    <p>Next: Chapter 3 applies the SDK to real junior-developer projects across domains.</p>
+  </div>
+</body>
+</html>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Chapter 2 — Ninai Python SDK</title>
+  <link rel="stylesheet" href="assets/book.css">
+</head>
+<body>
+  <h1>Chapter 2 — Ninai Python SDK</h1>
+
+  <h2>Installation</h2>
+  <pre>python -m pip install ninai-sdk</pre>
+
+  <h2>Core Concepts</h2>
+  <ul>
+    <li><strong>Client</strong>: entry point to services (`NinaiClient`).</li>
+    <li><strong>Agents</strong>: e.g., `GoalPlannerAgent`, `GoalLinkingAgent`, `MetaAgent`.</li>
+    <li><strong>Schemas</strong>: Pydantic models for Goals, Nodes, Links, Run results.</li>
+    <li><strong>ToolInvoker</strong>: adaptors for calling external tools with warnings and provenance.</li>
+  </ul>
+
+  <h2>Quickstart</h2>
+  <pre>
+  from ninai import NinaiClient, GoalPlannerAgent
+
+  client = NinaiClient(api_key="${NINAI_API_KEY}")
+  agent = GoalPlannerAgent(llm_client=client.llm)
+
+  result = await agent.propose_goal(user_request="Prepare Q1 sales report", session_context={})
+  if result.create_goal:
+      print(result.goal.title)
+  </pre>
+
+  <h2>Common SDK Patterns</h2>
+  <h3>Fail-closed usage</h3>
+  <p>All agent entrypoints return deterministic models. If LLMs fail, the agent returns conservative output objects; always check `confidence` and `create_goal` flags.</p>
+
+  <h3>Tool invocation</h3>
+  <pre>
+  from ninai.tools import ToolInvoker
+
+  invoker = ToolInvoker()
+  res = await invoker.invoke("extract_sales_data", params={...})
+  if res.warnings:
+      log.warning(res.warnings)
+  </pre>
+
+  <h2>SDK Reference (short)</h2>
+  <ul>
+    <li>`NinaiClient` &mdash; factory for service clients and llm adapters</li>
+    <li>`GoalPlannerAgent.propose_goal()` &mdash; returns `GoalPlannerAgentOutput`</li>
+    <li>`GoalLinkingAgent.suggest_links()` &mdash; returns `GoalLinkingAgentOutput`</li>
+    <li>`MetaAgent.*` &mdash; review primitives and escalation</li>
+  </ul>
+
+  <p>For full API lists, see the SDK module docstrings and the example notebooks in the `notebooks/` folder.</p>
+</body>
+</html>
