@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="640" viewBox="0 0 1100 640">
+  <defs>
+    <style>
+      .h{font:700 18px "Segoe UI",Arial,sans-serif;fill:#111}
+      .t{font:15px "Segoe UI",Arial,sans-serif;fill:#111}
+      .s{font:13px "Segoe UI",Arial,sans-serif;fill:#334155}
+      .box{fill:#fff;stroke:#cbd5e1;stroke-width:2;rx:14;ry:14}
+      .accent{fill:#fff7ed;stroke:#fb923c;stroke-width:2;rx:14;ry:14}
+      .ok{fill:#ecfeff;stroke:#06b6d4;stroke-width:2;rx:14;ry:14}
+      .arrow{stroke:#334155;stroke-width:2.5;fill:none;marker-end:url(#m)}
+      .dashed{stroke-dasharray:7 6}
+    </style>
+    <marker id="m" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M0,0 L12,6 L0,12 z" fill="#334155"/>
+    </marker>
+  </defs>
+
+  <text x="28" y="42" class="h">AIOps loop: incident → actions → memory → prevention</text>
+  <text x="28" y="68" class="s">Use Ninai as the shared brain for incident context and runbooks.</text>
+
+  <rect x="60" y="120" width="250" height="90" class="box"/>
+  <text x="80" y="154" class="h">Alert / Event</text>
+  <text x="80" y="178" class="s">metrics, logs, traces</text>
+
+  <rect x="360" y="120" width="280" height="90" class="accent"/>
+  <text x="380" y="154" class="h">Triage Goal</text>
+  <text x="380" y="178" class="s">classify severity &amp; scope</text>
+
+  <rect x="690" y="120" width="320" height="90" class="box"/>
+  <text x="710" y="154" class="h">Diagnostics Tools</text>
+  <text x="710" y="178" class="s">queries, dumps, health checks</text>
+
+  <path d="M310 165 L360 165" class="arrow"/>
+  <path d="M640 165 L690 165" class="arrow"/>
+
+  <rect x="150" y="260" width="330" height="110" class="box"/>
+  <text x="170" y="296" class="h">Decision Gate</text>
+  <text x="170" y="322" class="t">auto-remediate?</text>
+  <text x="170" y="348" class="s">policy • blast radius • approvals</text>
+
+  <rect x="540" y="260" width="360" height="110" class="box"/>
+  <text x="560" y="296" class="h">Remediation</text>
+  <text x="560" y="322" class="t">rollback / restart / scale</text>
+  <text x="560" y="348" class="s">idempotent tools + audit</text>
+
+  <path d="M505 220 L320 260" class="arrow"/>
+  <path d="M820 220 L760 260" class="arrow"/>
+  <path d="M480 315 L540 315" class="arrow"/>
+
+  <rect x="60" y="420" width="950" height="90" class="ok"/>
+  <text x="80" y="454" class="h">Write back to memory</text>
+  <text x="80" y="478" class="t">Store incident summary, evidence, decisions, and what worked (with tags + classification)</text>
+
+  <path d="M720 370 L540 420" class="arrow"/>
+  <path d="M320 370 L260 420" class="arrow"/>
+
+  <rect x="60" y="535" width="950" height="80" class="box"/>
+  <text x="80" y="568" class="h">Prevention &amp; improvement</text>
+  <text x="80" y="592" class="s">Create playbooks, alerts, SLO changes; promote durable knowledge after review.</text>
+
+  <path d="M540 510 L540 535" class="arrow"/>
+  <path d="M300 575 C300 520 220 500 180 460" class="arrow dashed"/>
+  <text x="84" y="408" class="s">evidence &amp; audit</text>
+</svg>

@@ -1,0 +1,10 @@
+title: "NinaiOS: Architecting Enterprise Memory and the Practical Path to AGI"
+author: ["Ninai Team"]
+date: "2026-01-25"
+lang: en-US
+metadata-files: []
+from: markdown
+to: html5
+css: []
+include-in-header:
+  - book/assets/mermaid-init.html

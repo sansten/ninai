@@ -1,0 +1,114 @@
+:root{
+  --ink:#111;
+  --muted:#555;
+  --rule:#e5e7eb;
+  --paper:#fff;
+  --code-bg:#0b1020;
+  --code-fg:#e6edf3;
+  --note-bg:#f6f8fa;
+  --warn-bg:#fff7ed;
+  --tip-bg:#ecfeff;
+  --accent:#8b1d1d;
+}
+
+@media print{
+  a{color:inherit;text-decoration:none}
+  .no-print{display:none !important}
+  body{margin:0}
+}
+
+body{
+  background:var(--paper);
+  color:var(--ink);
+  font-family: Georgia, Cambria, "Times New Roman", Times, serif;
+  line-height:1.55;
+  max-width: 980px;
+  margin: 32px auto;
+  padding: 0 18px;
+}
+
+header.book{
+  border-bottom:2px solid var(--rule);
+  margin-bottom:24px;
+  padding-bottom:12px;
+}
+
+header.book .kicker{
+  color:var(--muted);
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  font-size:12px;
+}
+
+h1,h2,h3,h4{
+  font-family: "Segoe UI", system-ui, -apple-system, Arial, sans-serif;
+  line-height:1.2;
+}
+
+h1{font-size:34px;margin:0 0 6px}
+h2{font-size:24px;margin:32px 0 10px}
+h3{font-size:18px;margin:22px 0 8px}
+
+nav.toc{
+  border:1px solid var(--rule);
+  padding:14px 16px;
+  border-radius:10px;
+  background:#fafafa;
+}
+
+nav.toc ul{margin:10px 0 0; padding-left: 18px}
+
+p.lead{font-size:18px;color:#222}
+
+code, pre, kbd{
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
+pre{
+  background:var(--code-bg);
+  color:var(--code-fg);
+  padding:14px 14px;
+  border-radius:10px;
+  overflow:auto;
+}
+
+pre code{color:inherit}
+
+blockquote{
+  border-left:4px solid var(--accent);
+  margin:16px 0;
+  padding:6px 14px;
+  color:#1f2937;
+  background:#fff;
+}
+
+.callout{
+  border:1px solid var(--rule);
+  border-radius:12px;
+  padding:12px 14px;
+  margin:14px 0;
+}
+
+.callout.note{background:var(--note-bg)}
+.callout.warn{background:var(--warn-bg)}
+.callout.tip{background:var(--tip-bg)}
+
+.callout .title{
+  font-family: "Segoe UI", system-ui, -apple-system, Arial, sans-serif;
+  font-weight:700;
+  margin-bottom:6px;
+}
+
+figure{margin:18px 0}
+figure img{max-width:100%; height:auto; border:1px solid var(--rule); border-radius:10px; background:#fff}
+figcaption{color:var(--muted); font-size:13px; margin-top:6px}
+
+hr{border:0;border-top:1px solid var(--rule); margin:26px 0}
+
+.footer{
+  color:var(--muted);
+  border-top:1px solid var(--rule);
+  margin-top:36px;
+  padding-top:12px;
+  font-size:13px;
+}

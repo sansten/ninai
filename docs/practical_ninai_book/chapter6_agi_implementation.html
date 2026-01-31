@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Chapter 6 — AGI Implementation in Ninai</title>
+  <link rel="stylesheet" href="assets/book.css">
+</head>
+<body>
+  <header class="book">
+    <div class="kicker">Practical Ninai - Chapter 6</div>
+    <h1>AGI Implementation in Ninai</h1>
+    <p class="lead">This chapter explains how Ninai implements “AGI primitives” as practical, testable software: the cognitive loop, goals, memory, tool governance, simulation, self-model reliability, and human-in-the-loop supervision. The focus is implementation architecture and build steps—not hype.</p>
+  </header>
+
+  <nav class="toc no-print" aria-label="Chapter contents">
+    <strong>In this chapter</strong>
+    <ul>
+      <li><a href="#definition">What we mean by “AGI” here</a></li>
+      <li><a href="#diagram">Reference architecture</a></li>
+      <li><a href="#primitives">Core primitives and how they work</a></li>
+      <li><a href="#safety">Safety model: fail-closed boundaries</a></li>
+      <li><a href="#build-order">Practical build order (from MVP → production)</a></li>
+      <li><a href="#testing">Testing and evaluation strategy</a></li>
+      <li><a href="#anti-patterns">Common anti-patterns</a></li>
+    </ul>
+  </nav>
+
+  <h2 id="definition">What we mean by “AGI” here</h2>
+  <p>In this repo, “AGI features” means an <strong>agentic system</strong> with the following properties:</p>
+  <ul>
+    <li><strong>Goals</strong>: a durable representation of intent that can outlive a single chat or API request.</li>
+    <li><strong>Memory</strong>: durable, searchable context (with scopes and security).</li>
+    <li><strong>Tools</strong>: real actions and data sources with strict permissions and auditing.</li>
+    <li><strong>Reasoning loop</strong>: plan → execute → critique → iterate, with bounded iterations.</li>
+    <li><strong>Evidence & evaluation</strong>: decisions should be backed by evidence and produce artifacts humans can audit.</li>
+    <li><strong>Supervision</strong>: risky transitions/actions are gated by policy and (optionally) humans.</li>
+  </ul>
+
+  <div class="callout warn">
+    <div class="title">Important: “AGI” is not “unbounded autonomy”</div>
+    <p>The safest production stance is <strong>narrow autonomy</strong> with explicit policies and review gates. Ninai’s implementation patterns are designed to make unsafe behavior hard by default.</p>
+  </div>
+
+  <h2 id="diagram">Reference architecture</h2>
+  <figure>
+    <img src="assets/diagrams/agi_reference_architecture.svg" alt="AGI reference architecture">
+    <figcaption>Figure 6-1. How Ninai’s AGI primitives connect: goals + memory + cognitive loop + simulation + policy + supervision.</figcaption>
+  </figure>
+
+  <h2 id="primitives">Core primitives and how they work</h2>
+
+  <h3>1) Memory: durable context with scope + classification</h3>
+  <p>Memory is the system’s “long-lived context layer.” The non-negotiables:</p>
+  <ul>
+    <li><strong>Scope</strong> (personal/team/org) controls visibility.</li>
+    <li><strong>Classification</strong> (internal/confidential/restricted) controls how tools and linking behave.</li>
+    <li><strong>Tags/entities</strong> are the retrieval contract. Treat them like an API.</li>
+  </ul>
+  <p>Implementation pattern:</p>
+  <ol>
+    <li>Ingest events into short-term memories.</li>
+    <li>Summarize/aggregate into a stable, human-readable memory record.</li>
+    <li>Promote only when quality and policy checks pass.</li>
+  </ol>
+
+  <h3>2) GoalGraph: intent decomposition and progress tracking</h3>
+  <p>Goals represent durable intent. Nodes represent tasks/subgoals/milestones. Edges represent dependencies and blocking relationships.</p>
+  <ul>
+    <li><strong>Why it matters</strong>: without goals, agents become “single-turn autocompleters.”</li>
+    <li><strong>What to persist</strong>: goal status, node statuses, evidence links (memories), and activity logs.</li>
+  </ul>
+
+  <h3>3) Cognitive loop: Planner → Executor → Critic</h3>
+  <p>The cognitive loop is a bounded iteration system that produces artifacts:</p>
+  <ul>
+    <li><strong>Planner</strong>: proposes steps and required tools.</li>
+    <li><strong>Executor</strong>: invokes tools through a policy boundary and persists tool call logs.</li>
+    <li><strong>Critic</strong>: evaluates whether results meet the objective and whether evidence is sufficient.</li>
+  </ul>
+
+  <div class="callout note">
+    <div class="title">Why a critic exists</div>
+    <p>In production, the critic is where you enforce “needs evidence” and “policy violation” outcomes. This is the key to preventing plausible but wrong outputs from silently shipping.</p>
+  </div>
+
+  <h3>4) Tool governance: PolicyGuard + ToolInvoker</h3>
+  <p>Tools are where agents become dangerous. Ninai’s core design is: <strong>no tool call without authorization</strong>.</p>
+  <ul>
+    <li><strong>PolicyGuard</strong>: checks permissions, scope constraints, classification/clearance, and (optionally) justification.</li>
+    <li><strong>ToolInvoker</strong>: persists safe tool-call summaries and executes the tool via a registry.</li>
+  </ul>
+
+  <h3>5) Simulation: deterministic risk signals</h3>
+  <p>Simulation is a lightweight, non-LLM safety layer. It answers: “If we do this, what could go wrong?” Examples:</p>
+  <ul>
+    <li><strong>Tool failure risk</strong>: avoid plans that depend on unreliable tools.</li>
+    <li><strong>Evidence strength</strong>: if evidence is weak, return <code>needs_evidence</code>.</li>
+    <li><strong>Promotion risk</strong>: warn when promoting sensitive content into durable memory.</li>
+  </ul>
+
+  <h3>6) SelfModel: reliability-aware behavior</h3>
+  <p>SelfModel is where the system learns from its own operations:</p>
+  <ul>
+    <li>Track per-tool success rates.</li>
+    <li>Use that data to adjust policy (e.g., require justification for low-reliability tools).</li>
+    <li>Use it to rank plan alternatives (prefer reliable tool chains).</li>
+  </ul>
+
+  <h3>7) Supervision: human-in-the-loop review where it matters</h3>
+  <p>The practical supervision pattern is:</p>
+  <ol>
+    <li>Agent proposes an action (or goal status change).</li>
+    <li>System attaches evidence and a risk assessment.</li>
+    <li>Human approves/rejects for high-impact decisions.</li>
+  </ol>
+  <p>This is especially important for:</p>
+  <ul>
+    <li>Cross-scope memory linking</li>
+    <li>Transitions like “completed” or “abandoned”</li>
+    <li>High-impact tools (money movement, account changes, destructive actions)</li>
+  </ul>
+
+  <h2 id="safety">Safety model: fail-closed boundaries</h2>
+  <p>Ninai’s safe default is <strong>fail-closed</strong> for risky operations. That means:</p>
+  <ul>
+    <li>If a permission check fails: deny.</li>
+    <li>If evidence is missing: return <code>needs_evidence</code> rather than “pass.”</li>
+    <li>If tool invocation is risky: require justification and/or human approval.</li>
+  </ul>
+
+  <div class="callout tip">
+    <div class="title">Design principle: investigation is cheap, enforcement is expensive</div>
+    <p>Automate read-only investigation as much as possible, but gate enforcement. This pattern works across banking, NASA-style mission workflows, and customer support.</p>
+  </div>
+
+  <h2 id="build-order">Practical build order (from MVP → production)</h2>
+  <ol>
+    <li><strong>Memory + retrieval MVP</strong>: store domain memories with tags/entities; validate with “gold queries.”</li>
+    <li><strong>Tool registry MVP</strong>: add one read-only tool; wrap it with PolicyGuard; log calls.</li>
+    <li><strong>Bounded cognitive loop</strong>: planner/executor/critic with max iterations; persist iterations.</li>
+    <li><strong>Goals</strong>: create goals/nodes; link evidence memories; compute progress.</li>
+    <li><strong>Simulation</strong>: add deterministic checks that can veto or downgrade confidence.</li>
+    <li><strong>Supervision gates</strong>: human approval for high-impact transitions and actions.</li>
+    <li><strong>Evaluation</strong>: track outcomes and regressions (search quality, false positives, reopen rate).</li>
+  </ol>
+
+  <h2 id="testing">Testing and evaluation strategy</h2>
+  <ul>
+    <li><strong>Unit tests</strong> for policy logic (permissions, justification, scope/classification rules).</li>
+    <li><strong>Integration tests</strong> that run a short cognitive loop and assert persisted artifacts exist.</li>
+    <li><strong>Regression tests</strong> for retrieval quality via a curated dataset of queries.</li>
+  </ul>
+
+  <h2 id="anti-patterns">Common anti-patterns</h2>
+  <ul>
+    <li><strong>“LLM everywhere”</strong>: use deterministic checks for safety and reliability.</li>
+    <li><strong>No audit trail</strong>: if humans can’t replay decisions, the system won’t survive incidents.</li>
+    <li><strong>Unscoped memory</strong>: personal/team/org scopes must be explicit to prevent leakage.</li>
+    <li><strong>Auto-promote sensitive content</strong>: promotion needs risk assessment and policy enforcement.</li>
+  </ul>
+
+  <div class="footer">
+    <p>Next: revisit the case studies in Chapter 3 and apply these primitives systematically.</p>
+  </div>
+</body>
+</html>
