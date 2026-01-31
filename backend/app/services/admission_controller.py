@@ -1,21 +1,16 @@
 """Admission controller service for resource quota enforcement.
 
-Manages admission decisions based on resource budgets, enforces quotas,
-and implements graceful degradation when budgets are exhausted.
+The implementation lives in the private `ninai-enterprise` repo/package.
+This stub remains only to make accidental imports fail loudly.
+
+ENTERPRISE ONLY - AdmissionController is an enterprise feature.
 """
 
-from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+raise ImportError(
+    "AdmissionController is an enterprise feature. Install the private 'ninai-enterprise' package to use it."
+)
 
-from sqlalchemy import select, and_
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from app.models.resource_budget import ResourceBudget, BudgetPeriod
-from app.services.audit_service import AuditService
-
-
-class AdmissionDecision:
     """Result of an admission control decision."""
 
     def __init__(

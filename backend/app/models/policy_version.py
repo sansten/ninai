@@ -1,42 +1,16 @@
 """Policy version model for validation rules and access control.
 
-Supports versioned policies with staged rollouts, canary deployments,
-and rollback capabilities for safe policy evolution.
+The implementation lives in the private `ninai-enterprise` repo/package.
+This stub remains only to make accidental imports fail loudly.
+
+ENTERPRISE ONLY - PolicyVersion is an enterprise feature.
 """
 
-from __future__ import annotations
 
-from datetime import datetime, timezone
-from enum import Enum as PyEnum
+raise ImportError(
+    "PolicyVersion is an enterprise feature. Install the private 'ninai-enterprise' package to use it."
+)
 
-from sqlalchemy import Column, DateTime, Integer, String, Text, JSON, Boolean, Float
-from sqlalchemy.sql import func
-
-from app.models.base import Base, UUIDMixin, TimestampMixin, TenantMixin
-
-
-class PolicyType(PyEnum):
-    """Policy type enum."""
-
-    ACCESS_CONTROL = "access_control"  # RBAC/ABAC rules
-    VALIDATION = "validation"  # Input/output validation
-    RATE_LIMIT = "rate_limit"  # Rate limiting rules
-    SAFETY = "safety"  # Content safety/moderation
-    ROUTING = "routing"  # Agent routing rules
-
-
-class RolloutStatus(PyEnum):
-    """Rollout status enum."""
-
-    DRAFT = "draft"  # Not yet deployed
-    CANARY = "canary"  # Deployed to canary group
-    STAGED = "staged"  # Deployed to percentage of users
-    ACTIVE = "active"  # Fully deployed
-    SUPERSEDED = "superseded"  # Replaced by newer version
-    ROLLED_BACK = "rolled_back"  # Rolled back due to issues
-
-
-class PolicyVersion(Base, UUIDMixin, TimestampMixin, TenantMixin):
     """Versioned policy with staged rollout support."""
 
     __tablename__ = "policy_versions"

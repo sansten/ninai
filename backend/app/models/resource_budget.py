@@ -1,29 +1,16 @@
 """Resource budget model for tenant quota tracking and admission control.
 
-Tracks token consumption, storage usage, and latency budgets per tenant.
-Enables admission control and graceful degradation when budgets are exhausted.
+The implementation lives in the private `ninai-enterprise` repo/package.
+This stub remains only to make accidental imports fail loudly.
+
+ENTERPRISE ONLY - ResourceBudget is an enterprise feature.
 """
 
-from __future__ import annotations
 
-from datetime import datetime, timezone
-from enum import Enum as PyEnum
+raise ImportError(
+    "ResourceBudget is an enterprise feature. Install the private 'ninai-enterprise' package to use it."
+)
 
-from sqlalchemy import Column, DateTime, Integer, String, Boolean, BigInteger, Float
-from sqlalchemy.sql import func
-
-from app.models.base import Base, UUIDMixin, TimestampMixin, TenantMixin
-
-
-class BudgetPeriod(PyEnum):
-    """Budget tracking period."""
-
-    HOURLY = "hourly"
-    DAILY = "daily"
-    MONTHLY = "monthly"
-
-
-class ResourceBudget(Base, UUIDMixin, TimestampMixin, TenantMixin):
     """Resource budget tracking for tenant quotas and admission control."""
 
     __tablename__ = "resource_budgets"

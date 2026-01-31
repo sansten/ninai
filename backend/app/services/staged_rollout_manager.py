@@ -1,22 +1,16 @@
 """Staged rollout manager for safe policy deployment.
 
-Manages canary deployments, gradual rollouts, and automatic rollbacks
-based on error rates and success metrics.
+The implementation lives in the private `ninai-enterprise` repo/package.
+This stub remains only to make accidental imports fail loudly.
+
+ENTERPRISE ONLY - StagedRolloutManager is an enterprise feature.
 """
 
-from __future__ import annotations
 
-from datetime import datetime, timezone
-from uuid import uuid4
+raise ImportError(
+    "StagedRolloutManager is an enterprise feature. Install the private 'ninai-enterprise' package to use it."
+)
 
-from sqlalchemy import select, and_, or_, func, desc
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from app.models.policy_version import PolicyVersion, PolicyType, RolloutStatus
-from app.services.audit_service import AuditService
-
-
-class StagedRolloutManager:
     """Manager for staged policy rollouts with canary deployments."""
 
     def __init__(self, db: AsyncSession):

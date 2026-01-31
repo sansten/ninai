@@ -1,26 +1,16 @@
 """Backup service for creating and managing memory snapshots.
 
-Provides point-in-time snapshots of memory state with:
-- Full and incremental backups
-- Compression and encryption
-- Integrity verification
-- Retention management
+The implementation lives in the private `ninai-enterprise` repo/package.
+This stub remains only to make accidental imports fail loudly.
+
+ENTERPRISE ONLY - BackupService is an enterprise feature.
 """
 
-from __future__ import annotations
 
-import hashlib
-from datetime import datetime, timedelta, timezone
-from uuid import uuid4
+raise ImportError(
+    "BackupService is an enterprise feature. Install the private 'ninai-enterprise' package to use it."
+)
 
-from sqlalchemy import select, and_, or_, desc, func
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from app.models.memory_snapshot import MemorySnapshot, SnapshotStatus, SnapshotType
-from app.services.audit_service import AuditService
-
-
-class BackupService:
     """Service for creating and managing memory snapshots."""
 
     def __init__(self, db: AsyncSession):
