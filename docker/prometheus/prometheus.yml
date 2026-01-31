@@ -1,0 +1,52 @@
+# Prometheus Configuration
+# Scrapes metrics from the Ninai application and other services
+
+global:
+  scrape_interval: 15s      # Scrape metrics every 15 seconds
+  evaluation_interval: 15s  # Evaluate rules every 15 seconds
+  external_labels:
+    monitor: 'ninai-monitor'
+
+# Scrape configurations
+scrape_configs:
+  # Ninai Backend Application Metrics
+  - job_name: 'ninai-backend'
+    static_configs:
+      - targets: ['localhost:8000']
+    metrics_path: '/metrics'
+    scrape_interval: 10s    # More frequent scraping for app metrics
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+
+  # PostgreSQL Database (via postgres_exporter)
+  # Requires postgres_exporter to be running on localhost:9187
+  - job_name: 'postgres'
+    static_configs:
+      - targets: ['localhost:9187']
+    scrape_interval: 30s
+
+  # Redis Cache (via redis_exporter)
+  # Requires redis_exporter to be running on localhost:9121
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['localhost:9121']
+    scrape_interval: 30s
+
+  # Node Exporter (system metrics)
+  # Requires node_exporter to be running on localhost:9100
+  - job_name: 'node'
+    static_configs:
+      - targets: ['localhost:9100']
+    scrape_interval: 30s
+
+# Alert rules
+rule_files:
+  - '/etc/prometheus/rules.yml'
+
+# AlertManager configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+            - 'localhost:9093'

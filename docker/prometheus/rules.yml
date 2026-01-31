@@ -1,0 +1,156 @@
+# Prometheus Alert Rules
+# Rules for alerting on metric thresholds
+
+groups:
+  - name: application_alerts
+    interval: 15s
+    rules:
+      # High error rate alert
+      - alert: HighErrorRate
+        expr: |
+          (rate(errors_total[5m]) > 0.05)
+        for: 5m
+        labels:
+          severity: warning
+          component: api
+        annotations:
+          summary: "High error rate detected"
+          description: "Error rate is {{ $value | humanize }}% over last 5 minutes"
+
+      # API response time alert
+      - alert: SlowAPIResponse
+        expr: |
+          (histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 1.0)
+        for: 10m
+        labels:
+          severity: warning
+          component: api
+        annotations:
+          summary: "Slow API response times"
+          description: "95th percentile response time is {{ $value | humanize }}s"
+
+      # High memory usage alert
+      - alert: HighMemoryUsage
+        expr: |
+          (process_resident_memory_bytes / 1024 / 1024 / 1024 > 2)
+        for: 5m
+        labels:
+          severity: warning
+          component: resource
+        annotations:
+          summary: "High memory usage detected"
+          description: "Memory usage is {{ $value | humanize }}GB"
+
+      # Database connection pool exhaustion alert
+      - alert: DatabaseConnectionPoolExhaustion
+        expr: |
+          (db_connections_active / 10 > 0.8)
+        for: 5m
+        labels:
+          severity: critical
+          component: database
+        annotations:
+          summary: "Database connection pool nearly exhausted"
+          description: "Active connections: {{ $value | humanize }} (80% of max)"
+
+      # Cache hit rate too low alert
+      - alert: LowCacheHitRate
+        expr: |
+          (rate(cache_hits_total[5m]) / (rate(cache_hits_total[5m]) + rate(cache_misses_total[5m])) < 0.6)
+        for: 10m
+        labels:
+          severity: warning
+          component: cache
+        annotations:
+          summary: "Low cache hit rate"
+          description: "Cache hit rate is {{ $value | humanizePercentage }}"
+
+      # Celery task failure alert
+      - alert: CeleryTaskFailures
+        expr: |
+          (rate(celery_tasks_total{status="failure"}[5m]) > 0.1)
+        for: 5m
+        labels:
+          severity: warning
+          component: celery
+        annotations:
+          summary: "High Celery task failure rate"
+          description: "Failure rate is {{ $value | humanize }} tasks/sec"
+
+      # Rate limiting triggered alert
+      - alert: RateLimitingTriggered
+        expr: |
+          (rate(rate_limit_exceeded_total[5m]) > 0)
+        for: 5m
+        labels:
+          severity: info
+          component: api
+        annotations:
+          summary: "Rate limiting is being triggered"
+          description: "Rate limit exceeded for {{ $labels.endpoint }}"
+
+      # Slow database queries alert
+      - alert: SlowDatabaseQueries
+        expr: |
+          (histogram_quantile(0.95, rate(db_query_duration_seconds_bucket[5m])) > 1.0)
+        for: 10m
+        labels:
+          severity: warning
+          component: database
+        annotations:
+          summary: "Slow database queries detected"
+          description: "95th percentile query time is {{ $value | humanize }}s"
+
+  - name: infrastructure_alerts
+    interval: 15s
+    rules:
+      # Service down alert
+      - alert: ServiceDown
+        expr: |
+          up{job="ninai-backend"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: infrastructure
+        annotations:
+          summary: "Service is down"
+          description: "{{ $labels.instance }} has been down for more than 1 minute"
+
+      # Prometheus scrape failure alert
+      - alert: PrometheusScrapeFailure
+        expr: |
+          up == 0
+        for: 5m
+        labels:
+          severity: warning
+          component: monitoring
+        annotations:
+          summary: "Prometheus scrape failure"
+          description: "Failed to scrape metrics from {{ $labels.instance }}"
+
+  - name: business_alerts
+    interval: 15s
+    rules:
+      # No new users alert (indicates potential signup issues)
+      - alert: NoNewUsersInLastHour
+        expr: |
+          (increase(users_created_total[1h]) == 0)
+        for: 10m
+        labels:
+          severity: info
+          component: business
+        annotations:
+          summary: "No new user signups in the last hour"
+          description: "Check if signup process is broken"
+
+      # Unusual memory creation rate change
+      - alert: UnusualMemoryCreationRate
+        expr: |
+          (rate(memories_created_total[5m]) > 2 * avg_over_time(rate(memories_created_total[5m])[1h:5m]))
+        for: 10m
+        labels:
+          severity: info
+          component: business
+        annotations:
+          summary: "Unusual memory creation rate"
+          description: "Current rate is {{ $value | humanize }} memories/sec (2x normal)"

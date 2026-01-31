@@ -1,0 +1,267 @@
+# AlertManager Configuration for NINAI
+# Routes alerts to appropriate channels based on severity
+
+global:
+  resolve_timeout: 5m
+  slack_api_url: "${SLACK_WEBHOOK_URL}"  # Set via environment variable
+  pagerduty_url: "https://events.pagerduty.com/v2/enqueue"
+
+# Template files for notification formats
+templates:
+  - '/etc/alertmanager/templates/*.tmpl'
+
+route:
+  # Default grouping - wait 30s to batch alerts
+  group_by: ['alertname', 'cluster', 'service']
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 12h
+  receiver: 'default'
+
+  # ============================================================================
+  # CRITICAL SEVERITY - Immediate escalation (PagerDuty + Slack + Email)
+  # ============================================================================
+  routes:
+    - match:
+        severity: critical
+      receiver: 'critical'
+      group_wait: 10s              # Immediate notification
+      group_interval: 1m
+      repeat_interval: 1h
+
+    # ============================================================================
+    # BACKEND DOWN - Critical path (Fire all channels)
+    # ============================================================================
+    - match:
+        alertname: 'BackendDown'
+      receiver: 'critical-backend'
+      group_wait: 10s
+      continue: true               # Also send to critical receiver
+
+    # ============================================================================
+    # DATABASE DOWN - Critical path
+    # ============================================================================
+    - match:
+        alertname: 'DatabaseDown'
+      receiver: 'critical-database'
+      group_wait: 10s
+      continue: true
+
+    # ============================================================================
+    # REGRESSION RED TIER - High priority (Slack + Email)
+    # ============================================================================
+    - match:
+        regression_tier: 'red'
+      receiver: 'regression-red'
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 4h
+
+    # ============================================================================
+    # REGRESSION YELLOW TIER - Medium priority (Slack only)
+    # ============================================================================
+    - match:
+        regression_tier: 'yellow'
+      receiver: 'regression-yellow'
+      group_wait: 1m
+      group_interval: 10m
+      repeat_interval: 12h
+
+    # ============================================================================
+    # REGRESSION GREEN TIER - Info (Slack #monitoring channel)
+    # ============================================================================
+    - match:
+        regression_tier: 'green'
+      receiver: 'regression-green'
+      group_wait: 5m
+      group_interval: 30m
+      repeat_interval: 24h
+
+    # ============================================================================
+    # WARNING SEVERITY - Slack + Email
+    # ============================================================================
+    - match:
+        severity: warning
+      receiver: 'warning'
+      group_wait: 1m
+      group_interval: 15m
+      repeat_interval: 24h
+
+    # ============================================================================
+    # INFO SEVERITY - Monitoring channel only
+    # ============================================================================
+    - match:
+        severity: info
+      receiver: 'info'
+      group_wait: 5m
+      group_interval: 1h
+      repeat_interval: 24h
+
+# ============================================================================
+# RECEIVERS - Define notification destinations
+# ============================================================================
+
+receivers:
+  # ============================================================================
+  # DEFAULT - All unmatched alerts
+  # ============================================================================
+  - name: 'default'
+    slack_configs:
+      - channel: '#monitoring'
+        title: 'NINAI Alert'
+        text: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
+
+  # ============================================================================
+  # CRITICAL - Fire-all alerting (PagerDuty + Slack + Email + SMS)
+  # ============================================================================
+  - name: 'critical'
+    pagerduty_configs:
+      - service_key: "${PAGERDUTY_SERVICE_KEY}"
+        description: '{{ .CommonAnnotations.summary }}'
+        details:
+          firing: '{{ template "pagerduty.default.instances" .Alerts.Firing }}'
+          alerts: '{{ .GroupLabels | jsonMarshal }}'
+
+    slack_configs:
+      - channel: '#alerts-critical'
+        title: '🚨 CRITICAL ALERT'
+        text: '{{ range .Alerts }}{{ .Annotations.description }}. Action: {{ .Annotations.action }}{{ end }}'
+        color: 'danger'
+        send_resolved: true
+
+    email_configs:
+      - to: 'ops-critical@ninai.com'
+        from: 'alertmanager@ninai.com'
+        smarthost: 'smtp.gmail.com:587'
+        auth_username: '${ALERTMANAGER_EMAIL}'
+        auth_password: '${ALERTMANAGER_PASSWORD}'
+        headers:
+          Subject: 'CRITICAL: {{ .GroupLabels.alertname }} - IMMEDIATE ACTION REQUIRED'
+
+  # ============================================================================
+  # CRITICAL BACKEND DOWN
+  # ============================================================================
+  - name: 'critical-backend'
+    slack_configs:
+      - channel: '#alerts-critical'
+        title: '🛑 BACKEND DOWN - IMMEDIATE ACTION'
+        text: 'Backend service not responding. Check health status. Runbook: <http://localhost:3000/d/backend-health>'
+        color: 'danger'
+
+    pagerduty_configs:
+      - service_key: "${PAGERDUTY_SERVICE_KEY}"
+        description: 'Backend service down - immediate investigation required'
+
+  # ============================================================================
+  # CRITICAL DATABASE DOWN
+  # ============================================================================
+  - name: 'critical-database'
+    slack_configs:
+      - channel: '#alerts-critical'
+        title: '🛑 DATABASE DOWN - IMMEDIATE ACTION'
+        text: 'PostgreSQL not responding. Data unavailable. Check DB status. Runbook: <http://localhost:3000/d/database-health>'
+        color: 'danger'
+
+    pagerduty_configs:
+      - service_key: "${PAGERDUTY_SERVICE_KEY}"
+        description: 'Database down - immediate investigation required'
+
+  # ============================================================================
+  # REGRESSION RED TIER - Performance degradation >20%
+  # ============================================================================
+  - name: 'regression-red'
+    slack_configs:
+      - channel: '#alerts-regression'
+        title: '⚠️ REGRESSION DETECTED - RED TIER (>20%)'
+        text: |
+          Operation: {{ .CommonLabels.operation }}
+          {{ range .Alerts }}{{ .Annotations.summary }}
+          {{ .Annotations.action }}{{ end }}
+        color: 'danger'
+        send_resolved: true
+
+    email_configs:
+      - to: 'performance-team@ninai.com'
+        from: 'alertmanager@ninai.com'
+        smarthost: 'smtp.gmail.com:587'
+        auth_username: '${ALERTMANAGER_EMAIL}'
+        auth_password: '${ALERTMANAGER_PASSWORD}'
+        headers:
+          Subject: 'REGRESSION: {{ .CommonLabels.operation }} RED TIER - >20% degradation'
+
+  # ============================================================================
+  # REGRESSION YELLOW TIER - Performance degradation 10-20%
+  # ============================================================================
+  - name: 'regression-yellow'
+    slack_configs:
+      - channel: '#alerts-regression'
+        title: '⚠️ REGRESSION DETECTED - YELLOW TIER (10-20%)'
+        text: |
+          Operation: {{ .CommonLabels.operation }}
+          {{ range .Alerts }}{{ .Annotations.summary }}
+          {{ .Annotations.action }}{{ end }}
+        color: 'warning'
+
+  # ============================================================================
+  # REGRESSION GREEN TIER - Performance normal but at upper baseline
+  # ============================================================================
+  - name: 'regression-green'
+    slack_configs:
+      - channel: '#monitoring'
+        title: '✅ Performance Info - Green Tier'
+        text: '{{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
+        color: 'good'
+
+  # ============================================================================
+  # WARNING SEVERITY - Non-critical issues
+  # ============================================================================
+  - name: 'warning'
+    slack_configs:
+      - channel: '#monitoring'
+        title: '⚠️ WARNING'
+        text: '{{ range .Alerts }}{{ .Annotations.summary }}. {{ .Annotations.action }}{{ end }}'
+        color: 'warning'
+
+  # ============================================================================
+  # INFO SEVERITY - Informational only
+  # ============================================================================
+  - name: 'info'
+    slack_configs:
+      - channel: '#monitoring'
+        title: 'ℹ️ INFO'
+        text: '{{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
+        color: 'good'
+
+# ============================================================================
+# INHIBITION RULES - Suppress alerts based on conditions
+# ============================================================================
+
+inhibit_rules:
+  # Suppress Yellow/Green when Red is firing
+  - source_match:
+      regression_tier: 'red'
+    target_match_re:
+      regression_tier: 'yellow|green'
+    equal: ['alertname', 'instance']
+
+  # Suppress warnings when critical alert firing for same operation
+  - source_match:
+      severity: 'critical'
+      alertname: 'BackendDown'
+    target_match:
+      severity: 'warning'
+    equal: ['job']
+
+  # Suppress database warnings when database is down
+  - source_match:
+      alertname: 'DatabaseDown'
+    target_match_re:
+      alertname: '.*Database.*'
+    equal: ['instance']
+
+  # Suppress network alerts when host is down
+  - source_match:
+      alertname: 'HostDown'
+    target_match_re:
+      alertname: '.*Network.*'
+    equal: ['instance']

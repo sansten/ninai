@@ -1,0 +1,15 @@
+# Ollama Docker Compose Service
+ollama:
+  image: ollama/ollama:latest
+  container_name: ollama
+  ports:
+    - "11434:11434"
+  volumes:
+    - ollama_data:/root/.ollama
+  environment:
+    - OLLAMA_MODELS=qwen2.5:7b
+    # You can change to another model, e.g. mistral, phi3, or mixtral if preferred
+  restart: unless-stopped
+
+volumes:
+  ollama_data:

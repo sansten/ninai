@@ -1,0 +1,391 @@
+# Prometheus Alerting Rules for NINAI Observability
+# Based on PERFORMANCE_BASELINE.md regression thresholds
+
+groups:
+  # ============================================================================
+  # QUEUE OPERATIONS ALERTS
+  # ============================================================================
+  - name: queue_operations
+    interval: 30s
+    rules:
+      # REGRESSION DETECTION - Green Tier (Normal, <10% degradation)
+      - alert: QueueLatencyGreen
+        expr: histogram_quantile(0.95, queue_operation_duration_seconds_bucket{operation="pause"}) > 0.120
+        for: 2m
+        labels:
+          severity: info
+          operation: queue
+          regression_tier: green
+        annotations:
+          summary: "Queue pause latency elevated (p95: {{ $value | humanizeDuration }})"
+          description: "Queue pause p95 latency is {{ $value | humanizeDuration }}, baseline 120ms. Within normal 10% threshold."
+          runbook_url: "http://localhost:3000/d/queue-operations"
+
+      # REGRESSION DETECTION - Yellow Tier (Caution, 10-20% degradation)
+      - alert: QueueLatencyYellow
+        expr: histogram_quantile(0.95, queue_operation_duration_seconds_bucket{operation="pause"}) > 0.144
+        for: 3m
+        labels:
+          severity: warning
+          operation: queue
+          regression_tier: yellow
+        annotations:
+          summary: "Queue pause latency degraded (p95: {{ $value | humanizeDuration }})"
+          description: "Queue pause p95 latency is {{ $value | humanizeDuration }}, baseline 120ms. 10-20% degradation detected."
+          runbook_url: "http://localhost:3000/d/queue-operations"
+          action: "Review recent deployments, check CPU utilization, check database performance"
+
+      # REGRESSION DETECTION - Red Tier (Critical, >20% degradation)
+      - alert: QueueLatencyRed
+        expr: histogram_quantile(0.95, queue_operation_duration_seconds_bucket{operation="pause"}) > 0.165
+        for: 1m
+        labels:
+          severity: critical
+          operation: queue
+          regression_tier: red
+        annotations:
+          summary: "Queue pause latency CRITICAL (p95: {{ $value | humanizeDuration }})"
+          description: "Queue pause p95 latency is {{ $value | humanizeDuration }}, baseline 120ms. >20% degradation - STOP DEPLOYMENTS."
+          runbook_url: "http://localhost:3000/d/queue-operations"
+          action: "IMMEDIATE: Rollback recent deployment, investigate bottleneck, check logs"
+
+      # THROUGHPUT DEGRADATION
+      - alert: QueueThroughputDegraded
+        expr: |
+          rate(queue_operations_total[5m]) < 25  # Baseline: 1500 ops/min @ 100 VUs = 25 ops/sec
+        for: 5m
+        labels:
+          severity: warning
+          operation: queue
+        annotations:
+          summary: "Queue operation throughput degraded to {{ $value | humanize }} ops/sec"
+          description: "Expected 25+ ops/sec, currently {{ $value | humanize }}. Check database connections."
+
+      # ERROR RATE
+      - alert: QueueOperationErrors
+        expr: |
+          rate(queue_operation_errors_total[5m]) > 0.01  # >1% error rate
+        for: 2m
+        labels:
+          severity: warning
+          operation: queue
+        annotations:
+          summary: "Queue operation error rate: {{ $value | humanizePercentage }}"
+          description: "Error rate {{ $value | humanizePercentage }} exceeds 1% threshold."
+
+  # ============================================================================
+  # ALERT OPERATIONS ALERTS
+  # ============================================================================
+  - name: alert_operations
+    interval: 30s
+    rules:
+      # REGRESSION DETECTION - Yellow Tier (10-20% degradation)
+      - alert: AlertLatencyYellow
+        expr: histogram_quantile(0.95, alert_operation_duration_seconds_bucket{operation="create"}) > 0.336
+        for: 3m
+        labels:
+          severity: warning
+          operation: alert
+          regression_tier: yellow
+        annotations:
+          summary: "Alert create latency degraded (p95: {{ $value | humanizeDuration }})"
+          description: "Alert create p95 is {{ $value | humanizeDuration }}, baseline 280ms. 10-20% degradation."
+          action: "Check database connection pool usage, look for slow queries"
+
+      # REGRESSION DETECTION - Red Tier (>20% degradation)
+      - alert: AlertLatencyRed
+        expr: histogram_quantile(0.95, alert_operation_duration_seconds_bucket{operation="create"}) > 0.384
+        for: 1m
+        labels:
+          severity: critical
+          operation: alert
+          regression_tier: red
+        annotations:
+          summary: "Alert create latency CRITICAL (p95: {{ $value | humanizeDuration }})"
+          description: "Alert create p95 is {{ $value | humanizeDuration }}, baseline 280ms. >20% degradation."
+          action: "IMMEDIATE: Investigate database performance, check slow query log"
+
+      # DATABASE CONNECTION POOL SATURATION
+      - alert: AlertDatabasePoolSaturation
+        expr: |
+          pg_stat_activity_count / 20 > 0.85  # 85% of 20 pool
+        for: 2m
+        labels:
+          severity: warning
+          operation: alert
+        annotations:
+          summary: "Database connection pool {{ $value | humanizePercentage }} saturated"
+          description: "Alert operations may be blocked waiting for connections."
+
+      # THROUGHPUT DEGRADATION
+      - alert: AlertThroughputDegraded
+        expr: |
+          rate(alert_operations_total[5m]) < 0.833  # Baseline: 50 alerts/sec = 50 ops/sec
+        for: 3m
+        labels:
+          severity: warning
+          operation: alert
+        annotations:
+          summary: "Alert operation throughput: {{ $value | humanize }} ops/sec"
+          description: "Expected 50+ ops/sec, currently {{ $value | humanize }}."
+
+  # ============================================================================
+  # SNAPSHOT OPERATIONS ALERTS
+  # ============================================================================
+  - name: snapshot_operations
+    interval: 30s
+    rules:
+      # REGRESSION DETECTION - Yellow Tier (10-20% degradation)
+      - alert: SnapshotLatencyYellow
+        expr: histogram_quantile(0.95, snapshot_operation_duration_seconds_bucket{operation="create"}) > 1.98
+        for: 3m
+        labels:
+          severity: warning
+          operation: snapshot
+          regression_tier: yellow
+        annotations:
+          summary: "Snapshot create latency degraded (p95: {{ $value | humanizeDuration }})"
+          description: "Snapshot create p95 is {{ $value | humanizeDuration }}, baseline 1800ms. 10-20% degradation."
+          action: "Check disk I/O performance, monitor storage subsystem"
+
+      # REGRESSION DETECTION - Red Tier (>20% degradation)
+      - alert: SnapshotLatencyRed
+        expr: histogram_quantile(0.95, snapshot_operation_duration_seconds_bucket{operation="create"}) > 2.16
+        for: 1m
+        labels:
+          severity: critical
+          operation: snapshot
+          regression_tier: red
+        annotations:
+          summary: "Snapshot create latency CRITICAL (p95: {{ $value | humanizeDuration }})"
+          description: "Snapshot create p95 is {{ $value | humanizeDuration }}, baseline 1800ms. >20% degradation."
+          action: "IMMEDIATE: Check disk subsystem, look for I/O bottlenecks"
+
+      # DISK I/O SATURATION
+      - alert: DiskIOSaturation
+        expr: |
+          rate(disk_io_time_ms[5m]) > 8000  # >80% disk utilization
+        for: 2m
+        labels:
+          severity: warning
+          operation: snapshot
+        annotations:
+          summary: "Disk I/O saturation: {{ $value | humanize }}ms/sec"
+          description: "Disk I/O approaching limits, snapshot operations affected."
+
+      # DISK SPACE WARNING
+      - alert: DiskSpaceLow
+        expr: |
+          node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes < 0.15
+        for: 5m
+        labels:
+          severity: warning
+          component: disk
+        annotations:
+          summary: "Disk space: {{ $value | humanizePercentage }} available"
+          description: "Less than 15% disk space remaining."
+
+  # ============================================================================
+  # INFRASTRUCTURE & RESOURCE ALERTS
+  # ============================================================================
+  - name: infrastructure
+    interval: 30s
+    rules:
+      # CPU UTILIZATION
+      - alert: CPUUtilizationHigh
+        expr: |
+          100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 5m
+        labels:
+          severity: warning
+          component: cpu
+        annotations:
+          summary: "CPU utilization: {{ $value | humanize }}%"
+          description: "CPU usage exceeds 80% threshold."
+          action: "Consider scaling up, profile application for optimization"
+
+      # CPU CRITICAL
+      - alert: CPUUtilizationCritical
+        expr: |
+          100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 95
+        for: 2m
+        labels:
+          severity: critical
+          component: cpu
+        annotations:
+          summary: "CPU CRITICAL: {{ $value | humanize }}%"
+          description: "CPU usage exceeds 95% threshold. Immediate scaling required."
+
+      # MEMORY UTILIZATION
+      - alert: MemoryUtilizationHigh
+        expr: |
+          (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+          component: memory
+        annotations:
+          summary: "Memory utilization: {{ $value | humanize }}%"
+          description: "Memory usage exceeds 85% threshold."
+          action: "Check for memory leaks, consider scaling"
+
+      # MEMORY CRITICAL
+      - alert: MemoryUtilizationCritical
+        expr: |
+          (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 95
+        for: 2m
+        labels:
+          severity: critical
+          component: memory
+        annotations:
+          summary: "Memory CRITICAL: {{ $value | humanize }}%"
+          description: "Memory usage exceeds 95%. Immediate action required."
+
+      # NETWORK SATURATION
+      - alert: NetworkBandwidthHigh
+        expr: |
+          rate(node_network_transmit_bytes_total[5m]) > 125000000  # >1 Gbps
+        for: 5m
+        labels:
+          severity: warning
+          component: network
+        annotations:
+          summary: "Network bandwidth: {{ $value | humanize }}B/s"
+          description: "Network utilization exceeds 1 Gbps."
+
+  # ============================================================================
+  # ERROR RATE & SLA ALERTS
+  # ============================================================================
+  - name: error_monitoring
+    interval: 30s
+    rules:
+      # GLOBAL ERROR RATE
+      - alert: GlobalErrorRateHigh
+        expr: |
+          (
+            rate(fastapi_requests_total{status=~"5.."}[5m])
+            /
+            rate(fastapi_requests_total[5m])
+          ) * 100 > 2  # >2% error rate
+        for: 2m
+        labels:
+          severity: warning
+          component: api
+        annotations:
+          summary: "Error rate: {{ $value | humanize }}%"
+          description: "Global error rate exceeds 2% threshold."
+          action: "Check application logs, review recent deployments"
+
+      # 5XX ERROR SPIKE
+      - alert: ServerErrorSpike
+        expr: |
+          rate(fastapi_requests_total{status=~"5.."}[1m]) > 10  # >10 errors/sec
+        for: 1m
+        labels:
+          severity: critical
+          component: api
+        annotations:
+          summary: "Server error spike: {{ $value | humanize }} errors/sec"
+          description: "Sudden spike in 5XX errors detected."
+          action: "IMMEDIATE: Check application logs, health status"
+
+      # SLOW QUERY DETECTION
+      - alert: SlowQueryDetected
+        expr: |
+          histogram_quantile(0.95, pg_stat_statements_query_time_seconds_bucket) > 1.0
+        for: 5m
+        labels:
+          severity: warning
+          component: database
+        annotations:
+          summary: "Slow queries detected (p95: {{ $value | humanizeDuration }})"
+          description: "95th percentile query time exceeds 1 second."
+          action: "Review slow query log, optimize queries, add indexes"
+
+  # ============================================================================
+  # SERVICE HEALTH & UPTIME
+  # ============================================================================
+  - name: service_health
+    interval: 30s
+    rules:
+      # BACKEND AVAILABILITY
+      - alert: BackendDown
+        expr: |
+          up{job="ninai-backend"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: backend
+        annotations:
+          summary: "Backend service is DOWN"
+          description: "Backend health check failed. Service unavailable."
+          action: "IMMEDIATE: Check backend logs, restart service if needed"
+
+      # DATABASE AVAILABILITY
+      - alert: DatabaseDown
+        expr: |
+          up{job="postgres"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: database
+        annotations:
+          summary: "Database is DOWN"
+          description: "PostgreSQL not responding. Data unavailable."
+          action: "IMMEDIATE: Check database status, verify network connectivity"
+
+      # REDIS AVAILABILITY
+      - alert: CacheDown
+        expr: |
+          up{job="redis"} == 0
+        for: 2m
+        labels:
+          severity: warning
+          component: cache
+        annotations:
+          summary: "Redis cache is DOWN"
+          description: "Redis not responding. Cache unavailable."
+          action: "Restart Redis, verify data integrity"
+
+      # PROMETHEUS ITSELF
+      - alert: PrometheusDown
+        expr: |
+          up{job="prometheus"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: monitoring
+        annotations:
+          summary: "Prometheus is DOWN"
+          description: "Prometheus monitoring system unavailable."
+          action: "Restart Prometheus immediately"
+
+  # ============================================================================
+  # DATA RETENTION & ALERTS
+  # ============================================================================
+  - name: alert_system
+    interval: 1m
+    rules:
+      # Staleness detection
+      - alert: MetricsStale
+        expr: |
+          time() - timestamp(fastapi_requests_total) > 600
+        for: 5m
+        labels:
+          severity: warning
+          component: monitoring
+        annotations:
+          summary: "Metrics data is stale (>10 minutes old)"
+          description: "No new metrics received in past 10 minutes. Backend may be offline."
+
+      # Alert rules not evaluating
+      - alert: AlertRulesNotEvaluating
+        expr: |
+          rate(prometheus_rule_group_iterations_total[5m]) == 0
+        for: 10m
+        labels:
+          severity: critical
+          component: monitoring
+        annotations:
+          summary: "Prometheus alert rules not evaluating"
+          description: "Rules haven't been evaluated in 10+ minutes."

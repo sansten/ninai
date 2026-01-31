@@ -1,0 +1,413 @@
+# =============================================================================
+# Ninai - Docker Compose Development Environment
+# =============================================================================
+# Usage:
+#   docker-compose up -d          # Start all services
+#   docker-compose logs -f        # View logs
+#   docker-compose down           # Stop all services
+#   docker-compose down -v        # Stop and remove volumes
+# =============================================================================
+
+version: "3.9"
+
+services:
+  # ---------------------------------------------------------------------------
+  # Backend API (FastAPI)
+  # ---------------------------------------------------------------------------
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: ninai-backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+      - ./backend_attachments:/data/memory_attachments
+    environment:
+      - APP_ENV=development
+      - DEBUG=true
+      # Authentication mode: password | oidc | both
+      # - AUTH_MODE=both
+      # OIDC (SSO) settings (Option A)
+      # - OIDC_ISSUER=https://login.microsoftonline.com/<tenant-id>/v2.0
+      # - OIDC_CLIENT_ID=<client-id>
+      # - OIDC_ALLOWED_EMAIL_DOMAINS=example.com
+      # - OIDC_DEFAULT_ORG_SLUG=ninai-demo
+      # - OIDC_DEFAULT_ROLE=member
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=ninai
+      - POSTGRES_PASSWORD=ninai_dev_password
+      - POSTGRES_DB=ninai
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/2
+      - QDRANT_HOST=qdrant
+      - QDRANT_PORT=6333
+      - ELASTICSEARCH_HOST=elasticsearch
+      - ELASTICSEARCH_PORT=9200
+      - MEMORY_ATTACHMENTS_DIR=/data/memory_attachments
+      # Optional OCR sidecar (enabled in this compose)
+      - OCR_SERVICE_URL=http://ocr:8000
+      - OCR_SERVICE_TIMEOUT_SECONDS=5
+      # Local-first LLM (Ollama)
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - OLLAMA_MODEL=qwen2.5:7b
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+      ocr:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys, urllib.request; urllib.request.urlopen('http://localhost:8000/health'); sys.exit(0)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - ninai-network
+
+  # ---------------------------------------------------------------------------
+  # OCR Sidecar (Tesseract via small HTTP API)
+  # ---------------------------------------------------------------------------
+  ocr:
+    build:
+      context: ./docker/ocr
+      dockerfile: Dockerfile
+    container_name: ninai-ocr
+    ports:
+      - "8010:8000"
+    environment:
+      - TESSERACT_LANG=eng
+      - TESSERACT_PSM=3
+    networks:
+      - ninai-network
+
+  # ---------------------------------------------------------------------------
+  # Frontend (React + Vite)
+  # ---------------------------------------------------------------------------
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: ninai-frontend
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - frontend_node_modules:/app/node_modules
+    environment:
+      - VITE_API_URL=/api/v1
+      - VITE_API_PROXY_TARGET=http://backend:8000
+      - VITE_DEV_PORT=3000
+      - VITE_HMR_HOST=localhost
+      - VITE_HMR_PORT=3000
+      # Vite file watching in Docker on Windows can miss events; polling fixes hot-reload.
+      - CHOKIDAR_USEPOLLING=true
+      - CHOKIDAR_INTERVAL=250
+      # Frontend OIDC settings (required for "Sign in with SSO")
+      # - VITE_OIDC_AUTHORITY=https://login.microsoftonline.com/<tenant-id>/v2.0
+      # - VITE_OIDC_CLIENT_ID=<client-id>
+      # - VITE_OIDC_REDIRECT_URI=http://localhost:3000/auth/oidc/callback
+    depends_on:
+      - backend
+    networks:
+      - ninai-network
+
+  # ---------------------------------------------------------------------------
+  # PostgreSQL Database
+  # ---------------------------------------------------------------------------
+  postgres:
+    image: postgres:15-alpine
+    container_name: ninai-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=ninai
+      - POSTGRES_PASSWORD=ninai_dev_password
+      - POSTGRES_DB=ninai
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ninai -d ninai"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ninai-network
+
+  # ---------------------------------------------------------------------------
+  # Redis + FalkorDB (Caching, Celery Broker, Graph Database)
+  # ---------------------------------------------------------------------------
+  redis:
+    image: falkordb/falkordb:latest
+    container_name: ninai-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --loadmodule /usr/lib/redis/modules/graphblas.so --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ninai-network
+
+  # ---------------------------------------------------------------------------
+  # Qdrant Vector Database
+  # ---------------------------------------------------------------------------
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: ninai-qdrant
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    networks:
+      - ninai-network
+
+  # ---------------------------------------------------------------------------
+  # Elasticsearch (Audit Log Search)
+  # ---------------------------------------------------------------------------
+  elasticsearch:
+    image: elasticsearch:8.11.0
+    container_name: ninai-elasticsearch
+    ports:
+      - "9200:9200"
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - ninai-network
+
+  # ---------------------------------------------------------------------------
+  # Celery Worker (Background Tasks)
+  # ---------------------------------------------------------------------------
+  celery-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: ninai-celery-worker
+    command: celery -A app.core.celery_app:celery_app worker --loglevel=info
+    volumes:
+      - ./backend:/app
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/2
+      - POSTGRES_HOST=postgres
+      - REDIS_HOST=redis
+      - QDRANT_HOST=qdrant
+      # Local-first LLM (Ollama)
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - OLLAMA_MODEL=qwen2.5:7b
+    depends_on:
+      - redis
+      - postgres
+    networks:
+      - ninai-network
+
+  # ---------------------------------------------------------------------------
+  # Celery Beat (Scheduled Tasks)
+  # ---------------------------------------------------------------------------
+  celery-beat:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: ninai-celery-beat
+    command: celery -A app.core.celery_app:celery_app beat --loglevel=info
+    volumes:
+      - ./backend:/app
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/2
+      # Local-first LLM (Ollama)
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - OLLAMA_MODEL=qwen2.5:7b
+    depends_on:
+      - redis
+    networks:
+      - ninai-network
+
+  # ---------------------------------------------------------------------------
+  # Ollama (LLM for Summarization)
+  # ---------------------------------------------------------------------------
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    environment:
+      - OLLAMA_MODELS=qwen2.5:7b
+    restart: unless-stopped
+    networks:
+      - ninai-network
+
+  # ===========================================================================
+  # Observability Stack - Prometheus, Grafana, AlertManager
+  # ===========================================================================
+
+  # Prometheus - Metrics collection and evaluation
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./docker/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./docker/prometheus/rules.yml:/etc/prometheus/rules.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=30d'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+      - '--web.enable-lifecycle'
+    environment:
+      TZ: UTC
+    restart: unless-stopped
+    depends_on:
+      - backend
+    networks:
+      - ninai-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Grafana - Metrics visualization and dashboards
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3001:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./docker/grafana/datasources:/etc/grafana/provisioning/datasources
+      - ./docker/grafana/dashboards:/etc/grafana/provisioning/dashboards
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_INSTALL_PLUGINS=
+      - GF_PATHS_PROVISIONING=/etc/grafana/provisioning
+      - GF_PATHS_LOGS=/var/log/grafana
+    restart: unless-stopped
+    depends_on:
+      - prometheus
+    networks:
+      - ninai-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # AlertManager - Alert management and routing
+  alertmanager:
+    image: prom/alertmanager:latest
+    container_name: alertmanager
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./docker/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml
+      - alertmanager_data:/alertmanager
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+      - '--web.external-url=http://localhost:9093/'
+    restart: unless-stopped
+    networks:
+      - ninai-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9093/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Node Exporter - System metrics (CPU, memory, disk, network)
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: node-exporter
+    ports:
+      - "9100:9100"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    restart: unless-stopped
+    networks:
+      - ninai-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9100/metrics"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Loki - Log aggregation (optional, for centralized logging)
+  loki:
+    image: grafana/loki:latest
+    container_name: loki
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./docker/loki/loki-config.yml:/etc/loki/local-config.yml
+      - loki_data:/loki
+    command: -config.file=/etc/loki/local-config.yml
+    restart: unless-stopped
+    networks:
+      - ninai-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3100/ready"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+# -----------------------------------------------------------------------------
+# Networks
+# -----------------------------------------------------------------------------
+networks:
+  ninai-network:
+    driver: bridge
+
+# -----------------------------------------------------------------------------
+# Volumes
+# -----------------------------------------------------------------------------
+volumes:
+  postgres_data:
+  frontend_node_modules:
+  redis_data:
+  qdrant_data:
+  elasticsearch_data:
+  ollama_data:
+  prometheus_data:
+  grafana_data:
+  alertmanager_data:
+  loki_data:
