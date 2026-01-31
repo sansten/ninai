@@ -11,10 +11,6 @@ raise ImportError(
     "ResourceBudget is an enterprise feature. Install the private 'ninai-enterprise' package to use it."
 )
 
-    """Resource budget tracking for tenant quotas and admission control."""
-
-    __tablename__ = "resource_budgets"
-
     # Budget period
     period = Column(
         String(20),

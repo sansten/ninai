@@ -10,10 +10,6 @@ ENTERPRISE ONLY - StagedRolloutManager is an enterprise feature.
 raise ImportError(
     "StagedRolloutManager is an enterprise feature. Install the private 'ninai-enterprise' package to use it."
 )
-
-    """Manager for staged policy rollouts with canary deployments."""
-
-    def __init__(self, db: AsyncSession):
         self.db = db
         self.audit = AuditService(db)
 

@@ -11,10 +11,6 @@ raise ImportError(
     "PolicyVersion is an enterprise feature. Install the private 'ninai-enterprise' package to use it."
 )
 
-    """Versioned policy with staged rollout support."""
-
-    __tablename__ = "policy_versions"
-
     # Policy identification
     policy_name = Column(
         String(100),
