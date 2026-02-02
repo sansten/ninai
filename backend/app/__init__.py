@@ -2,5 +2,5 @@
 Ninai Backend Application
 =========================
 
-Enterprise-grade agentic AI memory operating system.
+Secure multi-tenant agentic AI memory system for RAG and agent builders.
 """
