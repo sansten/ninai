@@ -8,7 +8,7 @@ A multi-tenant agentic memory system for RAG and agent builders. Store, govern, 
 
 **Get working in 30 minutes**: `docker compose up` with Postgres + Qdrant, seed demo data, and start building.
 
-## 📌 What is Ninai?
+## What is Ninai?
 
 Ninai is an **open-source memory layer** for AI agents and RAG systems. It solves the **"secure multi-tenant memory"** problem:
 
@@ -24,7 +24,7 @@ Ninai is an **open-source memory layer** for AI agents and RAG systems. It solve
 
 Ninai's core is OSS. Enterprise add-ons (SCIM, managed SLAs, advanced eval drift) are **optional** and **clearly separated**. The OSS version works right now with just Postgres + Qdrant.
 
-## 🌟 Core Features (OSS)
+##  Core Features (OSS)
 
 - **RLS-First Multi-Tenancy**: Postgres Row-Level Security enforces org isolation at the data layer—attackers cannot query across organizations even if app code has a vulnerability
 - **Hierarchical RBAC (Org → Team)**: Scoped access control with least-privilege defaults
@@ -33,8 +33,9 @@ Ninai's core is OSS. Enterprise add-ons (SCIM, managed SLAs, advanced eval drift
 - **Audit-Ready Traceability**: Request-level `X-Trace-ID`, versioned knowledge, approval comments, change history
 - **Non-Admin Reviewers**: Delegate knowledge approvals without giving out admin passwords
 - **Works Today with Minimal Stack**: Postgres + Qdrant; optional Redis/Elastic/Grafana for scale
+- Interested to contribute to opensource send out an email : opensource@sansten.com 
 
-## 📦 Editions
+##  Editions
 
 Ninai comes in three flavors:
 
@@ -52,7 +53,7 @@ Ninai comes in three flavors:
 
 See [docs/EDITIONS.md](docs/EDITIONS.md) for the full comparison.
 
-## 🚀 Quick Start (30 Minutes)
+## Quick Start (30 Minutes)
 
 ### Prerequisites
 
@@ -98,7 +99,7 @@ After seeding, use demo credentials:
 3. Switch to reviewer account and **approve** in the review queue
 4. Query via the **Search** tab or API
 
-## 📁 Architecture
+##  Architecture
 
 ### Data Plane vs. Control Plane
 
@@ -143,7 +144,7 @@ ninai/
 └── docker-compose.prod.yml # (Optional) prod baseline
 ```
 
-## 🔒 Security Guarantees
+##  Security Guarantees
 
 ### Multi-Tenancy Enforcement
 
@@ -200,7 +201,7 @@ Every vector search returns a scoring breakdown so you can audit why a result wa
 }
 ```
 
-## 📋 Key Concepts
+##  Key Concepts
 
 ### Knowledge Lifecycle
 
@@ -235,7 +236,7 @@ policies = {
 - Cross-tenant query tests fail loudly
 - RLS policy tests verify org isolation is airtight
 
-## 🧪 Testing
+##  Testing
 
 ### Fast Unit Tests (No DB)
 
@@ -371,7 +372,7 @@ if not policy_check.allowed:
     return []  # Fail closed
 ```
 
-## 📊 Observability & SLOs
+##  Observability & SLOs
 
 ### Key Metrics
 
@@ -397,7 +398,7 @@ if not policy_check.allowed:
 | Audit log durability | 24 hours | 7 days |
 | Availability | 99.5% | 99.99% |
 
-## 🚢 Deployment
+##  Deployment
 
 ### Development (Docker Compose)
 
@@ -423,7 +424,7 @@ Hosted on Google Cloud with:
 
 Contact: [sales@sanstenaix.dev](mailto:sales@sanstenaix.dev)
 
-## 🔐 Authentication
+##  Authentication
 
 ### Local Email/Password
 
@@ -451,7 +452,7 @@ VITE_OIDC_CLIENT_ID=<client-id>
 VITE_OIDC_REDIRECT_URI=http://localhost:3000/auth/oidc/callback
 ```
 
-## 📝 Development
+## Development
 
 ### Backend Tests
 
@@ -480,22 +481,22 @@ npm run build
 - **TypeScript**: ESLint, Prettier
 - **Commits**: Conventional Commits
 
-## 📚 Documentation
+## Documentation
 
 - [docs/EDITIONS.md](docs/EDITIONS.md) — OSS vs Enterprise feature matrix
 - [docs/SECURITY.md](docs/SECURITY.md) — RLS policies, audit logging, threat model
 - [docs/API.md](docs/API.md) — REST API reference
 - [../ninai-deploy/](../ninai-deploy/) — Deployment runbooks & infrastructure
 
-## 🤝 Contributing
+## Contributing
 
 We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
-## 📄 License
+## License
 
 MIT License. See [LICENSE](LICENSE) for details.
 
-## 🙏 Built With
+## Built With
 
 - [FastAPI](https://fastapi.tiangolo.com/)
 - [SQLAlchemy](https://www.sqlalchemy.org/)
@@ -506,6 +507,6 @@ MIT License. See [LICENSE](LICENSE) for details.
 
 ---
 
-**Questions?** Open an issue on GitHub or email [support@sanstenaix.dev](mailto:support@sanstenaix.dev).
+**Questions?** Open an issue on GitHub or email [support@sansten.com](mailto:support@sansten.com).
 
-**Want to use Enterprise?** See [../ninai-enterprise/](../ninai-enterprise/) or contact sales at [sales@sanstenaix.dev](mailto:sales@sanstenaix.dev).
+**Want to use Enterprise?** See [../ninai-enterprise/](../ninai-enterprise/) or contact sales at [sales@sanstenaix.dev](mailto:sales@sansten.com).
