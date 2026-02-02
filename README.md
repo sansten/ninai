@@ -8,6 +8,31 @@ A multi-tenant agentic memory system for RAG and agent builders. Store, govern, 
 
 **Get working in 30 minutes**: `docker compose up` with Postgres + Qdrant, seed demo data, and start building.
 
+### Quick Python SDK example (3 lines)
+
+```python
+from ninai import NinaiClient
+c = NinaiClient(api_key="nai_...")
+c.memories.create(content="Hello memory", tags=["demo"]); c.memories.search("Hello")
+```
+
+**Examples by case:**
+
+- **Security / classification** (sensitive memory)
+```python
+c.memories.create(content="SSO playbook", classification="restricted", tags=["security"])
+```
+
+- **Team-scoped memory** (multi-tenant scope)
+```python
+c.memories.create(content="Incident notes", scope="team", scope_id="<team-id>")
+```
+
+- **Search with tags** (targeted retrieval)
+```python
+c.memories.search("billing issue", tags=["support","billing"], limit=5)
+```
+
 ## What is Ninai?
 
 Ninai is an **open-source memory layer** for AI agents and RAG systems. It solves the **"secure multi-tenant memory"** problem:
@@ -50,8 +75,6 @@ Ninai comes in three flavors:
 | **SLA / Managed Hosting** | ❌ | ✅ | ❌ |
 | **Advanced Eval + Drift** | ❌ | ✅ | ✅ |
 | **DLQ / Dead Letter Handling** | ❌ | ✅ | ✅ |
-
-See [docs/EDITIONS.md](docs/EDITIONS.md) for the full comparison.
 
 ## Quick Start (30 Minutes)
 
