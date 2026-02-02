@@ -422,7 +422,7 @@ Hosted on Google Cloud with:
 - Auto-scaling based on load
 - Advanced eval + drift detection
 
-Contact: [sales@sanstenaix.dev](mailto:sales@sanstenaix.dev)
+Contact: [sales@sansten.com](mailto:sales@sansten.com)
 
 ##  Authentication
 
@@ -509,4 +509,4 @@ MIT License. See [LICENSE](LICENSE) for details.
 
 **Questions?** Open an issue on GitHub or email [support@sansten.com](mailto:support@sansten.com).
 
-**Want to use Enterprise?** See [../ninai-enterprise/](../ninai-enterprise/) or contact sales at [sales@sanstenaix.dev](mailto:sales@sansten.com).
+**Want to use Enterprise?** See [../ninai-enterprise/](../ninai-enterprise/) or contact sales at [sales@sansten.com](mailto:sales@sansten.com).
