@@ -100,6 +100,7 @@ docs_archive/
 # Markdown documentation files (except README.md - which is the primary entry point)
 *.md
 !README.md
+!backend/alembic/MIGRATIONS.md
 
 # Docs folder (internal documentation, kept locally)
 docs/
