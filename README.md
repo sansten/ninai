@@ -1,346 +1,511 @@
-# Ninai - Enterprise Agentic AI Memory OS
+# Ninai - The Secure Memory Layer for AI Agents
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-blue.svg)](https://www.typescriptlang.org/)
 
-An enterprise-grade, multi-tenant agentic AI memory operating system with hierarchical RBAC, 
-Row-Level Security (RLS), and vector search capabilities.
+A multi-tenant agentic memory system for RAG and agent builders. Store, govern, and retrieve agent knowledge securely with Postgres Row-Level Security (RLS) and explainable vector search—no cross-tenant data leaks.
 
-## 📌 Project Overview
+**Get working in 30 minutes**: `docker compose up` with Postgres + Qdrant, seed demo data, and start building.
 
-Ninai is a governed “Memory OS” for enterprise AI agents: capture knowledge, route it through human review, and promote it into durable long-term memory—while enforcing tenant isolation and least-privilege access at the database layer.
+## 📌 What is Ninai?
 
-- **Security by design**: Postgres RLS-first multi-tenancy + scoped RBAC (org/team) so data access is enforced even if application code makes a mistake
-- **Governed knowledge lifecycle**: submit → review queue → approve/reject with comments → publish an immutable version (optionally promote to memory with tags/topics)
-- **Operational traceability**: request-level `X-Trace-ID` plumbing + provenance-ready models for end-to-end audit trails
-- **Search you can trust**: vector retrieval with Postgres re-verification to preserve “vector + SQL parity” under real access controls
-- **LLM-flexible**: designed for hosted providers or local inference (e.g., Ollama) behind organization controls
+Ninai is an **open-source memory layer** for AI agents and RAG systems. It solves the **"secure multi-tenant memory"** problem:
 
-## 🌟 Features
+- **Store agent knowledge** as immutable versions with audit trails
+- **Enforce data isolation** via Postgres RLS at the database layer (not just app logic)  
+- **Retrieve with explainability** — vector search + SQL verification + scoring breakdown logs
+- **Optional human review** — route new knowledge through approval queues before promotion to long-term memory
+- **Simple to adopt** — single docker-compose, no Kubernetes, optional Grafana/Redis/Elastic
 
-- **RLS-First Multi-Tenancy**: Postgres Row-Level Security enforces org isolation at the data layer (not just app logic)
-- **Hierarchical RBAC (Org → Team)**: Scoped access control for users/teams with least-privilege defaults
-- **Governed Knowledge Review (HITL)**: Submit knowledge for approval, route to a dedicated reviewer queue, approve/reject with comments
-- **Non-Admin Reviewers**: Admins assign `knowledge_reviewer` capability; reviewers can approve via `/review` without admin portal access
-- **Immutable Versions + Traceability**: Knowledge is versioned; approvals publish an explicit version; requests can carry `X-Trace-ID`
-- **Promotion to Long-Term Memory (Optional)**: On approval, reviewers can promote items into durable memory with tags/topics mapping
-- **Vector Search With SQL Verification**: Qdrant retrieval + Postgres RLS re-verification for secure “vector + SQL parity”
-- **Audit & Compliance Foundations**: Central audit logging and security-oriented middleware hooks for regulated environments
-- **LLM / Local Model Ready**: Designed to run with hosted LLMs or local inference (e.g., Ollama) behind org controls
+**Ideal for**: agent builders, RAG teams, and platforms needing provably secure multi-tenant memory.
+
+### Why NOT enterprise-bloat?
+
+Ninai's core is OSS. Enterprise add-ons (SCIM, managed SLAs, advanced eval drift) are **optional** and **clearly separated**. The OSS version works right now with just Postgres + Qdrant.
+
+## 🌟 Core Features (OSS)
+
+- **RLS-First Multi-Tenancy**: Postgres Row-Level Security enforces org isolation at the data layer—attackers cannot query across organizations even if app code has a vulnerability
+- **Hierarchical RBAC (Org → Team)**: Scoped access control with least-privilege defaults
+- **Explainable Vector Retrieval**: Qdrant search + Postgres RLS re-verification + scoring breakdown logs
+- **Governed Knowledge Lifecycle**: Submit → review queue → approve/reject → immutable version → optional promotion to memory
+- **Audit-Ready Traceability**: Request-level `X-Trace-ID`, versioned knowledge, approval comments, change history
+- **Non-Admin Reviewers**: Delegate knowledge approvals without giving out admin passwords
+- **Works Today with Minimal Stack**: Postgres + Qdrant; optional Redis/Elastic/Grafana for scale
 
 ## 📦 Editions
 
-Ninai can be adopted in three ways:
+Ninai comes in three flavors:
 
-1. **Open Source (Community)** — MIT core.
-2. **Enterprise (Managed by Sansten AI on Google Cloud)** — Enterprise features + SLAs.
-3. **Enterprise (Self-Managed by Client)** — Enterprise features + client-operated.
+| Feature | OSS | Enterprise Managed | Enterprise Self-Managed |
+|---------|-----|-------------------|------------------------|
+| **Multi-tenant RLS** | ✅ | ✅ | ✅ |
+| **RBAC / Knowledge Review** | ✅ | ✅ | ✅ |
+| **Vector Search** | ✅ | ✅ | ✅ |
+| **OIDC SSO** | ✅ | ✅ | ✅ |
+| **Grafana / Audit** | ✅ | ✅ | ✅ |
+| **SCIM Provisioning** | ❌ | ✅ | ✅ |
+| **SLA / Managed Hosting** | ❌ | ✅ | ❌ |
+| **Advanced Eval + Drift** | ❌ | ✅ | ✅ |
+| **DLQ / Dead Letter Handling** | ❌ | ✅ | ✅ |
 
-See [docs/EDITIONS.md](docs/EDITIONS.md) for the one-page matrix.
+See [docs/EDITIONS.md](docs/EDITIONS.md) for the full comparison.
 
-## 🧭 This Repo (3-repo Setup)
-
-This repo is the **OSS (Community) codebase** and the runtime for the API/UI.
-
-- Enterprise add-on package (private): `../ninai-enterprise`
-- Deployment/infra (private): `../ninai-deploy`
-
-### Run OSS only
-
-```bash
-docker compose up -d --build
-```
-
-### Enable Enterprise (local dev)
-
-1) Install the enterprise add-on in the same Python environment as the backend:
-
-```bash
-pip install -e ../ninai-enterprise
-```
-
-2) Provide a license token (or you will see `403 feature_not_enabled` for `enterprise.*`):
-
-PowerShell:
-
-```powershell
-$env:NINAI_LICENSE_TOKEN = "ninai1.<payload>.<sig>"
-```
-
-## 📁 Project Structure
-
-```
-ninai/
-├── backend/                 # FastAPI backend
-│   ├── app/
-│   │   ├── api/            # API routes (v1)
-│   │   ├── core/           # Config, security, database
-│   │   ├── middleware/     # Tenant context, audit logging
-│   │   ├── models/         # SQLAlchemy models
-│   │   ├── schemas/        # Pydantic schemas
-│   │   ├── services/       # Business logic
-│   │   └── main.py         # Application entry
-│   ├── alembic/            # Database migrations
-│   ├── tests/              # Backend tests
-│   └── scripts/            # Utility scripts
-├── frontend/               # React + TypeScript frontend
-│   ├── src/
-│   │   ├── components/     # Reusable components
-│   │   ├── contexts/       # React contexts
-│   │   ├── hooks/          # Custom hooks
-│   │   ├── pages/          # Page components
-│   │   ├── services/       # API client
-│   │   └── types/          # TypeScript types
-│   └── ...
-├── docker/                 # Docker configurations
-├── docs/                   # Documentation
-└── docker-compose.yml      # Development environment
-```
-
-## 🚀 Quick Start
+## 🚀 Quick Start (30 Minutes)
 
 ### Prerequisites
 
 - Docker & Docker Compose
-- Python 3.11+
-- Node.js 18+
-- PostgreSQL 15+ (via Docker)
-- Redis 7+ (via Docker)
-- Qdrant (via Docker)
+- Python 3.11+ (for local dev)
+- Node.js 18+ (for frontend dev)
 
-### Development Setup (Docker Compose)
-
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/your-org/ninai.git
-   cd ninai
-   ```
-
-2. **Start the full stack**
-   ```bash
-   docker compose up -d --build
-   ```
-
-3. **Run database migrations**
-   ```bash
-   docker compose exec backend alembic upgrade head
-   ```
-
-4. **Seed demo data (recommended for first run)**
-   This creates a demo organization and demo users.
-   ```bash
-   docker compose exec backend python -m scripts.seed_data
-   ```
-
-5. **Open the app**
-   - Frontend: http://localhost:3000
-   - Backend API: http://localhost:8000
-   - Swagger: http://localhost:8000/docs
-
-### Demo Login Credentials
-
-After seeding, you can sign in with:
-
-- Admin: `admin@ninai.dev` / `admin1234`
-- Demo user: `demo@ninai.dev` / `demo1234`
-- Developer: `dev@ninai.dev` / `dev12345`
-- Reviewer: `reviewer@ninai.dev` / `review1234`
-
-### Resetting Your Dev Database
-
-If you want a completely fresh start:
+### 1. Clone & Start the Stack
 
 ```bash
-docker compose down -v
+git clone https://github.com/your-org/ninai.git
+cd ninai
+
+# Start PostgreSQL, Qdrant, Redis, and the app
 docker compose up -d --build
+
+# Run migrations
 docker compose exec backend alembic upgrade head
+
+# Seed demo data (org, users, sample knowledge)
 docker compose exec backend python -m scripts.seed_data
 ```
 
-## 🧰 Development Notes
+### 2. Open the App
 
-## ✅ Running Backend Tests
+- **Frontend**: http://localhost:3000  
+- **API Docs**: http://localhost:8000/docs
 
-### Fast unit tests (DB-less)
+### 3. Log In
 
-From the repo root:
+After seeding, use demo credentials:
+
+| User | Email | Password | Role |
+|------|-------|----------|------|
+| Admin | `admin@ninai.dev` | `admin1234` | Org Admin |
+| Reviewer | `reviewer@ninai.dev` | `review1234` | Knowledge Reviewer |
+| Agent Builder | `dev@ninai.dev` | `dev12345` | Team Member |
+
+### 4. Try It
+
+1. Log in as the agent builder
+2. Go to **Knowledge** → **Submit** → add a sample memory item
+3. Switch to reviewer account and **approve** in the review queue
+4. Query via the **Search** tab or API
+
+## 📁 Architecture
+
+### Data Plane vs. Control Plane
+
+**Data Plane** (OSS core):
+- Memory read/write/retrieve
+- Vector search (Qdrant) + RLS re-verification (Postgres)
+- Knowledge versioning and audit logs
+
+**Control Plane** (OSS + Enterprise):
+- Policy configuration (RBAC, RLS policies)
+- Knowledge review and approval workflows
+- Admin operations and user lifecycle
+
+### Directory Structure
+
+```
+ninai/
+├── backend/                 # FastAPI + SQLAlchemy
+│   ├── app/
+│   │   ├── api/            # v1 routes
+│   │   ├── core/           # Config, security, DB
+│   │   ├── middleware/     # Tenant context, audit logging
+│   │   ├── models/         # SQLAlchemy ORM
+│   │   ├── schemas/        # Pydantic + API responses
+│   │   ├── services/       # Business logic
+│   │   └── main.py
+│   ├── alembic/            # Database migrations
+│   ├── tests/              # Unit + integration tests
+│   └── scripts/            # Utils (seed, setup, etc.)
+├── frontend/               # React 18 + TypeScript
+│   ├── src/
+│   │   ├── components/     # Reusable UI
+│   │   ├── contexts/       # Auth, tenant, settings
+│   │   ├── hooks/          # Custom React hooks
+│   │   ├── pages/          # Full pages (Memory, Review, etc.)
+│   │   ├── services/       # API client
+│   │   └── types/          # TypeScript interfaces
+│   └── package.json
+├── docker/                 # Postgres, Qdrant, Redis configs
+├── docs/                   # User & operator guides
+├── docker-compose.yml      # Dev environment
+└── docker-compose.prod.yml # (Optional) prod baseline
+```
+
+## 🔒 Security Guarantees
+
+### Multi-Tenancy Enforcement
+
+**"No query without a tenant filter"** is enforced at the database layer:
+
+```python
+# Before ANY database operation, set the tenant context:
+async with session.begin():
+    await session.execute(
+        text("SET LOCAL app.current_org_id = :org_id"), 
+        {"org_id": org_id}
+    )
+    # Now all queries inherit org_id via Postgres RLS
+```
+
+**Postgres RLS Policies** on critical tables (memory, knowledge, audit):
+
+```sql
+CREATE POLICY org_isolation ON memory_metadata
+  USING (organization_id = current_setting('app.current_org_id')::uuid);
+```
+
+This means:
+- ✅ App code mistakes cannot leak data across orgs
+- ✅ SQL injection cannot escape the org
+- ✅ Even a stolen admin account can only see their org
+
+### Vector Search Parity
+
+Qdrant searches always include the org filter, with Postgres re-verification:
+
+```python
+# 1. Qdrant filter always includes org
+filter = Filter(must=[FieldCondition(key="organization_id", match=MatchValue(value=org_id))])
+
+# 2. Results are verified against Postgres RLS
+verified_ids = await verify_access(qdrant_ids, session)
+```
+
+### Explainable Retrieval
+
+Every vector search returns a scoring breakdown so you can audit why a result was ranked:
+
+```json
+{
+  "id": "...",
+  "text": "...",
+  "score": 0.92,
+  "explanation": {
+    "semantic_score": 0.85,
+    "recency_boost": 0.07,
+    "relevance_filters": ["tag:agent-behavior"]
+  }
+}
+```
+
+## 📋 Key Concepts
+
+### Knowledge Lifecycle
+
+1. **Submit**: Agent/developer submits knowledge → stored with `status=pending_review`
+2. **Review Queue**: Reviewer sees pending items, reads metadata, approves/rejects
+3. **Approval**: On approval, knowledge gets `version=1`, timestamp, approver audit trail
+4. **Memory Promotion** (optional): Reviewer optionally tags knowledge for long-term memory with topics/tags
+5. **Retrieval**: Agents retrieve via search; results include version info and audit trail
+
+### Policy-as-Code
+
+RBAC and RLS policies are versioned and auditable:
+
+```python
+# Define org-level policies
+policies = {
+    "org_isolation": "SELECT * FROM memory WHERE org_id = current_org",
+    "team_isolation": "SELECT * FROM knowledge WHERE team_id IN (current_teams)",
+    "review_gate": "knowledge must pass review before promotion"
+}
+```
+
+### Tenant Isolation Story
+
+**Strict guarantees**:
+- Postgres enforces RLS at the session layer (no app-level bugs can escape)
+- Qdrant filters + Postgres re-verification (defense in depth)
+- No shared indexes or caches across orgs
+- Audit logs prove that every query respects org boundaries
+
+**Test suite proves no leakage**:
+- Cross-tenant query tests fail loudly
+- RLS policy tests verify org isolation is airtight
+
+## 🧪 Testing
+
+### Fast Unit Tests (No DB)
 
 ```bash
 python -m pytest -q
 ```
 
-### Postgres-backed integration playbook (Section 6)
+### Integration Tests (Postgres Required)
 
-These tests run against a real Postgres database and apply Alembic migrations (required for RLS policies).
-
-1) Start Postgres (Docker Desktop must be running on Windows):
+Start Postgres and set the flag:
 
 ```bash
 docker compose up -d postgres
+RUN_POSTGRES_TESTS=1 python -m pytest -q backend/tests/
 ```
 
-2) Run the playbook suite:
-
-PowerShell:
-
-```powershell
-$env:RUN_POSTGRES_TESTS = "1"
-python -m pytest -q backend/tests/test_requirements_playbook_postgres.py
-```
-
-If Postgres is not reachable and `RUN_POSTGRES_TESTS=1` is set, the suite will fail (not skip) to avoid silently missing mandatory coverage.
-
-Optional overrides:
-
-- `POSTGRES_TEST_HOST`, `POSTGRES_TEST_PORT`, `POSTGRES_TEST_USER`, `POSTGRES_TEST_PASSWORD`
-- `POSTGRES_TEST_BASE_DB` (defaults to `ninai`) and `POSTGRES_TEST_DB` (defaults to `<base>_test`)
-
-### Optional performance smoke checks
-
-```powershell
-$env:RUN_POSTGRES_TESTS = "1"
-$env:RUN_PERF_TESTS = "1"
-python -m pytest -q backend/tests/test_requirements_playbook_postgres.py -k perf
-```
-
-### Frontend ↔ Backend API Routing
-
-- The Dockerized frontend is configured to call the backend through a relative base path: `/api/v1`.
-- Vite proxies `/api/v1` to the backend container; if you change proxy settings, remember that `localhost` inside a container is the container itself.
-
-### React DevTools
-
-Install the official React DevTools browser extension for a better development experience:
-- https://reactjs.org/link/react-devtools
-
-### React Router Warnings
-
-You may see React Router v6 “future flag” warnings in the console. This repo opts into the recommended v7 future flags to reduce noise.
-
-## 🔐 Authentication (Password + OIDC SSO)
-
-Ninai supports **local email/password** authentication and **OIDC SSO (Option A)**. Corporates can choose:
-
-- `AUTH_MODE=password` (default): only local email/password
-- `AUTH_MODE=oidc`: only SSO
-- `AUTH_MODE=both`: show both options on the login page
-
-The frontend automatically calls `GET /api/v1/auth/methods` to decide what to show.
-
-### Enable OIDC SSO (Option A)
-
-1) Configure the backend (environment variables on the `backend` service):
-
-- `AUTH_MODE=both`
-- `OIDC_ISSUER=<issuer-url>`
-- `OIDC_CLIENT_ID=<client-id>`
-- `OIDC_DEFAULT_ORG_SLUG=ninai-demo` (or set `OIDC_DEFAULT_ORG_ID=<uuid>`)
-- Optional hardening:
-   - `OIDC_ALLOWED_EMAIL_DOMAINS=example.com,example.org`
-   - `OIDC_DEFAULT_ROLE=member`
-   - `OIDC_GROUPS_CLAIM=groups` (provider-specific)
-   - `OIDC_GROUP_TO_ROLE_JSON={"Ninai-Org-Admins":"org_admin","Ninai-Members":"member"}`
-
-2) Configure the frontend (environment variables on the `frontend` service):
-
-- `VITE_OIDC_AUTHORITY=<same-as-OIDC_ISSUER>`
-- `VITE_OIDC_CLIENT_ID=<same-as-OIDC_CLIENT_ID>`
-- Optional:
-   - `VITE_OIDC_SCOPE=openid profile email`
-   - `VITE_OIDC_REDIRECT_URI=http://localhost:3000/auth/oidc/callback`
-
-3) Add this redirect URL to your identity provider:
-
-- `http://localhost:3000/auth/oidc/callback`
-
-### Common Issuer Examples
-
-- Microsoft Entra ID (Azure AD v2): `https://login.microsoftonline.com/<tenant-id>/v2.0`
-- Keycloak (realm issuer): `https://<keycloak-host>/realms/<realm-name>`
-
-## 🔍 Troubleshooting
-
-### Dashboard shows `/api/v1/audit/stats` 500
-
-- Confirm you seeded data and can log in.
-- Check backend logs: `docker compose logs -f backend`
-- If you recently pulled changes, rebuild containers: `docker compose up -d --build`
-
-## 🔒 Security Model
-
-### Row-Level Security (RLS)
-
-All critical tables enforce RLS with organization isolation:
-
-```sql
--- Example: org_isolation policy
-CREATE POLICY org_isolation ON memory_metadata
-  USING (organization_id = current_setting('app.current_org_id')::uuid);
-```
-
-### Tenant Context
-
-Every request sets database session variables for RLS:
-
-```python
-async with session.begin():
-    await session.execute(text("SET LOCAL app.current_org_id = :org_id"), {"org_id": org_id})
-    await session.execute(text("SET LOCAL app.current_user_id = :user_id"), {"user_id": user_id})
-```
-
-### Vector Search Parity
-
-Qdrant searches always include org filter, with Postgres RLS re-verification:
-
-```python
-# Qdrant filter always includes organization_id
-filter = Filter(must=[FieldCondition(key="organization_id", match=MatchValue(value=org_id))])
-
-# Results are re-verified against Postgres RLS
-verified_ids = await verify_access(qdrant_ids, session)
-```
-
-## 🧪 Testing
+### Cross-Tenant Leakage Tests
 
 ```bash
-# Backend tests
-cd backend
-pytest
+RUN_POSTGRES_TESTS=1 python -m pytest -q -k "test_no_cross_tenant_leak"
+```
 
-# Frontend lint + build
+Confirms:
+- User A cannot read org B's memory
+- Team A cannot read team B's knowledge
+- Admin account still respects org boundaries
+
+## 🔧 Configuration
+
+### Kill-Switch Simple Mode
+
+For dev/testing, run with just **Postgres + Qdrant**:
+
+```bash
+docker compose --profile lite up
+```
+
+This disables Redis, Elastic, Grafana. Ninai still works; just slower under load.
+
+### Schema Versioning & Migrations
+
+Ninai uses **Alembic** for database evolution:
+
+```bash
+# Create a migration
+alembic revision --autogenerate -m "add new column"
+
+# Apply
+alembic upgrade head
+
+# Rollback
+alembic downgrade -1
+```
+
+**Migration strategy**:
+- Migrations are idempotent
+- Backward-compatible schema changes only (for rolling deployments)
+- Qdrant payload schema evolved via versioned fields; old versions still readable
+
+### Latency & Cost Budgets
+
+**Expected p95 latencies**:
+- Memory write: < 100ms (Postgres + Qdrant)
+- Vector search: < 200ms (Qdrant + RLS re-verification)
+- Knowledge approval: < 50ms (Postgres only)
+
+**Cost control**:
+- Query result caching (optional Redis)
+- Token rate limiting per org/user
+- Qdrant payload size limits
+
+**Defaults**:
+- Rate limit: 1000 req/min per org
+- Retention: 90 days (configurable)
+- Cache TTL: 5 minutes (configurable)
+
+### Data Lifecycle
+
+**Right to Delete (GDPR)**:
+
+```python
+DELETE FROM memory WHERE organization_id = org_id AND user_id = user_id
+# Triggers cascade: memory_metadata, audit_logs, versions
+```
+
+**Retention Policies**:
+
+```python
+# Archival after 90 days
+DELETE FROM memory WHERE created_at < NOW() - INTERVAL '90 days' AND status = 'archived'
+```
+
+**Export & Portability**:
+
+```bash
+# Export all org data as JSON
+GET /api/v1/orgs/{org_id}/export
+```
+
+## 🛡️ Threat Model
+
+### What Ninai Protects Against
+
+✅ **Cross-tenant data leakage** via query mistakes  
+✅ **SQL injection** across org boundaries (RLS blocks it)  
+✅ **Unauthorized knowledge approval** (strict role-based gates)  
+✅ **Tampering with audit logs** (immutable append-only)  
+✅ **Prompt injection in retrieved knowledge** (PolicyGuard validates retrieval context)
+
+### What Ninai Does NOT Protect Against
+
+❌ **Denial of service** (rate limiting is basic; bring your own DDoS protection)  
+❌ **Network eavesdropping** (use TLS/mTLS in production)  
+❌ **Compromised application server** (if your backend is hacked, all bets are off)  
+❌ **Insider threats** (org admins can see all org data by design)  
+❌ **Supply chain attacks** (keep dependencies updated)
+
+### PolicyGuard (Tool Misuse Prevention)
+
+Ninai includes **PolicyGuard**: a policy engine that validates knowledge before retrieval to prevent:
+- Prompt injection attacks
+- Out-of-context retrieval
+- Unauthorized tool calls
+
+```python
+# PolicyGuard validation before returning results
+policy_check = await policeguard.validate(
+    knowledge_id=...,
+    query_context=...,
+    retrieved_context=...
+)
+if not policy_check.allowed:
+    return []  # Fail closed
+```
+
+## 📊 Observability & SLOs
+
+### Key Metrics
+
+- **Retrieval Latency** (p50, p95, p99)
+- **RLS Re-verification Latency**
+- **Knowledge Review Queue Depth** (SLO: < 10 min for approval)
+- **Cross-Tenant Audit Events** (SLO: 0)
+- **Token Usage** (per org, capped)
+
+### Grafana Dashboards (Included)
+
+- Memory I/O dashboard
+- Review queue SLA tracking
+- Tenant isolation audit board
+- Error rate + SLO burn-down
+
+### Recommended SLOs
+
+| Metric | OSS Target | Enterprise Target |
+|--------|-----------|------------------|
+| Retrieval latency (p95) | 500ms | 200ms |
+| Approval SLA | 4 hours | 1 hour |
+| Audit log durability | 24 hours | 7 days |
+| Availability | 99.5% | 99.99% |
+
+## 🚢 Deployment
+
+### Development (Docker Compose)
+
+```bash
+docker compose up -d --build
+```
+
+### Production (Self-Managed)
+
+See [../ninai-deploy/self-managed/](../ninai-deploy/self-managed/) for:
+- Kubernetes YAML manifests
+- Helm charts with values overlays
+- Terraform for GCP infrastructure
+- Runbooks for ops (backup, restore, scaling)
+
+### Enterprise Managed (Sansten AI)
+
+Hosted on Google Cloud with:
+- Managed database + backups
+- SLA monitoring + incident response
+- Auto-scaling based on load
+- Advanced eval + drift detection
+
+Contact: [sales@sanstenaix.dev](mailto:sales@sanstenaix.dev)
+
+## 🔐 Authentication
+
+### Local Email/Password
+
+Default. No external dependencies.
+
+```bash
+AUTH_MODE=password  # Only email/password login
+```
+
+### OIDC SSO (Keycloak, Azure AD, Google, etc.)
+
+```bash
+AUTH_MODE=both
+OIDC_ISSUER=https://login.microsoftonline.com/tenant-id/v2.0
+OIDC_CLIENT_ID=<client-id>
+OIDC_ALLOWED_EMAIL_DOMAINS=example.com
+OIDC_DEFAULT_ORG_SLUG=ninai-demo
+```
+
+**Frontend env vars**:
+
+```bash
+VITE_OIDC_AUTHORITY=https://login.microsoftonline.com/tenant-id/v2.0
+VITE_OIDC_CLIENT_ID=<client-id>
+VITE_OIDC_REDIRECT_URI=http://localhost:3000/auth/oidc/callback
+```
+
+## 📝 Development
+
+### Backend Tests
+
+```bash
+# Fast (no DB)
+python -m pytest -q
+
+# With Postgres
+RUN_POSTGRES_TESTS=1 python -m pytest -q
+
+# With performance tests
+RUN_POSTGRES_TESTS=1 RUN_PERF_TESTS=1 python -m pytest -k perf
+```
+
+### Frontend Lint + Build
+
+```bash
 cd frontend
 npm run lint
 npm run build
 ```
 
-## 📝 Contributing
-
-We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
-
-### Development Workflow
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
 ### Code Style
 
-- **Python**: Black + isort + ruff
-- **TypeScript**: ESLint + Prettier
+- **Python**: Black, isort, ruff
+- **TypeScript**: ESLint, Prettier
 - **Commits**: Conventional Commits
+
+## 📚 Documentation
+
+- [docs/EDITIONS.md](docs/EDITIONS.md) — OSS vs Enterprise feature matrix
+- [docs/SECURITY.md](docs/SECURITY.md) — RLS policies, audit logging, threat model
+- [docs/API.md](docs/API.md) — REST API reference
+- [../ninai-deploy/](../ninai-deploy/) — Deployment runbooks & infrastructure
+
+## 🤝 Contributing
+
+We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+MIT License. See [LICENSE](LICENSE) for details.
 
-## 🙏 Acknowledgments
+## 🙏 Built With
 
-Built with:
 - [FastAPI](https://fastapi.tiangolo.com/)
 - [SQLAlchemy](https://www.sqlalchemy.org/)
 - [Qdrant](https://qdrant.tech/)
-- [React](https://react.dev/)
+- [React 18](https://react.dev/)
 - [Tailwind CSS](https://tailwindcss.com/)
+- [PostgreSQL 15+](https://www.postgresql.org/)
+
+---
+
+**Questions?** Open an issue on GitHub or email [support@sanstenaix.dev](mailto:support@sanstenaix.dev).
+
+**Want to use Enterprise?** See [../ninai-enterprise/](../ninai-enterprise/) or contact sales at [sales@sanstenaix.dev](mailto:sales@sanstenaix.dev).
