@@ -16,9 +16,12 @@ import sys
 import argparse
 from datetime import datetime, timedelta, timezone
 import uuid
+import os
+from pathlib import Path
 
-# Add backend to path
-sys.path.insert(0, '/d/Sansten/Projects/Ninai2/backend')
+# Add backend to path (relative to this script's location)
+backend_path = str(Path(__file__).parent.parent)
+sys.path.insert(0, backend_path)
 
 from jose import jwt
 from app.core.config import settings

@@ -96,3 +96,10 @@ alembic/versions/__pycache__/
 md/
 md_sources/
 docs_archive/
+
+# Markdown documentation files (except README.md - which is the primary entry point)
+*.md
+!README.md
+
+# Docs folder (internal documentation, kept locally)
+docs/
