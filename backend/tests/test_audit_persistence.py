@@ -2,9 +2,13 @@
 
 import pytest
 import uuid
+import os
 from datetime import datetime, timezone
 
+ENTERPRISE_FEATURE = os.environ.get('NINAI_LICENSE_TOKEN')
 
+
+@pytest.mark.skipif(not ENTERPRISE_FEATURE, reason="Enterprise feature - requires NINAI_LICENSE_TOKEN")
 @pytest.mark.asyncio
 async def test_audit_events_persist(pg_client, auth_headers):
     """Test that audit events are stored in database."""
@@ -33,6 +37,7 @@ async def test_audit_events_persist(pg_client, auth_headers):
     assert any(e["id"] == event["id"] for e in data["events"])
 
 
+@pytest.mark.skipif(not ENTERPRISE_FEATURE, reason="Enterprise feature - requires NINAI_LICENSE_TOKEN")
 @pytest.mark.asyncio
 async def test_audit_trail_category_filter(pg_client, auth_headers):
     """Test category filtering on audit trail."""
@@ -57,6 +62,7 @@ async def test_audit_trail_category_filter(pg_client, auth_headers):
     assert all(e["category"] == "security" for e in events)
 
 
+@pytest.mark.skipif(not ENTERPRISE_FEATURE, reason="Enterprise feature - requires NINAI_LICENSE_TOKEN")
 @pytest.mark.asyncio
 async def test_audit_event_includes_actor(pg_client, auth_headers, test_user_id):
     """Test that audit events record actor information."""

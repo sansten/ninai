@@ -429,6 +429,13 @@ if not policy_check.allowed:
 docker compose up -d --build
 ```
 
+If you run the backend in a container without root privileges, set a writable
+backup directory:
+
+```bash
+BACKUP_DIR=/tmp/backups
+```
+
 ### Production (Self-Managed)
 
 See [../ninai-deploy/self-managed/](../ninai-deploy/self-managed/) for:
