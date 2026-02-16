@@ -21,6 +21,8 @@ from ninai.models import (
     ToolSpec,
     ToolInvocationResult,
     LLMCompleteJsonResponse,
+    TopicReassignmentRatio,
+    TopicRestructureResult,
 )
 
 
@@ -381,6 +383,49 @@ class LLMResource:
             },
         )
         return LLMCompleteJsonResponse(**response)
+
+
+class TopicsResource:
+    """Topic maintenance endpoints (admin only)."""
+
+    def __init__(self, client: "NinaiClient"):
+        self._client = client
+
+    def reassignment_ratio(
+        self,
+        *,
+        org_id: str | None = None,
+        scope: str | None = None,
+        scope_id: str | None = None,
+    ) -> TopicReassignmentRatio:
+        params: Dict[str, Any] = {}
+        if org_id:
+            params["org_id"] = org_id
+        if scope:
+            params["scope"] = scope
+        if scope_id:
+            params["scope_id"] = scope_id
+
+        response = self._client._get("/topics/admin/reassignment-ratio", params=params)
+        return TopicReassignmentRatio(**response)
+
+    def periodic_restructure(
+        self,
+        *,
+        org_id: str | None = None,
+        scope: str | None = None,
+        scope_id: str | None = None,
+    ) -> TopicRestructureResult:
+        payload: Dict[str, Any] = {}
+        if org_id:
+            payload["org_id"] = org_id
+        if scope:
+            payload["scope"] = scope
+        if scope_id:
+            payload["scope_id"] = scope_id
+
+        response = self._client._post("/topics/admin/restructure", json=payload)
+        return TopicRestructureResult(**response)
 
 
 class ToolsResource:

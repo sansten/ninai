@@ -88,6 +88,11 @@ from app.models.backup import (
     BackupRestore,
 )
 from app.models.memory_consolidation import MemoryConsolidation
+from app.models.memory_episode import MemoryEpisode
+from app.models.memory_episode_membership import MemoryEpisodeMembership
+from app.models.memory_semantic_node import MemorySemanticNode
+from app.models.memory_semantic_node_topic_history import MemorySemanticNodeTopicHistory
+from app.models.navigation_edge import NavigationEdge
 
 __all__ = [
     # Base
@@ -203,4 +208,12 @@ __all__ = [
     "BackupRestore",
     # Consolidations
     "MemoryConsolidation",
+    # GAP-1: Four-Level Hierarchy
+    "MemoryEpisode",
+    "MemoryEpisodeMembership",
+    "MemorySemanticNode",
+    # GAP-5: Retroactive Restructuring
+    "MemorySemanticNodeTopicHistory",
+    # GAP-6: kNN Navigation Graph
+    "NavigationEdge",
 ]

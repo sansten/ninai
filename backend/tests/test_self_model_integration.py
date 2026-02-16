@@ -11,9 +11,7 @@ from app.core.database import set_tenant_context
 from app.models.cognitive_iteration import CognitiveIteration
 from app.models.cognitive_session import CognitiveSession
 from app.models.evaluation_report import EvaluationReport
-from app.models.organization import Organization
 from app.models.tool_call_log import ToolCallLog
-from app.models.user import User
 from app.services.self_model_service import SelfModelService
 
 
@@ -24,28 +22,7 @@ requires_postgres = pytest.mark.skipif(not RUN_POSTGRES_TESTS, reason="Set RUN_P
 @requires_postgres
 @pytest.mark.asyncio
 async def test_self_model_ingest_and_recompute(db_session, test_org_id: str, test_user_id: str):
-    db_session.add(
-        Organization(
-            id=test_org_id,
-            name="Test Org",
-            slug=f"test-org-{uuid4().hex[:10]}",
-            is_active=True,
-            settings={},
-        )
-    )
-    db_session.add(
-        User(
-            id=test_user_id,
-            email=f"user-{uuid4().hex[:10]}@example.com",
-            hashed_password="not-a-real-hash",
-            full_name="Test User",
-            is_active=True,
-            is_superuser=False,
-            clearance_level=0,
-            preferences={},
-        )
-    )
-    await db_session.flush()
+    # Organization/User are seeded by the db_session fixture.
 
     await set_tenant_context(db_session, test_user_id, test_org_id, roles="org_admin", clearance_level=0)
 

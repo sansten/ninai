@@ -307,7 +307,6 @@ class MemoryRetrievalService:
                 "title": mem.title,
                 "scope": mem.scope,
                 "created_at": mem.created_at,
-                "episode_id": mem.episode_id,
             }
 
         return metadata

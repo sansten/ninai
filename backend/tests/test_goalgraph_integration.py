@@ -7,8 +7,6 @@ import pytest
 
 from app.core.database import set_tenant_context
 from app.models.memory import MemoryMetadata
-from app.models.organization import Organization
-from app.models.user import User
 from app.services.goal_service import GoalService
 
 
@@ -21,28 +19,7 @@ requires_postgres = pytest.mark.skipif(not RUN_POSTGRES_TESTS, reason="Set RUN_P
 async def test_goalgraph_create_node_link_and_idempotent_link(db_session, test_org_id: str, test_user_id: str):
     memory_id = str(uuid4())
 
-    db_session.add(
-        Organization(
-            id=test_org_id,
-            name="Test Org",
-            slug=f"test-org-{uuid4().hex[:10]}",
-            is_active=True,
-            settings={},
-        )
-    )
-    db_session.add(
-        User(
-            id=test_user_id,
-            email=f"user-{uuid4().hex[:10]}@example.com",
-            hashed_password="not-a-real-hash",
-            full_name="Test User",
-            is_active=True,
-            is_superuser=False,
-            clearance_level=0,
-            preferences={},
-        )
-    )
-    await db_session.flush()
+    # Organization/User are seeded by the db_session fixture.
 
     db_session.add(
         MemoryMetadata(

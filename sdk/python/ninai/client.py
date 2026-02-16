@@ -28,6 +28,7 @@ from ninai.resources import (
     SelfModelResource,
     ToolsResource,
     LLMResource,
+    TopicsResource,
 )
 from ninai.agents import GoalPlannerAgent, GoalLinkingAgent, MetaAgent
 from ninai.models import AuthTokens, User
@@ -108,6 +109,7 @@ class NinaiClient:
         self.self_model = SelfModelResource(self)
         self.tools = ToolsResource(self)
         self.llm = LLMResource(self)
+        self.topics = TopicsResource(self)
 
         # Typed agent helpers
         self._goal_planner_agent: GoalPlannerAgent | None = None

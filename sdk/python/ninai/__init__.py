@@ -18,6 +18,13 @@ Quick Start:
     # Search memories
     results = client.memories.search("billing problems")
 
+    # Topic maintenance (org admin only)
+    ratio = client.topics.reassignment_ratio()
+    print(ratio.reassignment_ratio)
+
+    result = client.topics.periodic_restructure(scope="personal")
+    print(result.reassignments, result.guidance_score_after)
+
 For more information, visit: https://github.com/your-org/ninai
 """
 

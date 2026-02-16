@@ -51,18 +51,17 @@ async def test_meta_metrics_uses_counts(client: AsyncClient, auth_headers: dict,
     monkeypatch.setattr(meta_endpoints, "set_tenant_context", AsyncMock())
 
     # db is provided via dependency override in conftest (AsyncMock spec=AsyncSession)
-    # Endpoint executes: open_conflicts, runs_total, escalations, drift_incidents, avg_conf
+    # Endpoint executes: open_conflicts, runs_total, escalations, avg_conf
     res1 = MagicMock(); res1.scalar_one.return_value = 2
     res2 = MagicMock(); res2.scalar_one.return_value = 8
     res3 = MagicMock(); res3.scalar_one.return_value = 1
-    res4 = MagicMock(); res4.scalar_one.return_value = 3
-    res5 = MagicMock(); res5.scalar_one.return_value = 0.5
+    res4 = MagicMock(); res4.scalar_one.return_value = 0.5
 
     # Patch the injected db execute behavior via dependency override function closure
     # We patch get_db in endpoint module scope by overriding dependency.
     async def override_get_db():
         db = AsyncMock()
-        db.execute = AsyncMock(side_effect=[res1, res2, res3, res4, res5])
+        db.execute = AsyncMock(side_effect=[res1, res2, res3, res4])
         yield db
 
     app.dependency_overrides[meta_endpoints.get_db] = override_get_db
@@ -76,6 +75,5 @@ async def test_meta_metrics_uses_counts(client: AsyncClient, auth_headers: dict,
     data = resp.json()
     assert "org_id" in data
     assert data["avg_confidence_by_org"] == 0.5
-    assert data["drift_incidents"] == 3
     assert data["conflict_rate"] == 2 / 8
     assert data["escalation_rate"] == 1 / 8
