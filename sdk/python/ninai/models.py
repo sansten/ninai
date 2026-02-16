@@ -195,3 +195,20 @@ class ToolInvocationResult(BaseModel):
 
 class LLMCompleteJsonResponse(BaseModel):
     data: Dict[str, Any] = {}
+
+
+class TopicReassignmentRatio(BaseModel):
+    total_nodes: int
+    nodes_with_history: int
+    nodes_reassigned: int
+    reassignment_ratio: float
+    initial_only_ratio: float
+
+
+class TopicRestructureResult(BaseModel):
+    reassignments: int
+    splits: int
+    merges: int
+    guidance_score_before: float
+    guidance_score_after: float
+    reassignment_ratio: float

@@ -1,6 +1,10 @@
 import pytest
+import os
+
+ENTERPRISE_FEATURE = os.environ.get('NINAI_LICENSE_TOKEN')
 
 
+@pytest.mark.skipif(not ENTERPRISE_FEATURE, reason="Enterprise feature - requires NINAI_LICENSE_TOKEN")
 @pytest.mark.asyncio
 async def test_observability_persists(pg_client, auth_headers):
     # Fetch defaults
@@ -28,6 +32,7 @@ async def test_observability_persists(pg_client, auth_headers):
     assert payload["log_config"]["services"][0]["level"] == "ERROR"
 
 
+@pytest.mark.skipif(not ENTERPRISE_FEATURE, reason="Enterprise feature - requires NINAI_LICENSE_TOKEN")
 @pytest.mark.asyncio
 async def test_alert_notifications_persist(pg_client, auth_headers):
     create_body = {
@@ -65,6 +70,7 @@ async def test_alert_notifications_persist(pg_client, auth_headers):
     assert updated["enabled"] is False
 
 
+@pytest.mark.skipif(not ENTERPRISE_FEATURE, reason="Enterprise feature - requires NINAI_LICENSE_TOKEN")
 @pytest.mark.asyncio
 async def test_alert_notification_test_endpoint_logs_mode(pg_client, auth_headers):
     res = await pg_client.post(

@@ -1,8 +1,12 @@
 """Test feature detection endpoint in OSS and Enterprise builds."""
 
 import pytest
+import os
+
+ENTERPRISE_FEATURE = os.environ.get('NINAI_LICENSE_TOKEN')
 
 
+@pytest.mark.skipif(not ENTERPRISE_FEATURE, reason="Enterprise feature - requires NINAI_LICENSE_TOKEN")
 @pytest.mark.asyncio
 async def test_features_endpoint_community_build(pg_client, auth_headers):
     """Test /features returns all flags False in Community build (no enterprise plugin)."""

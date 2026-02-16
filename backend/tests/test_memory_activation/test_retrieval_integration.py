@@ -63,20 +63,18 @@ class TestMemoryRetrievalService:
     @pytest.mark.asyncio
     async def test_score_single_memory(
         self,
-        async_session: AsyncSession,
+        db_session: AsyncSession,
         test_org_id: str,
         test_user_id: str,
-        test_org,
-        test_user,
     ):
         """Test scoring single memory."""
-        service = MemoryRetrievalService(session=async_session, org_id=test_org_id, user_id=test_user_id)
+        service = MemoryRetrievalService(session=db_session, org_id=test_org_id, user_id=test_user_id)
 
         mem_id = str(uuid4())
-        async with async_session.begin():
-            await set_tenant_context(async_session, user_id=test_user_id, org_id=test_org_id)
+        async with db_session.begin():
+            await set_tenant_context(db_session, user_id=test_user_id, org_id=test_org_id)
 
-            async_session.add(
+            db_session.add(
                 MemoryMetadata(
                     id=mem_id,
                     organization_id=test_org_id,
@@ -84,9 +82,11 @@ class TestMemoryRetrievalService:
                     scope="personal",
                     content_preview="integration memory",
                     content_hash=uuid4().hex,
+                    vector_id=str(uuid4()),
+                    embedding_model="text-embedding-3-small",
                 )
             )
-            async_session.add(
+            db_session.add(
                 MemoryActivationState(
                     organization_id=test_org_id,
                     memory_id=mem_id,
@@ -94,7 +94,7 @@ class TestMemoryRetrievalService:
                     confidence=0.9,
                 )
             )
-            await async_session.flush()
+            await db_session.flush()
 
             ranked, explanations = await service.score_and_rank_results(
                 memory_ids=[mem_id],
@@ -111,22 +111,20 @@ class TestMemoryRetrievalService:
     @pytest.mark.asyncio
     async def test_ranking_order(
         self,
-        async_session: AsyncSession,
+        db_session: AsyncSession,
         test_org_id: str,
         test_user_id: str,
-        test_org,
-        test_user,
     ):
         """Test memories ranked by activation descending."""
-        service = MemoryRetrievalService(session=async_session, org_id=test_org_id, user_id=test_user_id)
+        service = MemoryRetrievalService(session=db_session, org_id=test_org_id, user_id=test_user_id)
 
         mem_ids = [str(uuid4()) for _ in range(3)]
 
-        async with async_session.begin():
-            await set_tenant_context(async_session, user_id=test_user_id, org_id=test_org_id)
+        async with db_session.begin():
+            await set_tenant_context(db_session, user_id=test_user_id, org_id=test_org_id)
 
             for mem_id in mem_ids:
-                async_session.add(
+                db_session.add(
                     MemoryMetadata(
                         id=mem_id,
                         organization_id=test_org_id,
@@ -134,30 +132,43 @@ class TestMemoryRetrievalService:
                         scope="personal",
                         content_preview=f"integration memory {mem_id[:8]}",
                         content_hash=uuid4().hex,
+                        vector_id=str(uuid4()),
+                        embedding_model="text-embedding-3-small",
                     )
                 )
 
-            async_session.add_all(
-                [
-                    MemoryActivationState(
-                        organization_id=test_org_id,
-                        memory_id=mem_ids[0],
-                        base_importance=0.3,
-                    ),
-                    MemoryActivationState(
-                        organization_id=test_org_id,
-                        memory_id=mem_ids[1],
-                        base_importance=0.8,
-                    ),
-                    MemoryActivationState(
-                        organization_id=test_org_id,
-                        memory_id=mem_ids[2],
-                        base_importance=0.5,
-                    ),
-                ]
+            await db_session.flush()
+
+            db_session.add(
+                MemoryActivationState(
+                    id=str(uuid4()),
+                    organization_id=test_org_id,
+                    memory_id=mem_ids[0],
+                    base_importance=0.3,
+                )
+            )
+            await db_session.flush()
+            
+            db_session.add(
+                MemoryActivationState(
+                    id=str(uuid4()),
+                    organization_id=test_org_id,
+                    memory_id=mem_ids[1],
+                    base_importance=0.8,
+                )
+            )
+            await db_session.flush()
+            
+            db_session.add(
+                MemoryActivationState(
+                    id=str(uuid4()),
+                    organization_id=test_org_id,
+                    memory_id=mem_ids[2],
+                    base_importance=0.5,
+                )
             )
 
-            await async_session.flush()
+            await db_session.flush()
 
             similarities = {mid: 0.8 for mid in mem_ids}
 
@@ -176,38 +187,38 @@ class TestMemoryRetrievalService:
     @pytest.mark.asyncio
     async def test_explanation_log(
         self,
-        async_session: AsyncSession,
+        db_session: AsyncSession,
         test_org_id: str,
         test_user_id: str,
-        test_org,
-        test_user,
     ):
         """Test explanation log writing."""
-        service = MemoryRetrievalService(session=async_session, org_id=test_org_id, user_id=test_user_id)
+        service = MemoryRetrievalService(session=db_session, org_id=test_org_id, user_id=test_user_id)
 
         mem_id = str(uuid4())
 
-        async with async_session.begin():
-            await set_tenant_context(async_session, user_id=test_user_id, org_id=test_org_id)
+        async with db_session.begin():
+            await set_tenant_context(db_session, user_id=test_user_id, org_id=test_org_id)
 
-            async_session.add(
+            db_session.add(
                 MemoryMetadata(
                     id=mem_id,
                     organization_id=test_org_id,
                     owner_id=test_user_id,
                     scope="personal",
                     content_preview="integration memory",
+                    vector_id=str(uuid4()),
                     content_hash=uuid4().hex,
+                    embedding_model="text-embedding-3-small",
                 )
             )
-            async_session.add(
+            db_session.add(
                 MemoryActivationState(
                     organization_id=test_org_id,
                     memory_id=mem_id,
                     base_importance=0.7,
                 )
             )
-            await async_session.flush()
+            await db_session.flush()
 
             _ranked, explanations = await service.score_and_rank_results(
                 memory_ids=[mem_id],
@@ -226,7 +237,7 @@ class TestMemoryRetrievalService:
             from sqlalchemy import select
 
             stmt = select(MemoryRetrievalExplanation).where(MemoryRetrievalExplanation.id == log_id)
-            result = await async_session.execute(stmt)
+            result = await db_session.execute(stmt)
             log_entry = result.scalar_one()
 
             assert str(log_entry.user_id) == str(service.user_id)
