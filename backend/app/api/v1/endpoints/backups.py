@@ -2,6 +2,8 @@
 Backup Routes - Database backup and restore endpoints
 """
 
+import os
+
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import UUID
@@ -28,7 +30,7 @@ router = APIRouter(prefix="/backups", tags=["backups"])
 # Initialize backup service (in production, this would be dependency injected)
 backup_service = DatabaseBackupService(
     db_url="postgresql://user:password@localhost/ninai",
-    backup_dir=Path("/backups")
+    backup_dir=Path(os.environ.get("BACKUP_DIR", "/backups")),
 )
 
 

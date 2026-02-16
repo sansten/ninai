@@ -402,9 +402,7 @@ export function AdminSettingsTab() {
         </div>
       )}
 
-      {subtab === 'operations' && hasAdminOperationsge' && <AdminKnowledgeReviewTab apiBasePath="/admin/knowledge" />}
-
-  {subtab === 'operations' && <AdminOperationsTab />}
+      {subtab === 'operations' && <AdminOperationsTab />}
 
       {subtab === 'env' && (
         <div className="space-y-3">

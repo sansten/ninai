@@ -11,17 +11,19 @@ from __future__ import annotations
 
 from typing import Optional, Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.endpoints.auth import get_current_user
-from app.core.database import get_db
+from app.core.database import get_db, set_tenant_context
+from app.middleware.tenant_context import TenantContext, require_org_admin
 from app.models.memory import MemoryMetadata
 from app.models.memory_topic import MemoryTopic
 from app.models.memory_topic_membership import MemoryTopicMembership
 from app.models.user import User
+from app.services.topic_structure_service import TopicStructureService
 
 
 router = APIRouter(tags=["topics"])
@@ -57,6 +59,29 @@ class TopicMemoriesResponse(BaseModel):
     limit: int
     offset: int
     memories: list[TopicMemoryResponse]
+
+
+class TopicReassignmentRatioResponse(BaseModel):
+    total_nodes: int
+    nodes_with_history: int
+    nodes_reassigned: int
+    reassignment_ratio: float
+    initial_only_ratio: float
+
+
+class TopicRestructureRequest(BaseModel):
+    org_id: Optional[str] = Field(default=None, description="Defaults to caller org (system_admin may override)")
+    scope: Optional[str] = None
+    scope_id: Optional[str] = None
+
+
+class TopicRestructureResponse(BaseModel):
+    reassignments: int
+    splits: int
+    merges: int
+    guidance_score_before: float
+    guidance_score_after: float
+    reassignment_ratio: float
 
 
 @router.get("/topics", response_model=TopicListResponse)
@@ -246,3 +271,49 @@ async def list_memory_topics(
         )
         for t in topics
     ]
+
+
+@router.get("/topics/admin/reassignment-ratio", response_model=TopicReassignmentRatioResponse)
+async def get_topic_reassignment_ratio(
+    org_id: Optional[str] = Query(None),
+    scope: Optional[str] = Query(None),
+    scope_id: Optional[str] = Query(None),
+    tenant: TenantContext = Depends(require_org_admin()),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get reassignment ratio for semantic nodes (org admin only)."""
+    target_org_id = org_id or tenant.org_id
+    if (target_org_id != tenant.org_id) and not tenant.has_any_role("system_admin"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
+
+    await set_tenant_context(db, tenant.user_id, tenant.org_id, tenant.roles_string, tenant.clearance_level)
+
+    svc = TopicStructureService(db)
+    stats = await svc.track_reassignment_ratio(
+        organization_id=target_org_id,
+        scope=scope,
+        scope_id=scope_id,
+    )
+    return TopicReassignmentRatioResponse(**stats)
+
+
+@router.post("/topics/admin/restructure", response_model=TopicRestructureResponse)
+async def run_topic_restructure(
+    req: TopicRestructureRequest,
+    tenant: TenantContext = Depends(require_org_admin()),
+    db: AsyncSession = Depends(get_db),
+):
+    """Run periodic topic restructure (org admin only)."""
+    target_org_id = req.org_id or tenant.org_id
+    if (target_org_id != tenant.org_id) and not tenant.has_any_role("system_admin"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
+
+    await set_tenant_context(db, tenant.user_id, tenant.org_id, tenant.roles_string, tenant.clearance_level)
+
+    svc = TopicStructureService(db)
+    result = await svc.periodic_restructure(
+        organization_id=target_org_id,
+        scope=req.scope,
+        scope_id=req.scope_id,
+    )
+    return TopicRestructureResponse(**result)
