@@ -1,4 +1,4 @@
-# Ninai - The Secure Memory Layer for AI Agents
+# Ninai - The Memory OS for AI Agents
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
@@ -35,7 +35,7 @@ c.memories.search("billing issue", tags=["support","billing"], limit=5)
 
 ## What is Ninai?
 
-Ninai is an **open-source memory layer** for AI agents and RAG systems. It solves the **"secure multi-tenant memory"** problem:
+Ninai is an **open-source Memory OS** for AI agents and RAG systems. It solves the **"secure multi-tenant memory"** problem:
 
 - **Store agent knowledge** as immutable versions with audit trails
 - **Enforce data isolation** via Postgres RLS at the database layer (not just app logic)  
@@ -44,6 +44,59 @@ Ninai is an **open-source memory layer** for AI agents and RAG systems. It solve
 - **Simple to adopt** — single docker-compose, no Kubernetes, optional Grafana/Redis/Elastic
 
 **Ideal for**: agent builders, RAG teams, and platforms needing provably secure multi-tenant memory.
+
+## Why This OSS is Special
+
+Ninai isn't just another memory library—it's a **complete Memory Operating System** for agents. Here's what sets it apart:
+
+### 1. **RLS-First Security by Default**
+Most memory systems bolt security on top. Ninai makes **Postgres Row-Level Security** the foundation. This means:
+- Zero cross-tenant data leaks, regardless of app code bugs
+- SQL injection cannot escape the org boundary
+- Database-enforced isolation, not app-logic isolation
+- Every query is audited and traceable
+
+### 2. **Explainable Vector Search** (No Black Boxes)
+When an agent retrieves a memory, you see:
+- Semantic similarity score breakdown
+- Recency boost calculation
+- Filter logic that was applied
+- Audit trail of why this result was ranked #1
+
+This is critical for **compliance** and **debugging**—you can explain to regulators and users exactly why an agent made a decision.
+
+### 3. **Governed Knowledge Lifecycle**
+Ninai separates submission from approval:
+- Developers **submit** knowledge (goes to review queue)
+- Reviewers **approve/reject** (with audit comments)
+- Approved knowledge gets **immutable versions** and **promotion rules**
+- Optional routing to long-term vs short-term memory
+
+This prevents bad/outdated knowledge from leaking into agent behavior.
+
+### 4. **Works Today with Minimal Ops**
+No Kubernetes, no managed services required:
+- **Postgres + Qdrant** = full Memory OS
+- Optional Redis for caching, Grafana for observability
+- Single `docker compose up` gets you a production-ready system
+- Scales to millions of memories without refactoring
+
+### 5. **Clear OSS/Enterprise Separation**
+The core is **pure open-source** (MIT). Enterprise add-ons are:
+- SCIM user provisioning ❌ (OSS)
+- Advanced eval + drift detection ❌ (OSS)
+- Managed hosting + SLAs ❌ (OSS)
+
+No vendor lock-in. No surprise features that become paid. **Transparency by design.**
+
+### 6. **Built for Agent Behavior Governance**
+Unlike RAG-only systems, Ninai supports:
+- **Per-agent memory scopes** (agent-1 can't read agent-2's memories)
+- **Team-level knowledge** (shared context across a crew)
+- **Hierarchical RBAC** (org → team → personal)
+- **PolicyGuard validation** (prevent prompt injection via retrieved context)
+
+---
 
 ### Why NOT enterprise-bloat?
 
@@ -76,6 +129,96 @@ Ninai comes in three flavors:
 | **Advanced Eval + Drift** | ❌ | ✅ | ✅ |
 | **DLQ / Dead Letter Handling** | ❌ | ✅ | ✅ |
 
+## Components of Ninai Memory OS
+
+Ninai is built from modular components that work together as a complete Memory Operating System:
+
+### Core Data Layer
+
+**PostgreSQL (Memory Metadata Store)**
+- Stores all memory metadata, versions, audit logs
+- Enforces organization isolation via Row-Level Security (RLS)
+- Guarantees ACID compliance for knowledge governance
+- Supports complex queries on memory attributes
+
+**Qdrant (Vector Search Engine)**
+- Stores vector embeddings for semantic search
+- Performs similarity matching on agent knowledge
+- Filters by organization ID (org-aware)
+- Returns scored results with distance metrics
+
+**Redis (Cache Layer)** _(Optional)_
+- Caches frequently accessed memories
+- Stores short-term agent state
+- Improves search latency under load
+- Can be disabled for minimal deployments
+
+### Application Layer
+
+**FastAPI Backend**
+- REST API endpoints for memory CRUD operations
+- Knowledge review and approval workflows
+- Authentication (JWT + optional OIDC SSO)
+- Audit logging middleware for compliance
+- Tenant context management (org/team isolation)
+
+**React 18 Frontend**
+- Knowledge submission and search UI
+- Approval queue for reviewers
+- Admin dashboard (users, roles, policies)
+- Memory visualization and tagging
+- Real-time permission checks
+
+### Security/Governance Layer
+
+**Row-Level Security (RLS) Engine**
+- Database-enforced org isolation
+- Prevents cross-tenant data leaks
+- Re-verifies vector search results
+
+**PolicyGuard Validator**
+- Prevents prompt injection via retrieved context
+- Validates knowledge before retrieval
+- Checks contextual appropriateness of results
+
+**Audit Service**
+- Immutable audit trail of all operations
+- Request-level tracing (X-Trace-ID)
+- Approval comments and change history
+- Compliance-ready logs for exports
+
+### Memory Management
+
+**Knowledge Review Queue**
+- Pending knowledge awaits reviewer approval
+- Non-admins can serve as reviewers
+- Approval comments stored in audit trail
+
+**Versioning System**
+- Immutable versions of approved knowledge
+- Track creation, approval, promotion timestamps
+- Support rollback to previous versions
+
+**Memory Promotion Pipeline**
+- Auto-promote frequently accessed memories
+- Manual promotion to long-term storage
+- Configurable promotion rules per org/team
+
+### Observability Layer
+
+**Grafana Dashboards** _(Optional)_
+- Memory I/O performance metrics
+- Review queue SLA tracking
+- Tenant isolation audit board
+- Error rates and cross-tenant events
+
+**Request Tracing**
+- X-Trace-ID propagation through all services
+- Debug logging at each layer
+- Performance metrics per operation
+
+---
+
 ## Quick Start (30 Minutes)
 
 ### Prerequisites
@@ -89,23 +232,89 @@ Ninai comes in three flavors:
 ```bash
 git clone https://github.com/your-org/ninai.git
 cd ninai
-
-# Start PostgreSQL, Qdrant, Redis, and the app
-docker compose up -d --build
-
-# Run migrations
-docker compose exec backend alembic upgrade head
-
-# Seed demo data (org, users, sample knowledge)
-docker compose exec backend python -m scripts.seed_data
 ```
 
-### 2. Open the App
+### 2. Run Docker Containers
 
-- **Frontend**: http://localhost:3000  
-- **API Docs**: http://localhost:8000/docs
+**Full Stack (Recommended for Development)**:
+```bash
+# Start all services: Postgres, Qdrant, Redis, Backend, Frontend
+docker compose up -d --build
 
-### 3. Log In
+# This command:
+# - Builds the backend (FastAPI) and frontend (React) images
+# - Starts PostgreSQL on port 5432
+# - Starts Qdrant on port 6333
+# - Starts Redis on port 6379
+# - Starts Backend API on port 8000
+# - Starts Frontend UI on port 3000
+# - Creates persistent volumes for databases
+```
+
+**Minimal Stack (Postgres + Qdrant only)**:
+```bash
+# For minimal deployments without caching or monitoring
+docker compose --profile lite up -d
+```
+
+**View Running Services**:
+```bash
+# Check status of all containers
+docker compose ps
+
+# Output example:
+# NAME              STATUS              PORTS
+# ninai-backend-1   Up 2 minutes        0.0.0.0:8000->8000/tcp
+# ninai-frontend-1  Up 2 minutes        0.0.0.0:3000->3000/tcp
+# ninai-postgres-1  Up 2 minutes        0.0.0.0:5432->5432/tcp
+# ninai-qdrant-1    Up 2 minutes        0.0.0.0:6333->6333/tcp
+# ninai-redis-1     Up 2 minutes        0.0.0.0:6379->6379/tcp
+```
+
+**View Logs**:
+```bash
+# Tail backend logs
+docker compose logs -f backend
+
+# Tail frontend logs
+docker compose logs -f frontend
+
+# Tail specific service
+docker compose logs -f postgres
+```
+
+### 3. Initialize Database & Seed Data
+
+```bash
+# Run database migrations (creates tables, RLS policies, indexes)
+docker compose exec backend alembic upgrade head
+
+# Seed demo data (organizations, users, sample memories)
+docker compose exec backend python -m scripts.seed_data
+
+# Expected output:
+# ✓ Created organization: ninai-demo
+# ✓ Created admin user: admin@ninai.dev
+# ✓ Created reviewer user: reviewer@ninai.dev
+# ✓ Created agent builder user: dev@ninai.dev
+# ✓ Seeded 10 sample memories
+```
+
+### 4. Access the Application
+
+**Frontend UI** (React Dashboard):
+- URL: http://localhost:3000
+- Features: Knowledge submission, search, approval queues, admin panel
+
+**Backend API Documentation** (Swagger/OpenAPI):
+- URL: http://localhost:8000/docs
+- Features: Interactive API testing, schema documentation
+
+**Vector Search Console** (Qdrant):
+- URL: http://localhost:6333/dashboard
+- Features: View vector collections, payloads, statistics
+
+### 5. Log In
 
 After seeding, use demo credentials:
 
@@ -115,12 +324,84 @@ After seeding, use demo credentials:
 | Reviewer | `reviewer@ninai.dev` | `review1234` | Knowledge Reviewer |
 | Agent Builder | `dev@ninai.dev` | `dev12345` | Team Member |
 
-### 4. Try It
+**Note**: Demo credentials are for development only. Change passwords before production deployment.
 
-1. Log in as the agent builder
-2. Go to **Knowledge** → **Submit** → add a sample memory item
-3. Switch to reviewer account and **approve** in the review queue
-4. Query via the **Search** tab or API
+### 6. Try It
+
+**Via Web UI:**
+1. Open http://localhost:3000 in your browser
+2. Log in as `dev@ninai.dev` (password: `dev12345`)
+3. Click **Knowledge** → **Submit** → enter a memory item
+4. Log out and log in as `reviewer@ninai.dev` (password: `review1234`)
+5. Click **Review Queue** and **Approve** the submission
+6. Log back in as the developer and click **Search** to query
+
+**Via Python SDK:**
+```python
+from ninai import NinaiClient
+
+# Initialize client
+client = NinaiClient(
+    api_base_url="http://localhost:8000/api/v1",
+    api_key="dev-token-from-dashboard"  # Get from Admin → API Tokens
+)
+
+# Create a memory
+memory = client.memories.create(
+    content="Ninai is a Memory OS for agents",
+    tags=["architecture", "demo"],
+    scope="org"  # org/team/personal
+)
+
+# Search for memories
+results = client.memories.search(
+    query_text="memory management",
+    limit=10
+)
+
+for result in results:
+    print(f"Score: {result.score} - {result.content}")
+```
+
+**Via REST API:**
+```bash
+# Set your API token from admin panel
+API_TOKEN="your-api-token"
+API_BASE="http://localhost:8000/api/v1"
+
+# Create memory
+curl -X POST "${API_BASE}/memories" \
+  -H "Authorization: Bearer ${API_TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d '{"content": "Agent memory test", "tags": ["test"]}'
+
+# Search memories
+curl -X POST "${API_BASE}/memories/search" \
+  -H "Authorization: Bearer ${API_TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d '{"query_text": "test", "limit": 5}'
+```
+
+---
+
+## Stopping and Cleaning Up
+
+```bash
+# Stop all containers (keep data)
+docker compose stop
+
+# Start containers again
+docker compose start
+
+# Remove containers (keep data volumes)
+docker compose down
+
+# Remove everything including data
+docker compose down -v
+
+# Rebuild images (useful after code changes)
+docker compose build --no-cache
+```
 
 ##  Architecture
 
