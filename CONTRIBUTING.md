@@ -25,6 +25,11 @@ and maintainers review all changes.
 - Include logs, versions, and environment details.
 - Attach screenshots or traces when relevant.
 
+## Questions and Community Help
+
+- For questions and general help, use GitHub Discussions.
+- If Discussions are not enabled yet, ask a maintainer to enable them.
+
 ## Code Review
 
 All PRs require maintainer review before merge. Please be responsive to
