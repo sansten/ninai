@@ -4,8 +4,8 @@ Exports database helpers from app.core.database to maintain older import paths
 (e.g., tests/test_admin.py, admin routes).
 """
 
+from app.models.base import Base
 from app.core.database import (
-    Base,
     engine,
     async_session_factory,
     create_db_and_tables,

@@ -82,6 +82,21 @@ class Organization(Base, UUIDMixin, TimestampMixin):
         back_populates="organization",
         cascade="all, delete-orphan",
     )
+    eval_suites: Mapped[List["EvalSuite"]] = relationship(
+        "EvalSuite",
+        back_populates="organization",
+        cascade="all, delete-orphan",
+    )
+    eval_runs: Mapped[List["EvalRun"]] = relationship(
+        "EvalRun",
+        back_populates="organization",
+        cascade="all, delete-orphan",
+    )
+    drift_reports: Mapped[List["DriftReport"]] = relationship(
+        "DriftReport",
+        back_populates="organization",
+        cascade="all, delete-orphan",
+    )
     
     def __repr__(self) -> str:
         return f"<Organization {self.slug}>"

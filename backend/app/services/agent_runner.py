@@ -1345,6 +1345,18 @@ class AgentRunner:
         row.provenance = list(getattr(result, "provenance", []) or [])
         await session.flush()
 
+        if row.status == "success":
+            try:
+                from app.tasks.playbook_pipeline import enqueue_playbook_extraction
+
+                enqueue_playbook_extraction(
+                    org_id=row.organization_id,
+                    agent_run_id=row.id,
+                    initiator_user_id=self.service_user_id,
+                )
+            except Exception:
+                pass
+
         await self._append_trajectory_event(
             session=session,
             org_id=row.organization_id,
