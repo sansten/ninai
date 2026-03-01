@@ -109,5 +109,16 @@ docs_archive/
 !.github/ISSUE_TEMPLATE/*.md
 !.github/DISCUSSION_TEMPLATE/*.md
 
-# Docs folder (internal documentation, kept locally)
-docs/
+# Allow contributor documentation in docs/ folder
+!docs/
+!docs/*.md
+!docs/CONTRIBUTOR_ARCHITECTURE_GUIDE.md
+!docs/OSS_CONTRIBUTOR_LEARNING_PATHS.md
+!docs/ARCHITECTURE_VISUAL_SUMMARY.md
+!docs/DEPLOYMENT_RUNBOOK.md
+!docs/E2E_TESTING_GUIDE.md
+!docs/EDITIONS.md
+!docs/FEATURES.md
+
+# Docs folder that's not covered above (internal documentation, kept locally)
+docs_archive/
