@@ -12,7 +12,7 @@ from sqlalchemy import Column, String, DateTime, Boolean, ForeignKey, JSON
 from sqlalchemy.dialects.postgresql import UUID
 import uuid
 
-from backend.app.database import Base
+from app.database import Base
 
 
 class AutonomousGoalOutcome(Base):
@@ -43,7 +43,7 @@ class AutonomousGoalOutcome(Base):
     was_user_expecting = Column(Boolean, nullable=False, default=False)  # Did user also want this?
     
     # Metadata
-    metadata = Column(JSON, nullable=True, default={})
+    meta = Column(JSON, nullable=True, default={})
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
     
     def __repr__(self) -> str:

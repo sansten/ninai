@@ -1,0 +1,481 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Chapter 3 — Use Cases (Retail, Banking, NASA, Support, Personal)</title>
+  <link rel="stylesheet" href="assets/book.css">
+</head>
+<body>
+  <header class="book">
+    <div class="kicker">Practical Ninai - Chapter 3</div>
+    <h1>Use Cases: Retail, Banking, NASA, Support, Personal</h1>
+    <p class="lead">This chapter is intentionally implementation-heavy. You’ll design the memory model, wire real tools, add goal tracking, and introduce safety gates so the agent stays reliable. Each case study includes architecture, data/memory contracts, workflows, failure modes, and a practical “build order”.</p>
+  </header>
+
+  <nav class="toc no-print" aria-label="Chapter contents">
+    <strong>In this chapter</strong>
+    <ul>
+      <li><a href="#how-to-use">How to use these case studies</a></li>
+      <li><a href="#pattern-lib">A small pattern library</a></li>
+      <li><a href="#retail">Retail case study: shopping & bundle assistant</a></li>
+      <li><a href="#banking">Banking case study: fraud triage & case routing</a></li>
+      <li><a href="#nasa">NASA-like case study: mission planning with phase gates</a></li>
+      <li><a href="#support">Customer support case study: evidence-based replies & KB growth</a></li>
+      <li><a href="#personal">Personal agent case study: constrained productivity</a></li>
+      <li><a href="#common">Common implementation pitfalls (and fixes)</a></li>
+      <li><a href="#projects">Mini-projects (portfolio builders)</a></li>
+    </ul>
+  </nav>
+
+  <h2 id="how-to-use">How to use these case studies</h2>
+  <p>Read each use case twice:</p>
+  <ol>
+    <li><strong>First pass (product thinking)</strong>: understand what “good” looks like—KPIs, safety constraints, and what your agent is allowed to do.</li>
+    <li><strong>Second pass (implementation)</strong>: implement the memory contracts, tool calls, and the safety gates (review gates, policy checks, and evidence requirements).</li>
+  </ol>
+
+  <div class="callout note">
+    <div class="title">AGI features live in a separate chapter</div>
+    <p>In this chapter you’ll use “AGI-like” features (goals, a planner/executor/critic loop, simulation, and supervision) as building blocks. The <em>implementation details</em> of those primitives are in Chapter 6.</p>
+  </div>
+
+  <h2 id="pattern-lib">A small pattern library</h2>
+  <p>Industries differ, but production agent systems repeat a small number of patterns. The goal of this figure is to give you a stable mental model for implementation: ingestion → memory → retrieval → tool calls → review gates → durable knowledge.</p>
+
+  <figure>
+    <img src="assets/diagrams/use_cases_pattern_library.svg" alt="Use case pattern library">
+    <figcaption>Figure 3-1. Cross-domain patterns that scale from prototypes to production.</figcaption>
+  </figure>
+
+  <h2 id="retail">Retail case study: shopping & bundle assistant</h2>
+  <p><strong>Scenario</strong>: you operate an e-commerce storefront. You want an assistant that (a) recommends a main product and accessories, (b) stays honest about inventory and pricing, and (c) learns from past purchases and returns without leaking private data.</p>
+
+  <h3>What “good” looks like (KPIs + safety)</h3>
+  <ul>
+    <li><strong>Conversion uplift</strong> without increasing refund/return rate.</li>
+    <li><strong>Accuracy</strong>: never invent inventory, price, or shipping dates.</li>
+    <li><strong>Privacy</strong>: preference memory is confidential; aggregation is allowed, raw PII is not.</li>
+  </ul>
+
+  <h3>Architecture (minimal production slice)</h3>
+  <ol>
+    <li><strong>Ingestion</strong>: orders/returns/events → memory records (summary-first).</li>
+    <li><strong>Retrieval</strong>: query “preferences + constraints + relevant catalog notes”.</li>
+    <li><strong>Tool calls</strong>: pricing/inventory is <em>always</em> fetched from real systems.</li>
+    <li><strong>Promotion</strong>: short-term memories promote to durable memories only after quality checks.</li>
+  </ol>
+
+  <h3>Memory design (contracts you can test)</h3>
+  <p>Define a handful of memory “documents” with stable tags and stable entity keys:</p>
+  <ul>
+    <li><strong>Preference profile</strong> (tags: <code>retail</code>, <code>customer</code>, <code>profile</code>, <code>preferences</code>; entities: <code>customer_id</code>)</li>
+    <li><strong>Returns / dislike signals</strong> (tags: <code>retail</code>, <code>customer</code>, <code>returns</code>; entities: <code>customer_id</code>, <code>sku</code>, <code>reason</code>)</li>
+    <li><strong>Catalog product note</strong> (tags: <code>retail</code>, <code>catalog</code>, <code>product</code>; entities: <code>sku</code>)</li>
+    <li><strong>Fulfillment constraints</strong> (tags: <code>retail</code>, <code>policy</code>, <code>shipping</code>; entities: <code>region</code>)</li>
+  </ul>
+
+  <div class="callout tip">
+    <div class="title">Retail memory rule</div>
+    <p>Prefer <em>summaries</em> over raw events. If you ingest raw clickstream, keep it short-term and aggregate into a profile memory that’s stable and readable by humans.</p>
+  </div>
+
+  <h3>Implementation build order (what to code first)</h3>
+  <ol>
+    <li><strong>Write the memory contracts</strong> as JSON examples in your repo and a handful of “gold queries” that must work.</li>
+    <li><strong>Implement ingestion</strong>: on order completion, write a purchase memory and update the profile memory.</li>
+    <li><strong>Implement catalog tool calls</strong>: create inventory/pricing tools; do not allow the agent to fabricate numbers.</li>
+    <li><strong>Implement response composition</strong>: responses must cite which memories were used (“because you returned X”).</li>
+    <li><strong>Add promotion + audits</strong>: promote profile updates; log policy warnings when content looks sensitive.</li>
+  </ol>
+
+  <h3>Code: store and retrieve preference memories (Python SDK)</h3>
+  <pre><code>from ninai import NinaiClient
+
+client = NinaiClient(api_key="nai_your_key", organization_id="org_retail")
+
+client.memories.create(
+    title="Preference profile - CUST-7782",
+    content=(
+        "Customer profile summary:\n"
+        "- Style: minimalist, neutral colors\n"
+        "- Budget: under $150\n"
+        "- Avoid: leather\n"
+        "- Notes: returned two items due to heavy weight"
+    ),
+    tags=["retail", "customer", "profile", "preferences"],
+    entities={"customer_id": "CUST-7782"},
+    scope="organization",
+    classification="confidential",
+)
+
+profile = client.memories.search(
+    query="preference profile for customer_id CUST-7782",
+    scope="organization",
+    tags=["retail", "profile"],
+    limit=3,
+)
+
+for item in profile.items:
+    print(item.title, item.score)</code></pre>
+
+  <h3>Failure modes (and how to prevent them)</h3>
+  <ul>
+    <li><strong>Hallucinated pricing</strong>: only price via tool calls; if tool fails, say “price unavailable”.</li>
+    <li><strong>Over-personalization creep</strong>: keep PII out of memories; store “signals” not raw identifiers beyond <code>customer_id</code>.</li>
+    <li><strong>Retrieval noise</strong>: stable tags win; don’t mix retail + support tags in the same namespace.</li>
+  </ul>
+
+  <h3>Tool contracts (the part most teams skip)</h3>
+  <p>Retail assistants fail when they treat catalog facts as “text.” Implement pricing/inventory as tools with strict input/output schemas and make the assistant’s output depend on tool responses.</p>
+  <ul>
+    <li><strong>Inventory tool</strong>: input <code>{"sku": "...", "region": "..."}</code> → output <code>{"available": true, "quantity": 12, "eta_days": 2}</code></li>
+    <li><strong>Pricing tool</strong>: input <code>{"sku": "...", "customer_id": "..."}</code> → output <code>{"price": 129.99, "currency": "USD", "promo": "..."}</code></li>
+    <li><strong>Shipping rules tool</strong>: input <code>{"region": "...", "sku": "..."}</code> → output <code>{"allowed": true, "constraints": ["hazmat"]}</code></li>
+  </ul>
+
+  <div class="callout warn">
+    <div class="title">Tool-first truth</div>
+    <p>If a response includes a number a customer can act on (price, inventory, ETA), it must come from a tool call. Do not “RAG” these numbers from memories—memories are for context, tools are for truth.</p>
+  </div>
+
+  <h3>Case study walkthrough (end-to-end)</h3>
+  <ol>
+    <li><strong>Customer request</strong>: “I need a minimalist desk lamp under $150; I returned heavy lamps before.”</li>
+    <li><strong>Retrieve profile</strong>: search tags <code>[retail, profile]</code> and entity <code>customer_id</code>.</li>
+    <li><strong>Retrieve product notes</strong>: search <code>[retail, catalog]</code> for “desk lamp minimalist lightweight”.</li>
+    <li><strong>Plan bundle</strong>: propose 1–2 main SKUs + accessories (bulbs, smart plug) as a draft plan.</li>
+    <li><strong>Call tools</strong>: inventory + price for each candidate SKU in the customer’s region.</li>
+    <li><strong>Compose response</strong>: include citations (“You returned heavy lamps before; this one is 0.9kg”) and include only tool-proven price/availability.</li>
+    <li><strong>Write outcome memory</strong> (optional): if customer buys/returns, update the profile summary (promotion to durable memory only after checks).</li>
+  </ol>
+
+  <h3>Testing and rollout</h3>
+  <ul>
+    <li><strong>Gold queries</strong>: “preference profile for customer_id X”, “returns reasons for customer_id X”, “shipping constraints for region Y”.</li>
+    <li><strong>Shadow mode</strong>: run the assistant but don’t show output; compare to human recommendations.</li>
+    <li><strong>A/B testing</strong>: monitor conversion uplift and return rate; roll back if return rate rises.</li>
+  </ul>
+
+  <h2 id="banking">Banking case study: fraud triage & case routing</h2>
+  <p><strong>Scenario</strong>: you receive fraud alerts from a rules engine. You want Ninai to collect evidence, summarize the case, and recommend routing. High-impact actions (freeze card, block transfer) must be gated.</p>
+
+  <h3>What “good” looks like (KPIs + safety)</h3>
+  <ul>
+    <li><strong>Reduced time-to-triage</strong> with a clear evidence trail.</li>
+    <li><strong>Lower false positives</strong> by making the agent conservative.</li>
+    <li><strong>Auditability</strong>: every recommendation references the exact memories/policies used.</li>
+  </ul>
+
+  <h3>System boundaries (what the agent may do)</h3>
+  <ul>
+    <li><strong>Allowed by default</strong>: read-only diagnostics, summarization, case routing recommendation.</li>
+    <li><strong>Denied by default</strong>: freezing accounts, blocking transfers, changing limits.</li>
+    <li><strong>Allowed with review</strong>: sending customer outreach templates (human approves before send).</li>
+  </ul>
+
+  <h3>Memory design (case files you can query)</h3>
+  <ul>
+    <li><strong>Case memory</strong> (tags: <code>bank</code>, <code>fraud</code>, <code>case</code>, <code>triage</code>; entities: <code>case_id</code>, <code>risk</code>)</li>
+    <li><strong>Policy memory</strong> (tags: <code>bank</code>, <code>policy</code>, <code>validated</code>; type: <code>procedural</code>)</li>
+    <li><strong>Outcome memory</strong> (tags: <code>bank</code>, <code>fraud</code>, <code>outcome</code>; entities: <code>case_id</code>, <code>decision</code>)</li>
+  </ul>
+
+  <h3>Workflow (triage loop)</h3>
+  <ol>
+    <li><strong>Ingest</strong>: create a case memory for the alert (summary, no raw PAN).</li>
+    <li><strong>Retrieve</strong>: fetch validated policies relevant to the product + risk tier.</li>
+    <li><strong>Recommend</strong>: propose next steps and a routing decision (human-readable).</li>
+    <li><strong>Gate</strong>: if action is high-impact, require justification + approval.</li>
+    <li><strong>Learn</strong>: write an outcome memory after human resolution.</li>
+  </ol>
+
+  <h3>Code: store a fraud triage case (Python SDK)</h3>
+  <pre><code>from ninai import NinaiClient
+
+client = NinaiClient(api_key="nai_your_key", organization_id="org_bank")
+
+case_id = "CASE-2026-0012"
+client.memories.create(
+    title=f"Fraud triage case - {case_id}",
+    content=(
+        "Alert summary:\n"
+        "- Pattern: two transfers under $500 to new payees\n"
+        "- Login: new device\n"
+        "- Travel note: none\n"
+        "Recommended next steps: gather device fingerprint, verify payee risk, contact customer"
+    ),
+    tags=["bank", "fraud", "case", "triage"],
+    entities={"case_id": case_id, "risk": "medium", "product": "transfers"},
+    scope="organization",
+    classification="restricted",
+)
+
+policies = client.memories.search(
+    query="validated procedure for medium risk suspicious transfer triage",
+    scope="organization",
+    tags=["bank", "policy", "validated"],
+    limit=5,
+)
+
+for item in policies.items:
+    print(item.title, item.score)</code></pre>
+
+  <div class="callout warn">
+    <div class="title">Banking pitfall: “auto-enforcement”</div>
+    <p>It’s easy to accidentally turn a “recommendation” system into an “action” system. Make enforcement tools require explicit approval and keep the default path read-only.</p>
+  </div>
+
+  <h3>How to implement the gating (practical recipe)</h3>
+  <ol>
+    <li><strong>Define a ToolSpec</strong> for each high-impact action (freeze, block, limit-change).</li>
+    <li><strong>Require justification</strong> and restrict scope/classification.</li>
+    <li><strong>Record audit events</strong> for every denied/allowed decision.</li>
+    <li><strong>Add a “human approval” step</strong> in UI/API before calling the tool.</li>
+  </ol>
+
+  <h3>Case packet design (what your agent must produce)</h3>
+  <p>A fraud triage agent is only as good as its <strong>case packet</strong>. Treat this as a product artifact and make it structured and reviewable:</p>
+  <ul>
+    <li><strong>Summary</strong>: 5–10 lines explaining what happened.</li>
+    <li><strong>Evidence list</strong>: links to the memories/policies used (no evidence → no recommendation).</li>
+    <li><strong>Risk tier</strong>: low/medium/high with a reason.</li>
+    <li><strong>Recommended routing</strong>: “customer outreach”, “manual review”, “freeze recommended (requires approval)”.</li>
+    <li><strong>Next actions</strong>: read-only tool calls to run (device fingerprint check, payee reputation lookup).</li>
+  </ul>
+
+  <div class="callout note">
+    <div class="title">Practical heuristic</div>
+    <p>If the case packet cannot be understood by a human in under 60 seconds, your system is not production-ready.</p>
+  </div>
+
+  <h3>How to use AGI primitives here (without making it dangerous)</h3>
+  <ol>
+    <li><strong>Goal</strong>: represent each fraud case as a goal (“resolve CASE-…”) with nodes (“collect evidence”, “contact customer”, “final decision”).</li>
+    <li><strong>Critic</strong>: require evidence before “freeze recommended.” Missing evidence should yield <code>needs_evidence</code> (see Chapter 6).</li>
+    <li><strong>SelfModel</strong>: if a tool is unreliable (e.g., external payee reputation API), require justification and show a warning instead of silently trusting the tool.</li>
+  </ol>
+
+  <h2 id="nasa">NASA-like case study: mission planning with phase gates</h2>
+  <p><strong>Scenario</strong>: you’re planning a mission with strict constraints (power, thermal, mass, comms windows). You want Ninai to help draft plans, track evidence, and enforce phase gates (e.g., SRR → PDR → CDR equivalents). This is a perfect fit for AGI primitives: goals, evidence, review gates, and simulation.</p>
+
+  <h3>What “good” looks like (KPIs + safety)</h3>
+  <ul>
+    <li><strong>Traceability</strong>: every plan decision is linked to constraints and evidence.</li>
+    <li><strong>Gate discipline</strong>: phases only advance when reviews pass.</li>
+    <li><strong>Repeatability</strong>: you can replay how the plan was produced.</li>
+  </ul>
+
+  <h3>Memory design (constraints vs drafts vs evidence)</h3>
+  <ul>
+    <li><strong>Validated constraints</strong> (tags: <code>mission</code>, <code>constraints</code>, <code>validated</code>; entities: <code>phase</code>, <code>subsystem</code>)</li>
+    <li><strong>Draft plan notes</strong> (tags: <code>mission</code>, <code>draft</code>; scope: team/personal)</li>
+    <li><strong>Simulation outputs</strong> (attachments; tags: <code>mission</code>, <code>simulation</code>, <code>evidence</code>)</li>
+    <li><strong>Review decisions</strong> (tags: <code>mission</code>, <code>review</code>, <code>gate</code>)</li>
+  </ul>
+
+  <div class="callout note">
+    <div class="title">Key pattern: validated set vs working set</div>
+    <p>Keep a small, “validated constraints” memory set that retrieval prefers. Plans can use drafts, but the critic must insist on validated constraints before a gate pass.</p>
+  </div>
+
+  <h3>GoalGraph mapping (phases as goals, tasks as nodes)</h3>
+  <p>Model the mission as a goal with nodes for phase deliverables and edges for dependencies. Your agent writes drafts, but humans approve phase transitions.</p>
+  <ul>
+    <li><strong>Goal</strong>: “Phase B thermal plan and verification”</li>
+    <li><strong>Nodes</strong>: “Update thermal model”, “Run worst-case sim”, “Produce review package”, “Review gate decision”</li>
+    <li><strong>Edges</strong>: sims depend on model updates; review depends on sim evidence</li>
+  </ul>
+
+  <h3>Code: capture constraints as searchable memory (Python SDK)</h3>
+  <pre><code>from ninai import NinaiClient
+
+client = NinaiClient(api_key="nai_your_key", organization_id="org_mission")
+
+client.memories.create(
+    title="Constraint (validated) — thermal envelope — Phase B",
+    content="Operating temperature must remain between -10C and +35C during phase B.",
+    tags=["mission", "constraints", "validated", "thermal"],
+    entities={"phase": "B", "subsystem": "thermal"},
+    scope="organization",
+    classification="internal",
+)</code></pre>
+
+  <h3>Gate implementation checklist</h3>
+  <ol>
+    <li><strong>Plan artifact standard</strong>: define exactly what a gate needs (checklist + required evidence).</li>
+    <li><strong>Evidence link policy</strong>: gate can’t pass without evidence memories/attachments.</li>
+    <li><strong>Simulation-first</strong>: run deterministic checks before human review.</li>
+    <li><strong>Fail-closed</strong>: missing evidence means “needs evidence,” not “pass.”</li>
+  </ol>
+
+  <h3>Evidence pack format (make reviews fast)</h3>
+  <p>For NASA-like workflows, your “unit of work” is an evidence pack. You’re aiming for a package that can be reviewed in a meeting with minimal back-and-forth.</p>
+  <ul>
+    <li><strong>Gate checklist</strong> (attachment): required items and pass/fail notes.</li>
+    <li><strong>Constraint references</strong>: links to validated constraint memories used by the plan.</li>
+    <li><strong>Simulation artifacts</strong>: outputs attached (plots, CSVs, reports) and summarized in a memory.</li>
+    <li><strong>Change log</strong>: what changed since last gate and why.</li>
+    <li><strong>Decision record</strong>: who approved, when, and under what assumptions.</li>
+  </ul>
+
+  <div class="callout warn">
+    <div class="title">Mission anti-pattern: “planning without traceability”</div>
+    <p>Without evidence links, a mission plan becomes a story. Enforce a rule: if a plan step claims compliance with a constraint, it must cite a validated constraint memory and include a sim/check artifact.</p>
+  </div>
+
+  <h3>Implementation build order</h3>
+  <ol>
+    <li><strong>Start with constraints</strong>: ingest and validate constraints (small, curated set).</li>
+    <li><strong>Add draft planning</strong>: store drafts as team-scoped memories; do not promote drafts to validated.</li>
+    <li><strong>Add simulation hooks</strong>: deterministic checks first; attach outputs and summarize.</li>
+    <li><strong>Add gate workflow</strong>: “pending review” → “approved/needs changes” with explicit artifacts.</li>
+    <li><strong>Add goal tracking</strong>: phases as goals; tasks as nodes; dependencies enforce sequencing.</li>
+  </ol>
+
+  <h2 id="support">Customer support case study: evidence-based replies & KB growth</h2>
+  <p><strong>Scenario</strong>: you handle product support. You want faster first response time, fewer reopens, and a living KB. Ninai drafts replies that cite evidence (KB + past tickets) and then turns successful resolutions into new KB candidates via human review.</p>
+
+  <h3>What “good” looks like (KPIs + safety)</h3>
+  <ul>
+    <li><strong>Lower reopen rate</strong> and fewer escalations.</li>
+    <li><strong>Citation coverage</strong>: replies reference KB/ticket evidence.</li>
+    <li><strong>KB quality</strong>: new KB entries go through review (no auto-publish).</li>
+  </ul>
+
+  <h3>Memory design (ticket → evidence → published KB)</h3>
+  <ul>
+    <li><strong>Ticket memory</strong> (tags: <code>support</code>, <code>ticket</code>; entities: <code>ticket_id</code>, <code>product</code>, <code>error_code</code>)</li>
+    <li><strong>Validated KB</strong> (tags: <code>kb</code>, <code>validated</code>; type: <code>procedural</code>)</li>
+    <li><strong>Draft KB candidate</strong> (tags: <code>kb</code>, <code>draft</code>; includes “how we fixed it”)</li>
+  </ul>
+
+  <h3>Workflow (support loop)</h3>
+  <ol>
+    <li><strong>Ingest</strong>: create a ticket memory summarizing the report.</li>
+    <li><strong>Retrieve</strong>: search validated KB + similar tickets.</li>
+    <li><strong>Draft reply</strong>: include steps + cite evidence sources.</li>
+    <li><strong>After resolution</strong>: create a KB draft memory and trigger review workflow.</li>
+  </ol>
+
+  <h3>Code: similar-ticket + KB search (Python SDK)</h3>
+  <pre><code>from ninai import NinaiClient
+
+client = NinaiClient(api_key="nai_your_key", organization_id="org_support")
+
+ticket_id = "TCK-99102"
+client.memories.create(
+    title=f"Support ticket - {ticket_id}",
+    content=(
+        "User reports crash on login after update 3.2.1. "
+        "Error code: AUTH-401. Affects Windows only."
+    ),
+    tags=["support", "ticket", "auth"],
+    entities={"ticket_id": ticket_id, "error_code": "AUTH-401", "version": "3.2.1"},
+    scope="organization",
+    classification="confidential",
+)
+
+evidence = client.memories.search(
+    query="AUTH-401 crash on login after update 3.2.1 fix",
+    scope="organization",
+    tags=["kb", "support"],
+    limit=8,
+)
+
+for item in evidence.items:
+    print(item.title, item.score)</code></pre>
+
+  <div class="callout tip">
+    <div class="title">Support implementation trick</div>
+    <p>Store the final “resolution summary” as its own memory. It becomes your most valuable retrieval target for future tickets because it already compresses noise into steps and outcomes.</p>
+  </div>
+
+  <h3>KB growth pipeline (how to implement it like a real support org)</h3>
+  <ol>
+    <li><strong>Draft KB candidate</strong>: after resolution, create a KB draft memory with “Symptoms → Root cause → Fix → Verification → Rollback”.</li>
+    <li><strong>Attach evidence</strong>: logs/screenshots/stack traces as attachments; store safe summaries in memory content.</li>
+    <li><strong>Route to review</strong>: a human (or knowledge owner) reviews for correctness and redaction.</li>
+    <li><strong>Publish</strong>: promote the draft to a validated KB memory (tag <code>kb</code> + <code>validated</code>).</li>
+    <li><strong>Measure impact</strong>: track “KB cited” rate and reopen rate for tickets using the KB.</li>
+  </ol>
+
+  <div class="callout warn">
+    <div class="title">Support pitfall: unreviewed KB</div>
+    <p>If you let agents auto-publish KB content, you will eventually publish a hallucination or leak secrets. Always run KB through review gates, and keep redaction rules strict.</p>
+  </div>
+
+  <h2 id="personal">Personal agent case study: constrained productivity</h2>
+  <p><strong>Scenario</strong>: you want a personal agent that helps with planning, summaries, and task execution. The goal isn’t “maximum autonomy”; it’s “maximum usefulness with bounded risk”.</p>
+
+  <h3>Constraints (make it safe before it’s smart)</h3>
+  <ul>
+    <li><strong>Default read-only</strong> for email/calendar/docs.</li>
+    <li><strong>Write actions require approval</strong> (send mail, create invites, delete items).</li>
+    <li><strong>Personal scope by default</strong> and explicit promotion if needed.</li>
+  </ul>
+
+  <h3>Memory design (a “boring” but powerful personal schema)</h3>
+  <ul>
+    <li><strong>Daily plan</strong> (tags: <code>personal</code>, <code>planning</code>, <code>daily</code>; entities: <code>date</code>)</li>
+    <li><strong>Project notes</strong> (tags: <code>personal</code>, <code>project</code>; entities: <code>project_id</code>)</li>
+    <li><strong>Decision log</strong> (tags: <code>personal</code>, <code>decisions</code>; entities: <code>topic</code>)</li>
+  </ul>
+
+  <h3>Code: personal scratchpad memories</h3>
+  <pre><code>from ninai import NinaiClient
+
+client = NinaiClient(api_key="nai_your_key", organization_id="org_personal")
+
+client.memories.create(
+    title="Daily planning - 2026-01-24",
+    content=(
+        "Top 3:\n"
+        "1) Finish Ninai use-case chapter\n"
+        "2) Review PR for GoalGraph\n"
+        "3) Schedule dentist\n\n"
+        "Constraints: no outbound email without approval."
+    ),
+    tags=["personal", "planning", "daily"],
+    entities={"date": "2026-01-24"},
+    scope="personal",
+    classification="internal",
+)</code></pre>
+
+  <h3>Practical build order</h3>
+  <ol>
+    <li><strong>Start with a retrieval-only agent</strong>: ask questions, search notes, summarize.</li>
+    <li><strong>Add one tool at a time</strong>: calendar read, then calendar write (approval), then email draft (approval).</li>
+    <li><strong>Add a “reason required” gate</strong> for risky tools and low-reliability tools.</li>
+  </ol>
+
+  <h3>Security and privacy (personal agent reality check)</h3>
+  <ul>
+    <li><strong>Default local-first</strong>: if you can run without external calls, do it. When you do call remote services, keep content minimal and prefer summaries.</li>
+    <li><strong>Encrypt sensitive notes</strong>: treat “personal memory” as sensitive by default.</li>
+    <li><strong>Never auto-send</strong>: sending email/messages is a high-impact action; keep it approval-gated permanently.</li>
+  </ul>
+
+  <h2 id="common">Common implementation pitfalls (and fixes)</h2>
+  <ul>
+    <li><strong>Messy tags</strong>: define a tag taxonomy per domain; enforce it in ingestion code.</li>
+    <li><strong>No evidence links</strong>: require evidence for high-impact decisions; missing evidence should yield “needs evidence”.</li>
+    <li><strong>Tool flakiness</strong>: track tool reliability (SelfModel) and require justification when reliability is low.</li>
+    <li><strong>Confusing scopes</strong>: personal/team/org scopes must be explicit; do not “default to org”.</li>
+    <li><strong>No replay</strong>: persist enough run data (inputs/outputs summaries) so humans can debug incidents.</li>
+  </ul>
+
+  <h2 id="projects">Mini-projects (portfolio builders)</h2>
+  <ol>
+    <li><strong>Retail profile aggregator</strong>: ingest orders/returns, maintain a stable profile memory, and validate retrieval via a “gold query” set.</li>
+    <li><strong>Fraud triage console</strong>: create case memories, retrieve validated policies, and produce an evidence-based routing recommendation.</li>
+    <li><strong>Mission gate packager</strong>: given a phase goal, collect required evidence, attach simulation outputs, and generate a review bundle.</li>
+    <li><strong>Support KB pipeline</strong>: convert resolved tickets into KB drafts and route them through review before validation.</li>
+    <li><strong>Personal agent safety gates</strong>: implement approval for writes and a justification requirement for risky tools.</li>
+  </ol>
+
+  <div class="footer">
+    <p>Next: Chapter 4 covers the architect view (infra, scaling, tenancy). Chapter 6 goes deeper on AGI primitive implementation.</p>
+  </div>
+</body>
+</html>

@@ -25,6 +25,7 @@ from app.core.config import settings
 SHORT_TERM_PREFIX = "stm:"  # Short-term memory
 STM_INDEX_PREFIX = "stm_idx:"  # Index for user's memories
 STM_ACCESS_PREFIX = "stm_access:"  # Access count tracking
+STM_ACCESS_TIMES_PREFIX = "stm_times:"  # Access timestamp tracking (for spacing)
 
 
 @dataclass
@@ -76,9 +77,13 @@ class ShortTermMemoryService:
     # Default TTL for short-term memories (from config, default 7 days)
     DEFAULT_TTL = settings.SHORT_TERM_TTL
     
-    # Promotion thresholds
-    ACCESS_COUNT_THRESHOLD = 3  # Accessed 3+ times = promotion eligible
-    IMPORTANCE_SCORE_THRESHOLD = 0.7  # High importance = promotion eligible
+    # Promotion strategy: "count", "spacing", "hybrid"
+    PROMOTION_STRATEGY = settings.STM_PROMOTION_STRATEGY
+    
+    # Promotion thresholds (from config)
+    ACCESS_COUNT_THRESHOLD = settings.STM_ACCESS_COUNT_THRESHOLD
+    IMPORTANCE_SCORE_THRESHOLD = settings.STM_IMPORTANCE_THRESHOLD
+    MIN_ACCESS_SPACING_HOURS = settings.STM_MIN_ACCESS_SPACING_HOURS
     
     # Keywords that indicate importance (boost importance score)
     IMPORTANCE_KEYWORDS = [
@@ -152,6 +157,11 @@ class ShortTermMemoryService:
         access_key = f"{STM_ACCESS_PREFIX}{memory_id}"
         await client.setex(access_key, effective_ttl, "0")
         
+        # Initialize access timestamps list (for spacing-based promotion)
+        times_key = f"{STM_ACCESS_TIMES_PREFIX}{memory_id}"
+        await client.delete(times_key)  # Ensure clean start
+        await client.expire(times_key, effective_ttl)
+        
         return memory
     
     async def get(self, memory_id: str) -> Optional[ShortTermMemory]:
@@ -178,8 +188,17 @@ class ShortTermMemoryService:
         access_count = await client.incr(access_key)
         memory.access_count = int(access_count)
         
-        # Check if now eligible for promotion
-        if access_count >= self.ACCESS_COUNT_THRESHOLD:
+        # Record access timestamp (for spacing-based promotion)
+        now_ts = datetime.now(timezone.utc).timestamp()
+        times_key = f"{STM_ACCESS_TIMES_PREFIX}{memory_id}"
+        await client.rpush(times_key, str(now_ts))
+        
+        # Check if now eligible for promotion (strategy-aware)
+        promotion_eligible = await self._check_promotion_eligibility(
+            memory_id, access_count, client
+        )
+        
+        if promotion_eligible:
             memory.promotion_eligible = True
             # Update the stored memory with new eligibility
             await client.set(key, json.dumps(memory.to_dict()), keepttl=True)
@@ -244,6 +263,8 @@ class ShortTermMemoryService:
         
         deleted = await client.delete(key)
         await client.delete(access_key)
+        times_key = f"{STM_ACCESS_TIMES_PREFIX}{memory_id}"
+        await client.delete(times_key)
         await client.srem(index_key, memory_id)
         
         return deleted > 0
@@ -319,6 +340,91 @@ class ShortTermMemoryService:
             score += 0.1
         
         return min(score, 1.0)
+    
+    async def _check_promotion_eligibility(
+        self,
+        memory_id: str,
+        access_count: int,
+        client,
+    ) -> bool:
+        """
+        Check if memory is eligible for promotion based on configured strategy.
+        
+        Strategies:
+        - "count": Promote if access_count >= threshold (default behavior)
+        - "spacing": Promote if accesses are temporally spaced (ignore count)
+        - "hybrid": Promote if BOTH count AND spacing requirements met
+        
+        Args:
+            memory_id: Memory UUID
+            access_count: Current access count
+            client: Redis client
+        
+        Returns:
+            True if eligible for promotion
+        """
+        strategy = self.PROMOTION_STRATEGY.lower()
+        
+        if strategy == "count":
+            # Original behavior: just check count
+            return access_count >= self.ACCESS_COUNT_THRESHOLD
+        
+        elif strategy == "spacing":
+            # Only check temporal spacing, ignore count
+            return await self._has_sufficient_spacing(memory_id, client)
+        
+        elif strategy == "hybrid":
+            # Require BOTH count AND spacing
+            count_ok = access_count >= self.ACCESS_COUNT_THRESHOLD
+            spacing_ok = await self._has_sufficient_spacing(memory_id, client)
+            return count_ok and spacing_ok
+        
+        else:
+            # Fallback to count-based for unknown strategies
+            return access_count >= self.ACCESS_COUNT_THRESHOLD
+    
+    async def _has_sufficient_spacing(
+        self,
+        memory_id: str,
+        client,
+    ) -> bool:
+        """
+        Check if access timestamps are sufficiently spaced.
+        
+        Requires at least ACCESS_COUNT_THRESHOLD accesses with
+        MIN_ACCESS_SPACING_HOURS between consecutive accesses.
+        
+        Args:
+            memory_id: Memory UUID
+            client: Redis client
+        
+        Returns:
+            True if spacing requirements met
+        """
+        times_key = f"{STM_ACCESS_TIMES_PREFIX}{memory_id}"
+        timestamps_bytes = await client.lrange(times_key, 0, -1)
+        
+        if not timestamps_bytes:
+            return False
+        
+        # Convert to float timestamps
+        timestamps = [float(ts) for ts in timestamps_bytes]
+        
+        # Need at least ACCESS_COUNT_THRESHOLD timestamps
+        if len(timestamps) < self.ACCESS_COUNT_THRESHOLD:
+            return False
+        
+        # Check spacing between consecutive accesses
+        min_spacing_seconds = self.MIN_ACCESS_SPACING_HOURS * 3600
+        
+        for i in range(1, len(timestamps)):
+            delta_seconds = timestamps[i] - timestamps[i-1]
+            if delta_seconds < min_spacing_seconds:
+                # Found accesses too close together
+                return False
+        
+        # All accesses are sufficiently spaced
+        return True
 
 
 class ShortTermMemoryStats:

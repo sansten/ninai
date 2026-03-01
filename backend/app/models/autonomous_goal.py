@@ -12,7 +12,7 @@ from sqlalchemy import Column, String, Float, DateTime, ARRAY, JSON
 from sqlalchemy.dialects.postgresql import UUID
 import uuid
 
-from backend.app.database import Base
+from app.database import Base
 
 
 class AutonomousGoal(Base):
@@ -47,7 +47,7 @@ class AutonomousGoal(Base):
     completion_evidence = Column(JSON, nullable=True)  # List of memory IDs showing goal completion
     
     # Metadata
-    metadata = Column(JSON, nullable=True, default={})  # Additional context
+    meta = Column(JSON, nullable=True, default={})  # Additional context
     
     def __repr__(self) -> str:
         return f"<AutonomousGoal(id={self.id}, initiator={self.initiator}, title={self.title}, status={self.status})>"

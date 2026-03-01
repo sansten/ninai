@@ -68,7 +68,7 @@ def _get_tenant_models() -> Dict[type, Column]:
     
     # Import models here to avoid circular dependency
     from app.models.event import Event
-    from app.models.webhook_subscription import WebhookSubscription
+    from app.models.webhook import WebhookSubscription
     from app.models.snapshot import Snapshot
     from app.models.memory import MemoryMetadata
     from app.models.memory_edge import MemoryEdge

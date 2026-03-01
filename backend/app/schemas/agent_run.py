@@ -44,3 +44,52 @@ class AgentRunDetailResponse(AgentRunSummaryResponse):
     provenance: list[dict[str, Any]] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
     errors: list[str] = Field(default_factory=list)
+
+
+class CheckpointSnapshot(BaseSchema):
+    """Single checkpoint snapshot for replay."""
+
+    id: str
+    step_index: int
+    input_snapshot: dict[str, Any] = Field(default_factory=dict)
+    retrieval_snapshot: dict[str, Any] = Field(default_factory=dict)
+    model_snapshot: dict[str, Any] = Field(default_factory=dict)
+    output_snapshot: dict[str, Any] = Field(default_factory=dict)
+    created_at: str
+
+
+class ReplayResponse(BaseSchema):
+    """Full replay data for time-travel debugging."""
+
+    agent_run_id: str
+    checkpoints: list[CheckpointSnapshot] = Field(default_factory=list)
+
+
+class RetrievalExplanation(BaseSchema):
+    """Detailed explanation of why specific memories were retrieved."""
+
+    step_index: int
+    input_query: str
+    input_filters: dict[str, Any] = Field(default_factory=dict)
+    retrieved_ids: list[str] = Field(default_factory=list)
+    retrieved_scores: list[float] = Field(default_factory=list)
+    retrieval_filters: dict[str, Any] = Field(default_factory=dict)
+    retrieval_cutoff: Optional[float] = Field(default=None)
+    model_state: dict[str, Any] = Field(default_factory=dict)
+    step_output_keys: list[str] = Field(default_factory=list)
+
+
+class ReproduceRequest(BaseSchema):
+    """Request to reproduce a specific step."""
+
+    step_index: int
+
+
+class ReproduceResponse(BaseSchema):
+    """Result of step reproduction."""
+
+    step_index: int
+    input_snapshot: dict[str, Any] = Field(default_factory=dict)
+    retrieval_snapshot: dict[str, Any] = Field(default_factory=dict)
+    model_snapshot: dict[str, Any] = Field(default_factory=dict)
+    output_snapshot: dict[str, Any] = Field(default_factory=dict)

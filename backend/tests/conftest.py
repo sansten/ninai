@@ -78,6 +78,9 @@ from app.models.knowledge import Knowledge  # noqa: F401
 from app.models.event import Event  # noqa: F401
 from app.models.snapshot import Snapshot  # noqa: F401
 from app.models.webhook import WebhookSubscription  # noqa: F401
+from app.models.autonomous_goal import AutonomousGoal  # noqa: F401
+from app.models.knowledge_gap import KnowledgeGap  # noqa: F401
+from app.models.autonomous_goal_outcome import AutonomousGoalOutcome  # noqa: F401
 
 try:
     from app.core.database import Base as CoreBase

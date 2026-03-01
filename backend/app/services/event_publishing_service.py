@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from app.models.event import Event
-from app.models.webhook_subscription import WebhookSubscription
+from app.models.webhook import WebhookSubscription
 from app.services.audit_service import AuditService
 
 

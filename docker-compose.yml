@@ -24,6 +24,7 @@ services:
     volumes:
       - ./backend:/app
       - ./backend_attachments:/data/memory_attachments
+      - backend_backups:/backups
     environment:
       - APP_ENV=development
       - DEBUG=true
@@ -411,3 +412,4 @@ volumes:
   grafana_data:
   alertmanager_data:
   loki_data:
+  backend_backups:

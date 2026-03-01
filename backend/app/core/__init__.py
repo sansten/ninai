@@ -1,7 +1,8 @@
 """Core module initialization."""
 
 from app.core.config import settings
-from app.core.database import Base, engine, get_db, get_tenant_session
+from app.core.database import engine, get_db, get_tenant_session
+from app.models.base import Base
 from app.core.security import (
     create_access_token,
     create_refresh_token,

@@ -9,7 +9,7 @@ from datetime import datetime
 from sqlalchemy import String, Text, Boolean, Integer, ForeignKey, Index, JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import UUID as SQLA_UUID
-from app.core.database import Base
+from app.models.base import Base
 
 
 class Knowledge(Base):

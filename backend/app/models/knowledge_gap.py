@@ -12,7 +12,7 @@ from sqlalchemy import Column, String, Float, DateTime, ARRAY, JSON
 from sqlalchemy.dialects.postgresql import UUID
 import uuid
 
-from backend.app.database import Base
+from app.database import Base
 
 
 class KnowledgeGap(Base):
@@ -46,7 +46,7 @@ class KnowledgeGap(Base):
     resolved_at = Column(DateTime, nullable=True, index=True)
     
     # Metadata
-    metadata = Column(JSON, nullable=True, default={})  # Additional context
+    meta = Column(JSON, nullable=True, default={})  # Additional context
     
     def __repr__(self) -> str:
         return f"<KnowledgeGap(id={self.id}, gap_type={self.gap_type}, domain={self.domain})>"
