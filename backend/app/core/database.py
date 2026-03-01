@@ -16,20 +16,10 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
     AsyncEngine,
 )
-from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy import text
 from sqlalchemy.pool import NullPool
 
 from app.core.config import settings
-
-
-class Base(DeclarativeBase):
-    """
-    SQLAlchemy declarative base for all models.
-    
-    All models should inherit from this base class.
-    """
-    pass
 
 
 # Create async engine with connection pooling
@@ -65,6 +55,9 @@ async def create_db_and_tables() -> None:
     Note: In production, use Alembic migrations instead.
     This is primarily for development convenience.
     """
+    # Import Base from models.base to get all registered models
+    from app.models.base import Base
+    
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 

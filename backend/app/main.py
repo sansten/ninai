@@ -27,6 +27,9 @@ from app.middleware.request_id import RequestIdMiddleware
 from app.middleware.prometheus import PrometheusMiddleware, StructuredLoggingMiddleware
 import logging
 
+# Import models to register them with SQLAlchemy metadata
+import app.models  # noqa: F401
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
