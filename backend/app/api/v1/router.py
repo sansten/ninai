@@ -54,6 +54,7 @@ from app.api.v1.endpoints import (
     memory_activation,
     episodes,
     evaluation,
+    consolidation_sleep,
 )
 from app.api.v1.admin import routes as admin_routes
 from app.api.v1.endpoints import event_publishing_batch
@@ -330,6 +331,11 @@ api_router.include_router(
     consolidations.router,
     prefix="/api/v1",
     tags=["Consolidations"],
+)
+
+api_router.include_router(
+    consolidation_sleep.router,
+    tags=["Consolidation PR-2"],
 )
 
 api_router.include_router(
