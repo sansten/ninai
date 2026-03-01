@@ -149,6 +149,18 @@ class Settings(BaseSettings):
 
     # Short-term memory default TTL (in seconds)
     SHORT_TERM_TTL: int | None = None
+    
+    # Short-term memory promotion strategy: "count", "spacing", "hybrid"
+    STM_PROMOTION_STRATEGY: str = "spacing"
+    
+    # Access count threshold for promotion (used in count/hybrid modes)
+    STM_ACCESS_COUNT_THRESHOLD: int = 3
+    
+    # Minimum hours between accesses for spacing validation (used in spacing/hybrid modes)
+    STM_MIN_ACCESS_SPACING_HOURS: float = 6.0
+    
+    # Importance score threshold for immediate promotion bypass
+    STM_IMPORTANCE_THRESHOLD: float = 0.7
 
     @property
     def REDIS_URL(self) -> str:
