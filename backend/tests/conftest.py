@@ -71,14 +71,18 @@ from sqlalchemy.pool import NullPool
 from app.main import app
 from app.core.config import settings
 from app.core.database import get_db
-from app.core.database import Base as CoreBase
 from app.models.base import Base
 from app.models.mfa import TOTPDevice, SMSDevice, WebAuthnDevice, MFAEnrollment  # Ensure MFA models are imported
 from app.models.capability_token import CapabilityToken  # noqa: F401
 from app.models.knowledge import Knowledge  # noqa: F401
 from app.models.event import Event  # noqa: F401
 from app.models.snapshot import Snapshot  # noqa: F401
-from app.models.webhook_subscription import WebhookSubscription  # noqa: F401
+from app.models.webhook import WebhookSubscription  # noqa: F401
+
+try:
+    from app.core.database import Base as CoreBase
+except ImportError:
+    CoreBase = Base
 
 
 # Test database URL (use a separate test database).

@@ -52,6 +52,8 @@ from app.api.v1.endpoints import (
     knowledge_reports,
     advanced_search,
     memory_activation,
+    episodes,
+    evaluation,
 )
 from app.api.v1.admin import routes as admin_routes
 from app.api.v1.endpoints import event_publishing_batch
@@ -128,6 +130,18 @@ api_router.include_router(
     memories.router,
     prefix="/memories",
     tags=["Memories"],
+)
+
+api_router.include_router(
+    episodes.router,
+   prefix="/episodes",
+    tags=["Episodes"],
+)
+
+api_router.include_router(
+    evaluation.router,
+    prefix="/eval",
+    tags=["Evaluation"],
 )
 
 api_router.include_router(
