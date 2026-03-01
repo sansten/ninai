@@ -74,7 +74,6 @@ from app.models.meta_agent import (
 from app.models.capability_token import CapabilityToken
 from app.models.knowledge import Knowledge
 from app.models.event import Event
-from app.models.webhook_subscription import WebhookSubscription
 from app.models.snapshot import Snapshot
 from app.models.mfa import (
     TOTPDevice,
@@ -88,11 +87,23 @@ from app.models.backup import (
     BackupRestore,
 )
 from app.models.memory_consolidation import MemoryConsolidation
+from app.models.memory_consolidation_session import ConsolidationSession
+from app.models.memory_arc import MemoryArc
 from app.models.memory_episode import MemoryEpisode
 from app.models.memory_episode_membership import MemoryEpisodeMembership
 from app.models.memory_semantic_node import MemorySemanticNode
 from app.models.memory_semantic_node_topic_history import MemorySemanticNodeTopicHistory
 from app.models.navigation_edge import NavigationEdge
+from app.models.episode import Episode, EpisodeStatus, EpisodeScopeType
+from app.models.episode_event import EpisodeEvent, EpisodeEventType, EpisodeActorType
+from app.models.episode_link import EpisodeLink, EpisodeLinkRelation
+from app.models.memory_fact import MemoryFact, MemoryFactStatus
+from app.models.contradiction import Contradiction, ContradictionSeverity
+from app.models.playbook import Playbook, PlaybookScopeType
+from app.models.run_checkpoint import RunCheckpoint
+from app.models.eval_suite import EvalSuite
+from app.models.eval_run import EvalRun
+from app.models.drift_report import DriftReport
 
 __all__ = [
     # Base
@@ -208,6 +219,8 @@ __all__ = [
     "BackupRestore",
     # Consolidations
     "MemoryConsolidation",
+    "ConsolidationSession",
+    "MemoryArc",
     # GAP-1: Four-Level Hierarchy
     "MemoryEpisode",
     "MemoryEpisodeMembership",
@@ -216,4 +229,27 @@ __all__ = [
     "MemorySemanticNodeTopicHistory",
     # GAP-6: kNN Navigation Graph
     "NavigationEdge",
+    # PR1: Episode Case Continuity (Advanced Memory Features)
+    "Episode",
+    "EpisodeStatus",
+    "EpisodeScopeType",
+    "EpisodeEvent",
+    "EpisodeEventType",
+    "EpisodeActorType",
+    "EpisodeLink",
+    "EpisodeLinkRelation",
+    # PR3: Facts + Contradictions
+    "MemoryFact",
+    "MemoryFactStatus",
+    "Contradiction",
+    "ContradictionSeverity",
+    # PR4: Procedural/Skill Memory (Playbooks)
+    "Playbook",
+    "PlaybookScopeType",
+    # PR5: Checkpoints (Replayability)
+    "RunCheckpoint",
+    # PR6: Eval Harness + Drift Detection
+    "EvalSuite",
+    "EvalRun",
+    "DriftReport",
 ]
