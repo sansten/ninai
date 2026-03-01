@@ -475,3 +475,250 @@ class ToolsResource:
         payload = resp.json()
         result = payload.get("result") if isinstance(payload, dict) else None
         return ToolInvocationResult(**(result or {}))
+
+
+class CausalResource:
+    """
+    Causal Reasoning API resource.
+    
+    Provides methods for causal discovery, prediction, explanation,
+    counterfactual reasoning, and edge validation.
+    
+    Usage:
+        # Discover causal edges from an episode
+        edges = client.causal.discover(episode_id="episode-123")
+        
+        # Predict outcomes
+        predictions = client.causal.predict(cause_fact_ids=["fact-1", "fact-2"])
+        
+        # Explain decisions
+        explanation = client.causal.explain(effect_id="fact-purchase")
+        
+        # Run counterfactuals
+        scenario = client.causal.counterfactual(
+            scenario="Free shipping on all orders",
+            intervention={"free_shipping": True}
+        )
+        
+        # Validate edges
+        client.causal.validate(edge_id="edge-123", observed=True)
+    """
+    
+    def __init__(self, client: "NinaiClient"):
+        self._client = client
+    
+    def discover(
+        self,
+        episode_id: str,
+        min_strength: float = 0.3,
+        max_latency_seconds: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        """
+        Discover causal edges from a memory episode.
+        
+        Args:
+            episode_id: Memory episode ID containing facts
+            min_strength: Minimum causal strength (0.0-1.0)
+            max_latency_seconds: Maximum time between cause and effect
+            
+        Returns:
+            Dict with discovered edges and metadata
+        """
+        payload = {"min_strength": min_strength}
+        if max_latency_seconds:
+            payload["max_latency_seconds"] = max_latency_seconds
+        
+        return self._client._post(f"/causal/discover/{episode_id}", json=payload)
+    
+    def query_edges(
+        self,
+        cause_id: Optional[str] = None,
+        effect_id: Optional[str] = None,
+        min_strength: Optional[float] = None,
+        page: int = 1,
+        page_size: int = 20,
+    ) -> Dict[str, Any]:
+        """
+        Query causal edges with filters.
+        
+        Args:
+            cause_id: Filter by cause fact ID
+            effect_id: Filter by effect fact ID
+            min_strength: Minimum causal strength
+            page: Page number (1-indexed)
+            page_size: Items per page
+            
+        Returns:
+            Dict with matching edges
+        """
+        params = {"page": page, "page_size": page_size}
+        if cause_id:
+            params["cause_id"] = cause_id
+        if effect_id:
+            params["effect_id"] = effect_id
+        if min_strength is not None:
+            params["min_strength"] = min_strength
+        
+        return self._client._get("/causal/edges", params=params)
+    
+    def predict(
+        self,
+        cause_fact_ids: List[str],
+        max_depth: int = 3,
+        min_probability: float = 0.1,
+    ) -> Dict[str, Any]:
+        """
+        Predict outcomes from given causes.
+        
+        Args:
+            cause_fact_ids: List of cause fact IDs
+            max_depth: Maximum causal path depth
+            min_probability: Minimum prediction probability
+            
+        Returns:
+            Dict with predicted outcomes and causal paths
+        """
+        return self._client._post(
+            "/causal/predict",
+            json={
+                "cause_fact_ids": cause_fact_ids,
+                "max_depth": max_depth,
+                "min_probability": min_probability,
+            },
+        )
+    
+    def explain(
+        self,
+        effect_id: str,
+        max_depth: int = 3,
+        min_contribution: float = 0.1,
+    ) -> Dict[str, Any]:
+        """
+        Find root causes of an effect (causal explanation).
+        
+        Args:
+            effect_id: Effect fact ID to explain
+            max_depth: Maximum backward trace depth
+            min_contribution: Minimum causal contribution (0.0-1.0)
+            
+        Returns:
+            Dict with root causes ranked by contribution
+        """
+        params = {
+            "max_depth": max_depth,
+            "min_contribution": min_contribution,
+        }
+        return self._client._get(f"/causal/explain/{effect_id}", params=params)
+    
+    def counterfactual(
+        self,
+        scenario_description: str,
+        intervention: Dict[str, Any],
+        baseline_episode_id: str,
+        outcome_metric: str,
+    ) -> Dict[str, Any]:
+        """
+        Run a counterfactual \"what-if\" scenario.
+        
+        Args:
+            scenario_description: Human-readable scenario description
+            intervention: Intervention specification (type, action, parameters)
+            baseline_episode_id: Baseline episode for comparison
+            outcome_metric: Metric to evaluate (e.g., 'purchase_completion')
+            
+        Returns:
+            Dict with predicted outcome and baseline comparison
+        """
+        return self._client._post(
+            "/causal/counterfactual",
+            json={
+                "scenario_description": scenario_description,
+                "intervention": intervention,
+                "baseline_episode_id": baseline_episode_id,
+                "outcome_metric": outcome_metric,
+            },
+        )
+    
+    def do_calculus(
+        self,
+        cause_id: str,
+        effect_id: str,
+        intervention_type: str = "force_true",
+    ) -> Dict[str, Any]:
+        """
+        Estimate causal effect using Pearl's do-calculus.
+        
+        Args:
+            cause_id: Cause fact ID
+            effect_id: Effect fact ID
+            intervention_type: Type of intervention ('force_true', 'force_false', 'remove')
+            
+        Returns:
+            Dict with observational vs interventional probabilities
+        """
+        params = {
+            "cause_id": cause_id,
+            "effect_id": effect_id,
+            "intervention_type": intervention_type,
+        }
+        return self._client._get("/causal/do-calculus", params=params)
+    
+    def validate(
+        self,
+        edge_id: str,
+        observed: bool,
+        observation_metadata: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """
+        Validate and update a causal edge with new observation.
+        
+        Uses Bayesian inference to update edge strength based on
+        whether the effect was observed given the cause.
+        
+        Args:
+            edge_id: Causal edge ID
+            observed: Whether the effect was observed
+            observation_metadata: Additional context about observation
+            
+        Returns:
+            Dict with updated edge strength and evidence count
+        """
+        return self._client._post(
+            "/causal/validate",
+            json={
+                "edge_id": edge_id,
+                "observed": observed,
+                "observation_metadata": observation_metadata or {},
+            },
+        )
+
+
+class ConsolidationResource:
+    """PR-2 memory consolidation (sleep cycle) API resource."""
+
+    def __init__(self, client: "NinaiClient"):
+        self._client = client
+
+    def start(self, session_type: str = "triggered") -> Dict[str, Any]:
+        return self._client._post(
+            "/v1/consolidation/start",
+            json={"session_type": session_type},
+        )
+
+    def sessions(self, limit: int = 20) -> Dict[str, Any]:
+        return self._client._get(
+            "/v1/consolidation/sessions",
+            params={"limit": limit},
+        )
+
+    def report(self, session_id: str) -> Dict[str, Any]:
+        return self._client._get(f"/v1/consolidation/{session_id}/report")
+
+    def memory_arc(self, memory_id: str) -> Dict[str, Any]:
+        return self._client._get(f"/v1/memory/{memory_id}/arc")
+
+    def pin(self, memory_id: str) -> Dict[str, Any]:
+        return self._client._post(f"/v1/consolidation/pin/{memory_id}")
+
+    def unpin(self, memory_id: str) -> Dict[str, Any]:
+        return self._client._post(f"/v1/consolidation/unpin/{memory_id}")
