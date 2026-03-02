@@ -32,6 +32,7 @@ from ninai.resources import (
     CausalResource,
     ConsolidationResource,
     TemporalResource,
+    MetaCognitiveResource,
 )
 from ninai.agents import GoalPlannerAgent, GoalLinkingAgent, MetaAgent
 from ninai.models import AuthTokens, User
@@ -116,6 +117,7 @@ class NinaiClient:
         self.causal = CausalResource(self)
         self.consolidation = ConsolidationResource(self)
         self.temporal = TemporalResource(self)  # PR-5: Temporal Reasoning
+        self.meta_cognitive = MetaCognitiveResource(self)  # PR-6: Meta-Cognitive Planning
 
         # Typed agent helpers
         self._goal_planner_agent: GoalPlannerAgent | None = None

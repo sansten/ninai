@@ -111,6 +111,7 @@ from app.models.temporal_reasoning import (
     PatternType,
     TrendDirection,
 )
+from app.models.meta_cognitive import CognitiveStrategy, EpistemicState, StrategySelected
 from app.models.contradiction import Contradiction, ContradictionSeverity
 from app.models.playbook import Playbook, PlaybookScopeType
 from app.models.run_checkpoint import RunCheckpoint
@@ -273,6 +274,10 @@ __all__ = [
     "SequenceType",
     "PatternType",
     "TrendDirection",
+    # PR6: Meta-Cognitive Planning
+    "CognitiveStrategy",
+    "EpistemicState",
+    "StrategySelected",
     # PR4: Procedural/Skill Memory (Playbooks)
     "Playbook",
     "PlaybookScopeType",
