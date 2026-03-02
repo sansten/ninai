@@ -339,7 +339,6 @@ api_router.include_router(
 )
 
 api_router.include_router(
-<<<<<<< HEAD
     consolidation_sleep.router,
     tags=["Consolidation PR-2"],
 )
@@ -362,9 +361,10 @@ api_router.include_router(
 api_router.include_router(
     meta_cognitive_pr6.router,
     tags=["Meta-Cognitive Planning PR-6"],
-=======
+)
+
+api_router.include_router(
     compositional_generalization_pr7.router,
->>>>>>> b264031 (Implement PR-7 Compositional Generalization Engine with SDK notebook)
 )
 
 api_router.include_router(
