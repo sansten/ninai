@@ -476,7 +476,6 @@ class ToolsResource:
         result = payload.get("result") if isinstance(payload, dict) else None
         return ToolInvocationResult(**(result or {}))
 
-
 class CausalResource:
     """
     Causal Reasoning API resource.
@@ -724,6 +723,81 @@ class ConsolidationResource:
         return self._client._post(f"/v1/consolidation/unpin/{memory_id}")
 
 
+class CompositionResource:
+    """PR-7 compositional generalization endpoints."""
+
+    def __init__(self, client: "NinaiClient"):
+        self._client = client
+
+    def extract_abstract_procedure(
+        self,
+        playbook_id: str,
+        title: str,
+        description: str,
+        steps: List[str],
+        target_abstraction_level: int = 1,
+    ) -> Dict[str, Any]:
+        return self._client._post(
+            "/v1/composition/abstract-procedure/extract",
+            json={
+                "playbook_id": playbook_id,
+                "title": title,
+                "description": description,
+                "steps": steps,
+                "target_abstraction_level": target_abstraction_level,
+            },
+        )
+
+    def instantiate_abstract_procedure(
+        self,
+        abstract_procedure: Dict[str, Any],
+        parameters: Dict[str, str],
+    ) -> Dict[str, Any]:
+        return self._client._post(
+            "/v1/composition/abstract-procedure/instantiate",
+            json={
+                "abstract_procedure": abstract_procedure,
+                "parameters": parameters,
+            },
+        )
+
+    def compose_procedures(
+        self,
+        abstract_procedures: List[Dict[str, Any]],
+        glue_logic: str,
+    ) -> Dict[str, Any]:
+        return self._client._post(
+            "/v1/composition/abstract-procedure/compose",
+            json={
+                "abstract_procedures": abstract_procedures,
+                "glue_logic": glue_logic,
+            },
+        )
+
+    def find_analogies(self, problem_domain: str, target_domain: str) -> Dict[str, Any]:
+        return self._client._get(
+            "/v1/composition/analogies",
+            params={"problem_domain": problem_domain, "target_domain": target_domain},
+        )
+
+    def transfer_solution(
+        self,
+        source_playbook: Dict[str, Any],
+        source_domain: str,
+        target_domain: str,
+        problem_context: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        return self._client._post(
+            "/v1/composition/transfer-solution",
+            json={
+                "source_playbook": source_playbook,
+                "source_domain": source_domain,
+                "target_domain": target_domain,
+                "problem_context": problem_context,
+            },
+        )
+
+
 class TemporalResource:
     """
     PR-5 temporal reasoning API resource.
@@ -925,3 +999,4 @@ class MetaCognitiveResource:
     def epistemic_state(self) -> Dict[str, Any]:
         """Get known/uncertain/unknown domain snapshot."""
         return self._client._get("/v1/epistemic-state")
+

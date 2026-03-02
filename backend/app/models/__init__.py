@@ -118,6 +118,11 @@ from app.models.run_checkpoint import RunCheckpoint
 from app.models.eval_suite import EvalSuite
 from app.models.eval_run import EvalRun
 from app.models.drift_report import DriftReport
+from app.models.compositional_generalization import (
+    AbstractProcedure,
+    Analogy,
+    AnalogyApplicability,
+)
 
 __all__ = [
     # Base
@@ -243,6 +248,7 @@ __all__ = [
     "MemorySemanticNodeTopicHistory",
     # GAP-6: kNN Navigation Graph
     "NavigationEdge",
+<<<<<<< HEAD
     # PR1: Episode Case Continuity (Advanced Memory Features)
     "Episode",
     "EpisodeStatus",
@@ -287,4 +293,10 @@ __all__ = [
     "EvalSuite",
     "EvalRun",
     "DriftReport",
+=======
+    # PR-7: Compositional Generalization Engine
+    "AbstractProcedure",
+    "Analogy",
+    "AnalogyApplicability",
+>>>>>>> b264031 (Implement PR-7 Compositional Generalization Engine with SDK notebook)
 ]

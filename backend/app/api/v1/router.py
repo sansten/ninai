@@ -59,6 +59,7 @@ from app.api.v1.endpoints import (
     adaptive_strategy_pr4,
     temporal_reasoning_pr5,
     meta_cognitive_pr6,
+    compositional_generalization_pr7,
 )
 from app.api.v1.admin import routes as admin_routes
 from app.api.v1.endpoints import event_publishing_batch
@@ -338,6 +339,7 @@ api_router.include_router(
 )
 
 api_router.include_router(
+<<<<<<< HEAD
     consolidation_sleep.router,
     tags=["Consolidation PR-2"],
 )
@@ -360,6 +362,9 @@ api_router.include_router(
 api_router.include_router(
     meta_cognitive_pr6.router,
     tags=["Meta-Cognitive Planning PR-6"],
+=======
+    compositional_generalization_pr7.router,
+>>>>>>> b264031 (Implement PR-7 Compositional Generalization Engine with SDK notebook)
 )
 
 api_router.include_router(
