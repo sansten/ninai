@@ -372,11 +372,11 @@ api_router.include_router(
 api_router.include_router(
     affective_memory_pr8.router,
     tags=["Emotional & Affective Memory PR-8"],
+)
 
 api_router.include_router(
     federated_memory_pr10.router,
     tags=["Federated Memory & Collective Intelligence PR-10"],
-)
 )
 
 api_router.include_router(

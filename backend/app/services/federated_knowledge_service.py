@@ -11,7 +11,7 @@ import hashlib
 import re
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, func
-from backend.app.models.federated_knowledge import (
+from app.models.federated_knowledge import (
     FederatedKnowledgeSummary,
     PrivacyPolicy,
     FederatedContribution
