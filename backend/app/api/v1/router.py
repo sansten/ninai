@@ -60,6 +60,7 @@ from app.api.v1.endpoints import (
     temporal_reasoning_pr5,
     meta_cognitive_pr6,
     compositional_generalization_pr7,
+    affective_memory_pr8,
 )
 from app.api.v1.admin import routes as admin_routes
 from app.api.v1.endpoints import event_publishing_batch
@@ -365,6 +366,11 @@ api_router.include_router(
 
 api_router.include_router(
     compositional_generalization_pr7.router,
+)
+
+api_router.include_router(
+    affective_memory_pr8.router,
+    tags=["Emotional & Affective Memory PR-8"],
 )
 
 api_router.include_router(
