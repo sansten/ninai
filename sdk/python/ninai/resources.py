@@ -722,3 +722,163 @@ class ConsolidationResource:
 
     def unpin(self, memory_id: str) -> Dict[str, Any]:
         return self._client._post(f"/v1/consolidation/unpin/{memory_id}")
+
+
+class TemporalResource:
+    """
+    PR-5 temporal reasoning API resource.
+    
+    Enables time-aware intelligent analysis for optimal decision-making.
+    """
+
+    def __init__(self, client: "NinaiClient"):
+        self._client = client
+
+    def tag_fact_validity(
+        self,
+        fact_id: str,
+        valid_from: str,
+        valid_to: Optional[str] = None,
+        confidence_at_time: float = 0.8,
+        change_type: str = "stable",
+    ) -> Dict[str, Any]:
+        """
+        Tag a fact with temporal validity interval.
+        
+        Args:
+            fact_id: Identifier for the fact
+            valid_from: ISO timestamp when fact became true
+            valid_to: ISO timestamp when fact stopped being true (None = ongoing)
+            confidence_at_time: Confidence in the fact during this period
+            change_type: Type of change (onset, offset, stable, transient)
+            
+        Returns:
+            Dict with created temporal fact details
+        """
+        return self._client._post(
+            "/v1/temporal/facts/tag-validity",
+            json={
+                "fact_id": fact_id,
+                "valid_from": valid_from,
+                "valid_to": valid_to,
+                "confidence_at_time": confidence_at_time,
+                "change_type": change_type,
+            },
+        )
+
+    def detect_sequences(
+        self, entity_timelines: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
+        """
+        Detect recurring event sequences and patterns.
+        
+        Args:
+            entity_timelines: List of timeline dicts with entity_timeline and min_occurrences
+            
+        Returns:
+            List of detected sequences with pattern analysis
+        """
+        return self._client._post(
+            "/v1/temporal/sequences/detect",
+            json=entity_timelines,
+        )
+
+    def compute_trajectories(
+        self, trajectory_requests: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
+        """
+        Compute trajectories for quantities over time.
+        
+        Args:
+            trajectory_requests: List of trajectory dicts with entity_id, quantity, measurements
+            
+        Returns:
+            List of trajectory analyses with trends
+        """
+        return self._client._post(
+            "/v1/temporal/trajectories/compute",
+            json=trajectory_requests,
+        )
+
+    def forecast_trajectory(
+        self, trajectory_id: str, horizon_periods: int
+    ) -> Dict[str, Any]:
+        """
+        Forecast future values for a trajectory.
+        
+        Args:
+            trajectory_id: ID of computed trajectory
+            horizon_periods: Number of periods to forecast
+            
+        Returns:
+            Dict with predictions and confidence intervals
+        """
+        return self._client._post(
+            "/v1/temporal/trajectories/forecast",
+            json={
+                "trajectory_id": trajectory_id,
+                "horizon_periods": horizon_periods,
+            },
+        )
+
+    def get_inflection_points(
+        self, entity_id: str, sensitivity: float = 2.0
+    ) -> List[Dict[str, Any]]:
+        """
+        Detect inflection points in a trajectory.
+        
+        Args:
+            entity_id: Entity identifier for the trajectory
+            sensitivity: Threshold in std devs for change detection
+            
+        Returns:
+            List of inflection points with timestamps and severity
+        """
+        return self._client._get(
+            f"/v1/temporal/trajectories/{entity_id}/inflection-points",
+            params={"sensitivity": sensitivity},
+        )
+
+    def temporal_query(
+        self, query_type: str, **kwargs
+    ) -> Dict[str, Any]:
+        """
+        Execute temporal query.
+        
+        Args:
+            query_type: Type of temporal query
+            **kwargs: Additional query parameters
+            
+        Returns:
+            Query results
+        """
+        return self._client._get(
+            "/v1/temporal/query",
+            params={"query_type": query_type, **kwargs},
+        )
+
+    def when_should_act(
+        self,
+        goal_context: Dict[str, Any],
+        trajectory: Dict[str, Any],
+        action_lead_time_hours: int = 24,
+    ) -> Dict[str, Any]:
+        """
+        Determine optimal timing for an action.
+        
+        Args:
+            goal_context: Goal information dict
+            trajectory: Trajectory data dict
+            action_lead_time_hours: Hours needed to prepare action
+            
+        Returns:
+            Dict with timing recommendation and urgency
+        """
+        return self._client._post(
+            "/v1/temporal/when-should-act",
+            json={
+                "goal_context": goal_context,
+                "trajectory": trajectory,
+                "action_lead_time_hours": action_lead_time_hours,
+            },
+        )
