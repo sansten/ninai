@@ -43,6 +43,10 @@ from app.schemas.memory_batch import (
 from app.services.memory_service import MemoryService
 from app.services.embedding_service import EmbeddingService
 from app.tasks.memory_pipeline import enqueue_memory_pipeline
+from app.tasks.episode_pipeline import enqueue_episode_pipeline
+from app.tasks.fact_pipeline import enqueue_fact_pipeline
+from app.services.fact_service import FactService
+from app.services.playbook_service import PlaybookService
 from app.services.memory_attachment_service import (
     MemoryAttachmentService,
     AttachmentNotFoundError,
@@ -166,6 +170,20 @@ async def create_memory(
             await db.commit()
 
         enqueue_memory_pipeline(
+            org_id=tenant.org_id,
+            memory_id=memory.id,
+            initiator_user_id=tenant.user_id,
+            trace_id=request_id,
+            storage="long_term",
+        )
+        enqueue_episode_pipeline(
+            org_id=tenant.org_id,
+            memory_id=memory.id,
+            initiator_user_id=tenant.user_id,
+            trace_id=request_id,
+            storage="long_term",
+        )
+        enqueue_fact_pipeline(
             org_id=tenant.org_id,
             memory_id=memory.id,
             initiator_user_id=tenant.user_id,
@@ -585,6 +603,20 @@ async def create_memory_smart(
             trace_id=request_id,
             storage=storage,
         )
+        enqueue_episode_pipeline(
+            org_id=tenant.org_id,
+            memory_id=result.id,
+            initiator_user_id=tenant.user_id,
+            trace_id=request_id,
+            storage=storage,
+        )
+        enqueue_fact_pipeline(
+            org_id=tenant.org_id,
+            memory_id=result.id,
+            initiator_user_id=tenant.user_id,
+            trace_id=request_id,
+            storage=storage,
+        )
 
         from app.services.short_term_memory import ShortTermMemory
         if isinstance(result, ShortTermMemory):
@@ -649,6 +681,8 @@ async def search_memories(
         },
     ),
     limit: int = Query(10, ge=1, le=100, description="Maximum number of results to return"),
+    include_enrichment: bool = Query(False, description="Include facts_used and disputed_facts enrichment"),
+    include_playbooks: bool = Query(False, description="Include playbook matches for this query"),
     tenant: TenantContext = Depends(get_tenant_context),
     db: AsyncSession = Depends(get_db),
     service: MemoryService = Depends(get_memory_service),
@@ -735,7 +769,19 @@ async def search_memories(
         await db.commit()
         
         elapsed_ms = (time.perf_counter() - start_time) * 1000
-        
+
+        enrichment = {"facts_used": None, "disputed_facts": None}
+        if include_enrichment:
+            fact_service = FactService(db, tenant.org_id)
+            enrichment_data = await fact_service.get_enrichment_for_memories([memory.id for memory in results])
+            enrichment["facts_used"] = enrichment_data.get("facts_used", [])
+            enrichment["disputed_facts"] = enrichment_data.get("disputed_facts", [])
+
+        playbooks = None
+        if include_playbooks:
+            playbook_service = PlaybookService(db, tenant.org_id)
+            playbooks = await playbook_service.search_playbooks(query=query, limit=5)
+
         return MemorySearchResponse(
             trace_id=request_id,
             query=query,
@@ -743,6 +789,9 @@ async def search_memories(
             total=len(results),
             took_ms=round(elapsed_ms, 2),
             ranking_meta=service.get_search_ranking_meta(search_request),
+            facts_used=enrichment["facts_used"],
+            disputed_facts=enrichment["disputed_facts"],
+            playbooks=playbooks,
         )
     
     except PermissionError as e:

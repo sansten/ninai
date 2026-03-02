@@ -21,9 +21,13 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code
 COPY . .
 
-# Create non-root user for security
-RUN adduser --disabled-password --gecos '' appuser && \
-    chown -R appuser:appuser /app
+# Copy and set permissions for entrypoint script (must be done as root)
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh && \
+    adduser --disabled-password --gecos '' appuser && \
+    chown -R appuser:appuser /app && \
+    chown appuser:appuser /entrypoint.sh
+
 USER appuser
 
 # Expose port
@@ -33,5 +37,5 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD python -c "import sys, urllib.request; urllib.request.urlopen('http://localhost:8000/health'); sys.exit(0)"
 
-# Run application
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+# Run application with entrypoint script
+ENTRYPOINT ["/entrypoint.sh"]

@@ -171,6 +171,9 @@ class MemorySearchResponse(BaseSchema):
     total: int
     took_ms: float
     ranking_meta: Optional[dict[str, Any]] = None
+    facts_used: Optional[List[dict[str, Any]]] = None
+    disputed_facts: Optional[List[dict[str, Any]]] = None
+    playbooks: Optional[List[dict[str, Any]]] = None
 
 
 # =============================================================================

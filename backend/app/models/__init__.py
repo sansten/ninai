@@ -98,6 +98,9 @@ from app.models.episode import Episode, EpisodeStatus, EpisodeScopeType
 from app.models.episode_event import EpisodeEvent, EpisodeEventType, EpisodeActorType
 from app.models.episode_link import EpisodeLink, EpisodeLinkRelation
 from app.models.memory_fact import MemoryFact, MemoryFactStatus
+from app.models.autonomous_goal import AutonomousGoal
+from app.models.knowledge_gap import KnowledgeGap
+from app.models.autonomous_goal_outcome import AutonomousGoalOutcome
 from app.models.contradiction import Contradiction, ContradictionSeverity
 from app.models.playbook import Playbook, PlaybookScopeType
 from app.models.run_checkpoint import RunCheckpoint
@@ -243,6 +246,10 @@ __all__ = [
     "MemoryFactStatus",
     "Contradiction",
     "ContradictionSeverity",
+    # PR3: Autonomous Goals & Intrinsic Motivation
+    "AutonomousGoal",
+    "KnowledgeGap",
+    "AutonomousGoalOutcome",
     # PR4: Procedural/Skill Memory (Playbooks)
     "Playbook",
     "PlaybookScopeType",

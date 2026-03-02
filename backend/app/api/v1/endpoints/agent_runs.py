@@ -19,8 +19,17 @@ from app.middleware.tenant_context import TenantContext, get_tenant_context
 from app.models.agent_run import AgentRun
 from app.models.agent_run_event import AgentRunEvent
 from app.models.base import generate_uuid
-from app.schemas.agent_run import AgentRunDetailResponse, AgentRunSummaryResponse
+from app.schemas.agent_run import (
+    AgentRunDetailResponse,
+    AgentRunSummaryResponse,
+    CheckpointSnapshot,
+    ReplayResponse,
+    RetrievalExplanation,
+    ReproduceRequest,
+    ReproduceResponse,
+)
 from app.schemas.agent_run_event import AgentRunEventCreateRequest, AgentRunEventResponse
+from app.services.checkpoint_service import CheckpointService
 
 
 router = APIRouter()
@@ -272,3 +281,132 @@ async def search_agent_run_events(
         )
         for e in events
     ]
+
+
+@router.get("/agent-runs/{agent_run_id}/replay", response_model=ReplayResponse)
+async def replay_agent_run(
+    agent_run_id: str,
+    to_step: int | None = Query(default=None, ge=0, description="Maximum step index (inclusive)"),
+    tenant: TenantContext = Depends(get_tenant_context),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get deterministic snapshots for time-travel debugging.
+    
+    Returns all checkpoints up to specified step (or all steps if not specified).
+    Each checkpoint contains: inputs, retrieval state, model config, outputs.
+    """
+    await set_tenant_context(db, tenant.user_id, tenant.org_id, tenant.roles_string, tenant.clearance_level)
+
+    # Verify the run exists and belongs to this org
+    res = await db.execute(
+        select(AgentRun).where(
+            AgentRun.id == agent_run_id,
+            AgentRun.organization_id == tenant.org_id,
+        )
+    )
+    if not res.scalar_one_or_none():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent run not found")
+
+    svc = CheckpointService(db, tenant.org_id)
+    snapshots = await svc.get_checkpoints_up_to_step(agent_run_id=agent_run_id, to_step=to_step)
+
+    checkpoints = [
+        CheckpointSnapshot(
+            id=snap["id"],
+            step_index=snap["step_index"],
+            input_snapshot=snap["input_snapshot"],
+            retrieval_snapshot=snap["retrieval_snapshot"],
+            model_snapshot=snap["model_snapshot"],
+            output_snapshot=snap["output_snapshot"],
+            created_at=snap["created_at"],
+        )
+        for snap in snapshots
+    ]
+
+    return ReplayResponse(agent_run_id=agent_run_id, checkpoints=checkpoints)
+
+
+@router.get("/agent-runs/{agent_run_id}/explain-retrieval", response_model=RetrievalExplanation)
+async def explain_retrieval(
+    agent_run_id: str,
+    step_index: int = Query(..., ge=0, description="Step to explain"),
+    tenant: TenantContext = Depends(get_tenant_context),
+    db: AsyncSession = Depends(get_db),
+):
+    """Explain what was retrieved at a specific step and why.
+    
+    Answers: "Which memories were recalled? What filters/scores were applied?"
+    Useful for debugging retrieval quality and understanding agent decisions.
+    """
+    await set_tenant_context(db, tenant.user_id, tenant.org_id, tenant.roles_string, tenant.clearance_level)
+
+    # Verify the run exists and belongs to this org
+    res = await db.execute(
+        select(AgentRun).where(
+            AgentRun.id == agent_run_id,
+            AgentRun.organization_id == tenant.org_id,
+        )
+    )
+    if not res.scalar_one_or_none():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent run not found")
+
+    svc = CheckpointService(db, tenant.org_id)
+    explanation = await svc.explain_retrieval_at_step(agent_run_id=agent_run_id, step_index=step_index)
+
+    if "error" in explanation:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=explanation["error"])
+
+    return RetrievalExplanation(
+        step_index=explanation["step_index"],
+        input_query=explanation["input_query"],
+        input_filters=explanation["input_filters"],
+        retrieved_ids=explanation["retrieved_ids"],
+        retrieved_scores=explanation["retrieved_scores"],
+        retrieval_filters=explanation["retrieval_filters"],
+        retrieval_cutoff=explanation["retrieval_cutoff"],
+        model_state=explanation["model_config"],
+        step_output_keys=explanation["step_output_keys"],
+    )
+
+
+@router.post("/agent-runs/{agent_run_id}/reproduce", response_model=ReproduceResponse)
+async def reproduce_step(
+    agent_run_id: str,
+    body: ReproduceRequest,
+    tenant: TenantContext = Depends(get_tenant_context),
+    db: AsyncSession = Depends(get_db),
+):
+    """Reproduce a specific step using its checkpoint snapshot.
+    
+    Returns the checkpoint data for sandbox re-execution.
+    (Actual sandbox execution is delegated to caller for safety/flexibility.)
+    """
+    await set_tenant_context(db, tenant.user_id, tenant.org_id, tenant.roles_string, tenant.clearance_level)
+
+    # Verify the run exists and belongs to this org
+    res = await db.execute(
+        select(AgentRun).where(
+            AgentRun.id == agent_run_id,
+            AgentRun.organization_id == tenant.org_id,
+        )
+    )
+    if not res.scalar_one_or_none():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent run not found")
+
+    svc = CheckpointService(db, tenant.org_id)
+    checkpoint = await svc.get_checkpoint_for_reproduce(
+        agent_run_id=agent_run_id,
+        step_index=body.step_index,
+    )
+
+    if not checkpoint:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Checkpoint not found for step")
+
+    return ReproduceResponse(
+        step_index=checkpoint["step_index"],
+        input_snapshot=checkpoint["input_snapshot"],
+        retrieval_snapshot=checkpoint["retrieval_snapshot"],
+        model_snapshot=checkpoint["model_snapshot"],
+        output_snapshot=checkpoint["output_snapshot"],
+    )
+
