@@ -882,3 +882,46 @@ class TemporalResource:
                 "action_lead_time_hours": action_lead_time_hours,
             },
         )
+
+
+class MetaCognitiveResource:
+    """
+    PR-6 meta-cognitive planning API resource.
+
+    Provides executive-function endpoints for strategy selection and
+    epistemic-state introspection.
+    """
+
+    def __init__(self, client: "NinaiClient"):
+        self._client = client
+
+    def estimate_complexity(self, query: str) -> Dict[str, Any]:
+        """Estimate query complexity on a 0-1 scale."""
+        return self._client._get(
+            "/v1/meta-cognitive/estimate-complexity",
+            params={"query": query},
+        )
+
+    def recommend_strategy(
+        self,
+        query: str,
+        time_budget_seconds: int = 30,
+        confidence_threshold: float = 0.7,
+    ) -> Dict[str, Any]:
+        """Select best cognitive strategy for the given query."""
+        return self._client._post(
+            "/v1/meta-cognitive/strategy",
+            json={
+                "query": query,
+                "time_budget_seconds": time_budget_seconds,
+                "confidence_threshold": confidence_threshold,
+            },
+        )
+
+    def confidence_calibration(self) -> Dict[str, Any]:
+        """Get confidence calibration metrics for the agent."""
+        return self._client._get("/v1/meta-cognitive/confidence-calibration")
+
+    def epistemic_state(self) -> Dict[str, Any]:
+        """Get known/uncertain/unknown domain snapshot."""
+        return self._client._get("/v1/epistemic-state")
