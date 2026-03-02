@@ -248,7 +248,6 @@ __all__ = [
     "MemorySemanticNodeTopicHistory",
     # GAP-6: kNN Navigation Graph
     "NavigationEdge",
-<<<<<<< HEAD
     # PR1: Episode Case Continuity (Advanced Memory Features)
     "Episode",
     "EpisodeStatus",
@@ -293,10 +292,8 @@ __all__ = [
     "EvalSuite",
     "EvalRun",
     "DriftReport",
-=======
     # PR-7: Compositional Generalization Engine
     "AbstractProcedure",
     "Analogy",
     "AnalogyApplicability",
->>>>>>> b264031 (Implement PR-7 Compositional Generalization Engine with SDK notebook)
 ]
