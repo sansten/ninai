@@ -31,6 +31,7 @@ from ninai.resources import (
     TopicsResource,
     CausalResource,
     ConsolidationResource,
+    TemporalResource,
 )
 from ninai.agents import GoalPlannerAgent, GoalLinkingAgent, MetaAgent
 from ninai.models import AuthTokens, User
@@ -114,6 +115,7 @@ class NinaiClient:
         self.topics = TopicsResource(self)
         self.causal = CausalResource(self)
         self.consolidation = ConsolidationResource(self)
+        self.temporal = TemporalResource(self)  # PR-5: Temporal Reasoning
 
         # Typed agent helpers
         self._goal_planner_agent: GoalPlannerAgent | None = None
