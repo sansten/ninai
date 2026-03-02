@@ -68,6 +68,9 @@ class Settings(BaseSettings):
     # - "both": allow both flows
     AUTH_MODE: str | None = None
 
+    # PR-10: Organization federated login gate (disabled by default)
+    ORG_FEDERATED_LOGIN_ENABLED: bool = False
+
     # -------------------------------------------------------------------------
     # OIDC (SSO) - Option A (recommended)
     # -------------------------------------------------------------------------

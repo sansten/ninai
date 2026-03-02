@@ -10,6 +10,7 @@ from typing import List
 from datetime import datetime
 
 from app.core.database import get_db
+from app.core.config import settings
 from app.models.federated_knowledge import PrivacyPolicy
 from app.services.federated_knowledge_service import FederatedKnowledgeService
 from app.services.org_benchmark_service import OrgBenchmarkService
@@ -40,7 +41,21 @@ from app.schemas.federated_memory_pr10 import (
 )
 from sqlalchemy import select, func
 
-router = APIRouter(prefix="/federated", tags=["federated-memory"])
+
+def require_org_federated_login_enabled() -> None:
+    """Gate PR-10 federated routes behind explicit config opt-in."""
+    if not settings.ORG_FEDERATED_LOGIN_ENABLED:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Organization federated login is disabled",
+        )
+
+
+router = APIRouter(
+    prefix="/federated",
+    tags=["federated-memory"],
+    dependencies=[Depends(require_org_federated_login_enabled)],
+)
 
 
 # Federated Knowledge Endpoints
@@ -446,7 +461,7 @@ async def get_federation_health(db: AsyncSession = Depends(get_db)):
     
     Shows participation rates, knowledge quality, and privacy compliance.
     """
-    from backend.app.models.federated_knowledge import FederatedKnowledgeSummary
+    from app.models.federated_knowledge import FederatedKnowledgeSummary
     
     # Count total federated knowledge
     stmt_total_knowledge = select(func.count()).select_from(FederatedKnowledgeSummary)
