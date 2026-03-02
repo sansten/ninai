@@ -56,6 +56,7 @@ from app.api.v1.endpoints import (
     evaluation,
     consolidation_sleep,
     intrinsic_motivation_pr3,
+    adaptive_strategy_pr4,
 )
 from app.api.v1.admin import routes as admin_routes
 from app.api.v1.endpoints import event_publishing_batch
@@ -342,6 +343,11 @@ api_router.include_router(
 api_router.include_router(
     intrinsic_motivation_pr3.router,
     tags=["Autonomous Goals PR-3"],
+)
+
+api_router.include_router(
+    adaptive_strategy_pr4.router,
+    tags=["Tool Learning PR-4"],
 )
 
 api_router.include_router(

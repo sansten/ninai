@@ -101,6 +101,7 @@ from app.models.memory_fact import MemoryFact, MemoryFactStatus
 from app.models.autonomous_goal import AutonomousGoal
 from app.models.knowledge_gap import KnowledgeGap
 from app.models.autonomous_goal_outcome import AutonomousGoalOutcome
+from app.models.tool_capability import ToolCapability, StrategyAdaptation, CapabilityDiscovery, ToolType
 from app.models.contradiction import Contradiction, ContradictionSeverity
 from app.models.playbook import Playbook, PlaybookScopeType
 from app.models.run_checkpoint import RunCheckpoint
@@ -250,6 +251,11 @@ __all__ = [
     "AutonomousGoal",
     "KnowledgeGap",
     "AutonomousGoalOutcome",
+    # PR4: Tool Capability Learning & Adaptive Strategy Selection
+    "ToolCapability",
+    "StrategyAdaptation",
+    "CapabilityDiscovery",
+    "ToolType",
     # PR4: Procedural/Skill Memory (Playbooks)
     "Playbook",
     "PlaybookScopeType",
