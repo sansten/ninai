@@ -9,7 +9,7 @@ from typing import Dict, List, Optional, Any
 from datetime import datetime, timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, func
-from backend.app.models.federated_knowledge import OrgBenchmark, PrivacyPolicy
+from app.models.federated_knowledge import OrgBenchmark, PrivacyPolicy
 import statistics
 
 
@@ -177,8 +177,7 @@ class OrgBenchmarkService:
             # Identify improvements
             if benchmark.trend == "improving":
                 improvements.append(
-                    f"{benchmark.metric_type} improved 
-to {benchmark.percentile:.0%} percentile"
+                    f"{benchmark.metric_type} improved to {benchmark.percentile:.0%} percentile"
                 )
             
             # Generate recommendations for low performers
