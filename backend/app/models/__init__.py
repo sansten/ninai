@@ -123,6 +123,14 @@ from app.models.compositional_generalization import (
     Analogy,
     AnalogyApplicability,
 )
+from app.models.affective_memory import (
+    AffectiveMemory,
+    EmotionalTrajectory,
+    EmotionalInteractionEvent,
+    EmotionalTag,
+    EmotionalTrend,
+    DeEscalationStrategy,
+)
 
 __all__ = [
     # Base
@@ -296,4 +304,11 @@ __all__ = [
     "AbstractProcedure",
     "Analogy",
     "AnalogyApplicability",
+    # PR-8: Emotional & Affective Memory
+    "AffectiveMemory",
+    "EmotionalTrajectory",
+    "EmotionalInteractionEvent",
+    "EmotionalTag",
+    "EmotionalTrend",
+    "DeEscalationStrategy",
 ]
