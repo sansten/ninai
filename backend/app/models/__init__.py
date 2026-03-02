@@ -131,6 +131,12 @@ from app.models.affective_memory import (
     EmotionalTrend,
     DeEscalationStrategy,
 )
+from app.models.federated_knowledge import (
+    FederatedKnowledgeSummary,
+    OrgBenchmark,
+    PrivacyPolicy,
+    FederatedContribution,
+)
 
 __all__ = [
     # Base
@@ -311,4 +317,9 @@ __all__ = [
     "EmotionalTag",
     "EmotionalTrend",
     "DeEscalationStrategy",
+    # PR-10: Federated Memory & Collective Intelligence
+    "FederatedKnowledgeSummary",
+    "OrgBenchmark",
+    "PrivacyPolicy",
+    "FederatedContribution",
 ]
