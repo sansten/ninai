@@ -33,6 +33,7 @@ from ninai.resources import (
     ConsolidationResource,
     TemporalResource,
     MetaCognitiveResource,
+    CompositionResource,
 )
 from ninai.agents import GoalPlannerAgent, GoalLinkingAgent, MetaAgent
 from ninai.models import AuthTokens, User
@@ -118,6 +119,7 @@ class NinaiClient:
         self.consolidation = ConsolidationResource(self)
         self.temporal = TemporalResource(self)  # PR-5: Temporal Reasoning
         self.meta_cognitive = MetaCognitiveResource(self)  # PR-6: Meta-Cognitive Planning
+        self.composition = CompositionResource(self)  # PR-7: Compositional Generalization
 
         # Typed agent helpers
         self._goal_planner_agent: GoalPlannerAgent | None = None
