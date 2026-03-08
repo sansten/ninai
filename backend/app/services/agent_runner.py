@@ -1031,6 +1031,41 @@ class AgentRunner:
                     },
                 )
 
+        if agent_name == "SemanticNormalizationAgent":
+            await _run_side_effect(
+                tool_name="MemoryMetadata.update_semantic_fields",
+                call_payload={
+                    "agent": agent_name,
+                    "memory_id": ctx.memory_id,
+                    "intent": result.outputs.get("intent"),
+                    "business_domain": result.outputs.get("business_domain"),
+                },
+                op_coro=self._apply_semantic_normalization(
+                    session=session,
+                    memory_id=ctx.memory_id,
+                    outputs=result.outputs,
+                ),
+            )
+
+    async def _apply_semantic_normalization(
+        self,
+        *,
+        session: AsyncSession,
+        memory_id: str,
+        outputs: dict,
+    ) -> dict:
+        mem = await session.get(MemoryMetadata, memory_id)
+        if mem is None:
+            return {"updated": False}
+        mem.semantic_intent = outputs.get("intent")
+        mem.business_domain = outputs.get("business_domain")
+        rels = outputs.get("semantic_relationships", [])
+        if rels:
+            extra = dict(mem.extra_metadata or {})
+            extra["semantic_relationships"] = rels
+            mem.extra_metadata = extra
+        return {"updated": True}
+
     async def _load_pending_feedback_fingerprint(self, session: AsyncSession, org_id: str, memory_id: str) -> str:
         """Fingerprint unapplied feedback for idempotency.
 
