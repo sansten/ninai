@@ -15,6 +15,7 @@ from app.agents.logseq_export_agent import LogseqExportAgent
 from app.agents.metadata_extraction_agent import MetadataExtractionAgent
 from app.agents.pattern_detection_agent import PatternDetectionAgent
 from app.agents.promotion_agent import PromotionAgent
+from app.agents.context_amplifier_agent import ContextAmplifierAgent
 from app.agents.entity_resolution_agent import EntityResolutionAgent
 from app.agents.semantic_normalization_agent import SemanticNormalizationAgent
 from app.agents.topic_modeling_agent import TopicModelingAgent
@@ -52,5 +53,8 @@ def get_agent(agent_name: str) -> Optional[BaseAgent]:
 
     if name in {"entity_resolution", "entityresolution", "entityresolutionagent"}:
         return EntityResolutionAgent()
+
+    if name in {"context_amplifier", "contextamplifier", "contextamplifieragent"}:
+        return ContextAmplifierAgent()
 
     return None
