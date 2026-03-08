@@ -21,6 +21,7 @@ from app.models.memory_activation import (
     CausalHypothesis,
 )
 from app.models.memory import MemoryMetadata
+from app.models.goal import GoalMemoryLink
 from app.services.memory_activation.scoring import (
     ActivationScorer,
     ActivationComponents,
@@ -99,6 +100,10 @@ class MemoryRetrievalService:
         memory_metadata = await self._load_memory_metadata(memory_ids)
         evidence_links = await self._load_evidence_link_counts(memory_ids)
         co_activated_neighbors = await self._load_coactivated_neighbors(memory_ids)
+        goal_linked_memory_ids = (
+            await self._load_goal_linked_memories(memory_ids, goal_id)
+            if goal_id else set()
+        )
 
         # Score each memory
         scored_results: List[Tuple[str, float, RetrievalResultSchema]] = []
@@ -114,6 +119,7 @@ class MemoryRetrievalService:
                 scope=scope,
                 episode_id=episode_id,
                 goal_id=goal_id,
+                goal_linked=(mem_id in goal_linked_memory_ids),
             )
 
             scored_results.append((mem_id, activation, result_schema))
@@ -182,6 +188,7 @@ class MemoryRetrievalService:
         scope: Optional[str],
         episode_id: Optional[str],
         goal_id: Optional[str],
+        goal_linked: bool = False,
         current_rank: int = 0,
     ) -> Tuple[float, ActivationComponents, RetrievalResultSchema]:
         """Score a single memory with all 8 components.
@@ -212,7 +219,7 @@ class MemoryRetrievalService:
         # Compute context gate
         scope_match = self._compute_scope_match(scope, metadata) if metadata else 0.5
         episode_match = self._compute_episode_match(episode_id, metadata) if metadata else 0.5
-        goal_match = self._compute_goal_match(goal_id, metadata) if metadata else 0.5
+        goal_match = self._compute_goal_match(goal_id, goal_linked)
 
         # Compute age in days
         created_at = metadata.get("created_at") if metadata else None
@@ -391,13 +398,32 @@ class MemoryRetrievalService:
         mem_episode = metadata.get("episode_id")
         return 1.0 if mem_episode == current_episode else 0.3
 
-    def _compute_goal_match(self, current_goal: Optional[str], metadata: Dict[str, Any]) -> float:
-        """Compute goal affinity."""
-        if not current_goal or not metadata:
-            return 0.5
+    def _compute_goal_match(self, current_goal: Optional[str], goal_linked: bool) -> float:
+        """Compute goal affinity from GoalMemoryLink relationship.
 
-        # Simplified: would need to check goal tags or relationships
-        return 0.5
+        Returns 1.0 if this memory is explicitly linked to the active goal,
+        0.3 if there is an active goal but no link, or 0.5 if no goal context.
+        """
+        if not current_goal:
+            return 0.5
+        return 1.0 if goal_linked else 0.3
+
+    async def _load_goal_linked_memories(
+        self, memory_ids: List[str], goal_id: str
+    ) -> set:
+        """Batch-load which memory IDs are linked to the active goal.
+
+        Returns a set of memory_id strings that have a GoalMemoryLink to goal_id.
+        """
+        stmt = select(GoalMemoryLink.memory_id).where(
+            and_(
+                GoalMemoryLink.organization_id == self.org_id,
+                GoalMemoryLink.goal_id == goal_id,
+                GoalMemoryLink.memory_id.in_(memory_ids),
+            )
+        )
+        result = await self.session.execute(stmt)
+        return {str(row) for row in result.scalars().all()}
 
     def _compute_age_days(self, created_at: Optional[datetime]) -> float:
         """Compute memory age in days."""

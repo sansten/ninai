@@ -120,6 +120,9 @@ class PlannerAgent:
         evidence_cards: list[dict[str, Any]],
         available_tools: list[str],
         self_model_summary: dict[str, Any] | None = None,
+        tool_recommendations: list[dict[str, Any]] | None = None,
+        strategy_hints: dict[str, Any] | None = None,
+        cognitive_context: dict[str, Any] | None = None,
         tool_event_sink=None,
     ) -> PlannerOutput:
         cleaned_goal = (goal or "").strip()
@@ -138,11 +141,24 @@ class PlannerAgent:
             )
 
         prompt_template = load_prompt_text("cognitive_loop", "planner_v1.txt")
+        # Include only relevant fields from tool recommendations to keep prompt concise
+        compact_recommendations = [
+            {
+                "tool_name": r.get("tool_name", "unknown"),
+                "score": round(float(r.get("score", 0.0)), 3),
+                "success_rate": round(float(r.get("success_rate", 0.0)), 3),
+            }
+            for r in (tool_recommendations or [])
+            if isinstance(r, dict) and r.get("tool_name")
+        ]
         prompt = prompt_template.format(
             goal=cleaned_goal,
-            evidence_json=json.dumps(evidence_cards, ensure_ascii=False, indent=2),
-            tools_json=json.dumps(sorted(list(set(available_tools or []))), ensure_ascii=False, indent=2),
-            self_model_json=json.dumps(self_model_summary or {}, ensure_ascii=False, indent=2),
+            evidence_json=json.dumps(evidence_cards, ensure_ascii=False, separators=(",", ":")),
+            tools_json=json.dumps(sorted(list(set(available_tools or []))), ensure_ascii=False, separators=(",", ":")),
+            self_model_json=json.dumps(self_model_summary or {}, ensure_ascii=False, separators=(",", ":")),
+            tool_recommendations_json=json.dumps(compact_recommendations, ensure_ascii=False, separators=(",", ":")),
+            strategy_context_json=json.dumps(strategy_hints or {}, ensure_ascii=False, separators=(",", ":")),
+            cognitive_context_json=json.dumps(cognitive_context or {}, ensure_ascii=False, separators=(",", ":")),
         )
 
         client = self.llm_client or self._default_llm()

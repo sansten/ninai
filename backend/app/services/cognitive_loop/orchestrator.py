@@ -14,6 +14,7 @@ Idempotency (best-effort):
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
@@ -27,6 +28,9 @@ from app.services.cognitive_loop.critic_agent import CriticAgent
 from app.services.simulation_report_service import SimulationReportService
 from app.services.simulation_service import SimulationService
 from app.services.cognitive_tooling.policy_guard import ToolContext
+from app.services.adaptive_strategy_service import AdaptiveStrategyService
+from app.services.strategy_learning_service import StrategyLearningService, _classify_goal_type
+from app.services.cognitive_context_aggregator import CognitiveContextAggregator
 
 
 @dataclass(frozen=True)
@@ -47,6 +51,9 @@ class LoopOrchestrator:
         critic: CriticAgent,
         available_tools: list[str],
         self_model_summary: dict[str, Any] | None = None,
+        adaptive_strategy: AdaptiveStrategyService | None = None,
+        strategy_learning: StrategyLearningService | None = None,
+        context_aggregator: CognitiveContextAggregator | None = None,
         config: OrchestratorConfig | None = None,
     ) -> None:
         self.repo = repo
@@ -58,6 +65,9 @@ class LoopOrchestrator:
         self.critic = critic
         self.available_tools = available_tools
         self.self_model_summary = self_model_summary or {}
+        self.adaptive_strategy = adaptive_strategy
+        self.strategy_learning = strategy_learning
+        self.context_aggregator = context_aggregator
         self.config = config or OrchestratorConfig()
 
     def _apply_safe_simulation_patch(self, *, plan: PlannerOutput, patch: dict[str, Any]) -> PlannerOutput:
@@ -139,6 +149,40 @@ class LoopOrchestrator:
             await self.repo.save_session_status(sess, "failed")
             return "failed"
 
+        # Pre-classify goal type and domain for strategy learning
+        goal_type = _classify_goal_type(goal)
+        session_domain = str((getattr(sess, "context_snapshot", None) or {}).get("domain", "general")).strip() or "general"
+
+        # Fetch strategy hints and cognitive context concurrently — both are
+        # independent pre-loop operations used across all iterations.
+        async def _fetch_strategy_hints() -> dict[str, Any] | None:
+            if not self.strategy_learning:
+                return None
+            try:
+                return await self.strategy_learning.get_strategy_hints(
+                    org_id=tool_ctx.org_id,
+                    goal_type=goal_type,
+                    domain=session_domain,
+                )
+            except Exception:
+                return None
+
+        async def _fetch_cognitive_context() -> dict[str, Any] | None:
+            if not self.context_aggregator:
+                return None
+            try:
+                return await self.context_aggregator.aggregate(
+                    org_id=tool_ctx.org_id,
+                    goal=goal,
+                ) or None
+            except Exception:
+                return None
+
+        strategy_hints, cognitive_context = await asyncio.gather(
+            _fetch_strategy_hints(),
+            _fetch_cognitive_context(),
+        )
+
         final_status = "failed"
 
         for iteration_num in range(1, int(self.config.max_iterations) + 1):
@@ -168,11 +212,28 @@ class LoopOrchestrator:
 
             evidence_cards = await self.evidence.retrieve_evidence(goal=goal, limit=evidence_limit, hybrid=True)
 
+            # Fetch adaptive tool recommendations for this iteration
+            tool_recommendations: list[dict[str, Any]] = []
+            if self.adaptive_strategy:
+                try:
+                    tool_recommendations = await self.adaptive_strategy.get_tool_recommendations(
+                        org_id=tool_ctx.org_id,
+                        goal_id=session_id,
+                        goal_type=goal_type,
+                        domain=session_domain,
+                        limit=5,
+                    )
+                except Exception:
+                    tool_recommendations = []
+
             plan: PlannerOutput = await self.planner.plan(
                 goal=goal,
                 evidence_cards=evidence_cards,
                 available_tools=self.available_tools,
                 self_model_summary=self.self_model_summary,
+                tool_recommendations=tool_recommendations,
+                strategy_hints=strategy_hints,
+                cognitive_context=cognitive_context,
             )
 
             simulation = self.simulator.simulate_plan(plan=plan, evidence_cards=evidence_cards)
@@ -247,4 +308,15 @@ class LoopOrchestrator:
             break
 
         await self.repo.save_session_status(sess, final_status)
+
+        # Post-session: ingest outcome into strategy library (fire-and-forget)
+        if self.strategy_learning and final_status in ("succeeded", "failed", "aborted"):
+            try:
+                await self.strategy_learning.ingest_session_outcome(
+                    org_id=tool_ctx.org_id,
+                    session_id=session_id,
+                )
+            except Exception:
+                pass  # non-blocking; learning failure must not affect session outcome
+
         return final_status
