@@ -19,13 +19,15 @@ class CognitiveEvidenceService:
     def __init__(self, memory_service: MemoryService):
         self.memory_service = memory_service
 
+    _SUMMARY_MAX = 300  # chars — keeps planner prompt compact
+
     async def retrieve_evidence(
         self,
         *,
         goal: str,
         scope: str | None = None,
         team_id: str | None = None,
-        limit: int = 10,
+        limit: int = 5,
         hybrid: bool = True,
     ) -> list[dict[str, Any]]:
         query_embedding = await EmbeddingService.embed(goal)
@@ -41,16 +43,15 @@ class CognitiveEvidenceService:
 
         cards: list[dict[str, Any]] = []
         for m in memories:
+            raw_summary = getattr(m, "content_preview", "") or ""
+            summary = raw_summary[: self._SUMMARY_MAX]
             cards.append(
                 {
                     "id": str(getattr(m, "id")),
-                    "summary": getattr(m, "content_preview", "") or "",
+                    "summary": summary,
                     "title": getattr(m, "title", None),
                     "tags": list(getattr(m, "tags", []) or []),
-                    "classification": getattr(m, "classification", None),
-                    "scope": getattr(m, "scope", None),
-                    "scope_id": getattr(m, "scope_id", None),
-                    "score": float(getattr(m, "score", 0.0) or 0.0),
+                    "score": round(float(getattr(m, "score", 0.0) or 0.0), 3),
                 }
             )
 

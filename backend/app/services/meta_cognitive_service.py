@@ -6,19 +6,23 @@ Executive control layer that decides how deeply and carefully the agent should t
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Optional
 
+from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.meta_cognitive import StrategySelected
+from app.models.meta_agent import MetaAgentRun
+from app.models.self_model import SelfModelProfile
 
 
 class MetaCognitiveService:
     """Service for query complexity estimation and strategy selection."""
 
-    def __init__(self, session: Optional[AsyncSession] = None):
+    def __init__(self, session: Optional[AsyncSession] = None, org_id: Optional[str] = None):
         self.session = session
+        self.org_id = org_id
 
     async def estimate_query_complexity(self, query: str) -> float:
         """
@@ -170,20 +174,83 @@ class MetaCognitiveService:
         }
 
     async def get_confidence_calibration(self) -> Dict[str, float]:
-        """Return a lightweight confidence calibration summary."""
+        """Return confidence calibration computed from MetaAgentRun outcomes.
+
+        confidence_calibration: avg final_confidence across recent runs
+        surprise_frequency: fraction of runs that were confident (>0.7) yet failed
+        Fallback to neutral defaults if no session or no data.
+        """
+        if not self.session or not self.org_id:
+            return {"confidence_calibration": 0.70, "surprise_frequency": 0.0, "well_calibrated": True}
+
+        cutoff = datetime.now(timezone.utc) - timedelta(days=90)
+        stmt = (
+            select(MetaAgentRun)
+            .where(
+                and_(
+                    MetaAgentRun.organization_id == self.org_id,
+                    MetaAgentRun.created_at >= cutoff,
+                    MetaAgentRun.final_confidence.isnot(None),
+                )
+            )
+            .order_by(MetaAgentRun.created_at.desc())
+            .limit(200)
+        )
+        result = await self.session.execute(stmt)
+        runs = result.scalars().all()
+
+        if not runs:
+            return {"confidence_calibration": 0.70, "surprise_frequency": 0.0, "well_calibrated": True}
+
+        confidences = [r.final_confidence for r in runs if r.final_confidence is not None]
+        avg_confidence = sum(confidences) / len(confidences)
+
+        # Surprised = agent was confident (>0.7) but run failed
+        surprises = sum(
+            1 for r in runs if (r.final_confidence or 0.0) > 0.7 and r.status == "failed"
+        )
+        surprise_frequency = surprises / len(runs)
+
         return {
-            "confidence_calibration": 0.81,
-            "surprise_frequency": 0.14,
-            "well_calibrated": True,
+            "confidence_calibration": round(avg_confidence, 3),
+            "surprise_frequency": round(surprise_frequency, 3),
+            "well_calibrated": surprise_frequency < 0.25,
         }
 
     async def get_epistemic_state(self) -> Dict[str, object]:
-        """Return current epistemic snapshot (known/uncertain/unknown domains)."""
+        """Return epistemic snapshot derived from SelfModelProfile domain_confidence.
+
+        known_domains: confidence >= 0.70
+        uncertain_domains: 0.40 <= confidence < 0.70
+        unknown_domains: confidence < 0.40
+        Calibration data re-uses get_confidence_calibration() to avoid duplication.
+        """
+        known_domains: list[str] = []
+        uncertain_domains: list[str] = []
+        unknown_domains: list[str] = []
+
+        if self.session and self.org_id:
+            stmt = select(SelfModelProfile).where(SelfModelProfile.organization_id == self.org_id)
+            result = await self.session.execute(stmt)
+            profile = result.scalar_one_or_none()
+
+            if profile and profile.domain_confidence:
+                for domain, conf in profile.domain_confidence.items():
+                    conf_val = float(conf) if isinstance(conf, (int, float)) else 0.5
+                    if conf_val >= 0.70:
+                        known_domains.append(domain)
+                    elif conf_val >= 0.40:
+                        uncertain_domains.append(domain)
+                    else:
+                        unknown_domains.append(domain)
+
+        calibration = await self.get_confidence_calibration()
+
         return {
-            "timestamp": datetime.utcnow().isoformat(),
-            "known_domains": ["memory_retrieval", "tool_usage"],
-            "uncertain_domains": ["long_horizon_forecasting", "novel_domain_transfer"],
-            "unknown_domains": ["organization_specific_undocumented_constraints"],
-            "confidence_calibration": 0.81,
-            "surprise_frequency": 0.14,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "known_domains": known_domains,
+            "uncertain_domains": uncertain_domains,
+            "unknown_domains": unknown_domains,
+            "confidence_calibration": calibration["confidence_calibration"],
+            "surprise_frequency": calibration["surprise_frequency"],
         }
