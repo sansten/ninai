@@ -15,6 +15,7 @@ from app.agents.logseq_export_agent import LogseqExportAgent
 from app.agents.metadata_extraction_agent import MetadataExtractionAgent
 from app.agents.pattern_detection_agent import PatternDetectionAgent
 from app.agents.promotion_agent import PromotionAgent
+from app.agents.semantic_normalization_agent import SemanticNormalizationAgent
 from app.agents.topic_modeling_agent import TopicModelingAgent
 
 
@@ -44,5 +45,8 @@ def get_agent(agent_name: str) -> Optional[BaseAgent]:
 
     if name in {"feedback", "feedbacklearning", "feedbacklearningagent"}:
         return FeedbackLearningAgent()
+
+    if name in {"semantic_normalization", "semanticnormalization", "semanticnormalizationagent"}:
+        return SemanticNormalizationAgent()
 
     return None
