@@ -22,6 +22,7 @@ from app.agents.silo_propagation_agent import SiloPropagationAgent
 from app.agents.org_attention_agent import OrgAttentionAgent
 from app.agents.proactive_memory_push_agent import ProactiveMemoryPushAgent
 from app.agents.topic_modeling_agent import TopicModelingAgent
+from app.agents.world_model_agent import WorldModelAgent
 
 
 def get_agent(agent_name: str) -> Optional[BaseAgent]:
@@ -69,5 +70,8 @@ def get_agent(agent_name: str) -> Optional[BaseAgent]:
     if name in {"proactive_push", "proactivepush", "proactivememorpush",
                 "proactivememory", "proactivememorypush", "proactivememorypushagent"}:
         return ProactiveMemoryPushAgent()
+
+    if name in {"world_model", "worldmodel", "worldmodelagent"}:
+        return WorldModelAgent()
 
     return None
