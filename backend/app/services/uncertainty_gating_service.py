@@ -134,25 +134,10 @@ class UncertaintyGatingService:
                 current_entropy = trial_entropy
                 total_reduction += delta_h
             else:
-                # Reject: insufficient uncertainty reduction
-                logger.debug("Candidate %d rejected (ΔH < δ)", i)
-                # Stop early if no progress can be made
-                if len(included_items) == 0:
-                    return self._build_result(
-                        current_context,
-                        included_items,
-                        total_reduction,
-                        "Entropy threshold not met",
-                    )
-                # If we've included items but this one rejected, likely diminishing returns
-                # Return early to save compute
-                else:
-                    return self._build_result(
-                        current_context,
-                        included_items,
-                        total_reduction,
-                        "Entropy threshold not met",
-                    )
+                # Reject: insufficient uncertainty reduction — continue evaluating remaining
+                # candidates. A later candidate may still pass the threshold independently.
+                logger.debug("Candidate %d rejected (ΔH=%.3f < δ=%.3f), continuing", i, delta_h, entropy_threshold)
+                continue
 
         # Finished all candidates (all accepted)
         logger.info(

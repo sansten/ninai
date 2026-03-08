@@ -80,7 +80,10 @@ async def test_expand_with_gating_accepts_high_entropy_reduction(
     assert result["included_items"][0]["id"] == "msg-1"
     assert result["included_items"][1]["id"] == "msg-2"
     assert result["total_entropy_reduction"] == pytest.approx(0.6, abs=0.01)
-    assert "threshold" in result["expansion_stopped_reason"].lower()
+    # After the early-stop bug fix (continue instead of return), all candidates
+    # are evaluated; the 3rd is rejected but the loop finishes naturally.
+    reason = result["expansion_stopped_reason"].lower()
+    assert "threshold" in reason or "all candidates" in reason
 
 
 @pytest.mark.asyncio

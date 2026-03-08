@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
+from app.middleware.tenant_context import TenantContext, get_tenant_context
 from app.schemas.meta_cognitive_pr6 import (
     ComplexityResponse,
     StrategyRequest,
@@ -21,8 +22,9 @@ router = APIRouter()
 
 async def get_meta_cognitive_service(
     session: AsyncSession = Depends(get_db),
+    tenant: TenantContext = Depends(get_tenant_context),
 ) -> MetaCognitiveService:
-    return MetaCognitiveService(session=session)
+    return MetaCognitiveService(session=session, org_id=tenant.org_id)
 
 
 @router.get("/v1/meta-cognitive/estimate-complexity", response_model=ComplexityResponse)

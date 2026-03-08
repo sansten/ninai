@@ -38,6 +38,11 @@ from app.services.simulation_service import SimulationService
 from app.tasks.self_model import self_model_recompute_task
 from app.services.goal_service import GoalService
 from app.tasks.goals import goal_progress_recompute_task
+from app.services.adaptive_strategy_service import AdaptiveStrategyService
+from app.services.strategy_learning_service import StrategyLearningService
+from app.services.cognitive_context_aggregator import CognitiveContextAggregator
+from app.services.meta_cognitive_service import MetaCognitiveService
+from app.services.intrinsic_motivation_service import IntrinsicMotivationService
 
 
 logger = get_task_logger(__name__)
@@ -127,6 +132,12 @@ def cognitive_loop_task(
                         critic=CriticAgent(),
                         available_tools=["memory.search"],
                         self_model_summary=self_model_summary,
+                        adaptive_strategy=AdaptiveStrategyService(db),
+                        strategy_learning=StrategyLearningService(db),
+                        context_aggregator=CognitiveContextAggregator(
+                            meta_cognitive=MetaCognitiveService(session=db, org_id=org_id),
+                            intrinsic_motivation=IntrinsicMotivationService(db),
+                        ),
                         config=OrchestratorConfig(max_iterations=int(max_iterations or 3)),
                     )
 
