@@ -17,6 +17,15 @@ AVAILABLE TOOLS:
 SELF MODEL SUMMARY (organization-level calibration; may be empty):
 {self_model_json}
 
+TOOL PERFORMANCE CONTEXT (ranked by reliability; prefer tools with higher score when equivalent options exist):
+{tool_recommendations_json}
+
+STRATEGY CONTEXT (proven tool sequences from past successful sessions; use as warm-start when applicable):
+{strategy_context_json}
+
+COGNITIVE CONTEXT (epistemic state + active knowledge gaps; use to calibrate confidence and identify what is unknown):
+{cognitive_context_json}
+
 TASK:
 Return a JSON object matching this schema exactly:
 {{
@@ -45,3 +54,7 @@ GUIDANCE:
 - Prefer "memory.search" or "memory.get" tools when you need more evidence.
 - Keep required_tools minimal and only from AVAILABLE TOOLS.
 - If SELF MODEL indicates low-confidence domains or unreliable tools, increase evidence gathering and avoid risky tools.
+- If TOOL PERFORMANCE CONTEXT is non-empty, prefer tools with higher score values when multiple tools could accomplish the same step.
+- If STRATEGY CONTEXT contains top_strategies, consider reusing the top tool_sequence as a starting point for your steps list, adapting it to the current evidence and constraints.
+- If COGNITIVE CONTEXT lists uncertain_domains or unknown_domains matching the goal, increase evidence gathering steps and lower your confidence score accordingly.
+- If COGNITIVE CONTEXT lists knowledge_gaps, acknowledge unresolved gaps in stop_conditions and prefer evidence-gathering steps for those domains.

@@ -7,12 +7,10 @@ and supports continuous self-improvement through goal-based learning.
 """
 
 import uuid
-from datetime import datetime, timedelta
-from typing import List, Dict, Optional, Tuple
-import math
-import random
+from datetime import datetime, timedelta, timezone
+from typing import List, Dict, Optional
 
-from sqlalchemy import select
+from sqlalchemy import select, and_, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import (
@@ -20,6 +18,8 @@ from app.models import (
     KnowledgeGap,
     AutonomousGoalOutcome,
 )
+from app.models.audit import AuditEvent
+from app.models.self_model import SelfModelProfile
 
 
 class IntrinsicMotivationService:
@@ -138,66 +138,74 @@ class IntrinsicMotivationService:
         org_id: str,
         lookback_days: int = 90
     ) -> List[Dict]:
+        """Predict user needs by analyzing AuditEvent frequency per resource_type.
+
+        Queries the real audit log for the org, groups events by resource_type,
+        and generates anticipatory goals for the most-queried domains so the agent
+        can prepare before the next request arrives.
         """
-        Predict user needs based on historical patterns.
-        
-        Analyzes:
-        - Frequency of user requests by domain
-        - Seasonal patterns
-        - Escalation patterns
-        
-        Generates anticipatory goals like:
-        "User typically asks about billing every 3 months; they're due soon"
-        
-        Args:
-            org_id: Organization ID
-            lookback_days: Days of history to analyze
-        
-        Returns:
-            List of predictive goals
-        """
+        cutoff_date = datetime.now(timezone.utc) - timedelta(days=lookback_days)
+
+        # Count audit events by resource_type in the lookback window
+        stmt = (
+            select(
+                AuditEvent.resource_type,
+                func.count().label("event_count"),
+            )
+            .where(
+                and_(
+                    AuditEvent.organization_id == org_id,
+                    AuditEvent.timestamp >= cutoff_date,
+                    AuditEvent.resource_type.isnot(None),
+                )
+            )
+            .group_by(AuditEvent.resource_type)
+            .order_by(func.count().desc())
+            .limit(5)
+        )
+        result = await self.session.execute(stmt)
+        domain_counts = result.all()
+
+        if not domain_counts:
+            return []
+
+        total_events = sum(row.event_count for row in domain_counts)
         goals = []
-        
-        # In a real implementation, this would:
-        # 1. Query audit logs for user requests in lookback period
-        # 2. Group by domain and calculate frequency
-        # 3. Detect patterns and seasonality
-        # 4. Generate proactive goals for predicted next need
-        
-        # For demo purposes, return a few example predictive goals
-        prediction_domains = [
-            {"domain": "billing", "frequency_days": 90, "confidence": 0.75},
-            {"domain": "feature_usage", "frequency_days": 14, "confidence": 0.65},
-            {"domain": "account_health", "frequency_days": 30, "confidence": 0.70},
-        ]
-        
-        cutoff_date = datetime.utcnow() - timedelta(days=lookback_days)
-        
-        for domain_pred in prediction_domains:
+
+        for row in domain_counts:
+            domain = row.resource_type
+            count = row.event_count
+            # Confidence scales with how dominant this domain is
+            frequency_ratio = count / total_events if total_events > 0 else 0.0
+            confidence = min(0.90, 0.40 + frequency_ratio * 0.50)
+            # Estimated recurrence period in days (heuristic: lookback / count)
+            expected_frequency_days = max(1, lookback_days // count)
+
             goal = {
                 "id": str(uuid.uuid4()),
                 "organization_id": org_id,
                 "initiator": "prediction",
-                "title": f"Prepare: Likely user request about {domain_pred['domain']}",
+                "title": f"Prepare: Likely user request about {domain}",
                 "description": (
-                    f"Based on {lookback_days}-day history, user typically asks about "
-                    f"{domain_pred['domain']} every {domain_pred['frequency_days']} days. "
-                    f"Next request likely soon."
+                    f"Audit history ({lookback_days}d): {count} events in '{domain}'. "
+                    f"Estimated recurrence every ~{expected_frequency_days} days. "
+                    f"Pre-loading context may reduce latency."
                 ),
                 "trigger_memory_ids": [],
-                "expected_value": 0.5 + (domain_pred["confidence"] * 0.35),
-                "urgency": 0.5,
-                "confidence": domain_pred["confidence"],
+                "expected_value": 0.4 + confidence * 0.4,
+                "urgency": frequency_ratio,
+                "confidence": confidence,
                 "status": "proposed",
-                "created_at": datetime.utcnow(),
+                "created_at": datetime.now(timezone.utc),
                 "metadata": {
                     "prediction_type": "user_need",
-                    "domain": domain_pred["domain"],
-                    "expected_frequency_days": domain_pred["frequency_days"],
+                    "domain": domain,
+                    "event_count_lookback": count,
+                    "expected_frequency_days": expected_frequency_days,
                 },
             }
             goals.append(goal)
-        
+
         return goals
     
     async def detect_self_improvement_needs(
@@ -205,70 +213,63 @@ class IntrinsicMotivationService:
         org_id: str,
         tool_success_threshold: float = 0.6
     ) -> List[Dict]:
+        """Identify underperforming tools by reading the real SelfModelProfile.
+
+        SelfModelProfile.tool_reliability is a JSONB dict keyed by tool_name,
+        each entry containing EMA-smoothed success_rate_30d computed by
+        SelfModelService. Tools whose success_rate_30d is below threshold become
+        self-improvement goals.
         """
-        Identify areas where agent should improve its capabilities.
-        
-        Looks for:
-        - Tools with low success rates
-        - Domains with poor understanding
-        - Skills with declining performance
-        
-        Args:
-            org_id: Organization ID
-            tool_success_threshold: Min success rate to avoid improvement goal
-        
-        Returns:
-            List of self-improvement goals
-        """
+        stmt = select(SelfModelProfile).where(
+            SelfModelProfile.organization_id == org_id
+        )
+        result = await self.session.execute(stmt)
+        profile = result.scalar_one_or_none()
+
+        if not profile or not profile.tool_reliability:
+            return []
+
         goals = []
-        
-        # In a real implementation, this would:
-        # 1. Query tool_call_logs for success rates per tool
-        # 2. Compare against threshold
-        # 3. Generate improvement goals for low-performing tools
-        
-        # For demo purposes, return example self-improvement goals
-        improvement_areas = [
-            {
-                "area": "customer_data_extraction",
-                "current_success_rate": 0.55,
-                "target_rate": 0.80,
-                "confidence": 0.8,
-            },
-            {
-                "area": "sentiment_analysis",
-                "current_success_rate": 0.68,
-                "target_rate": 0.90,
-                "confidence": 0.70,
-            },
-        ]
-        
-        for area in improvement_areas:
-            if area["current_success_rate"] < tool_success_threshold:
-                goal = {
-                    "id": str(uuid.uuid4()),
-                    "organization_id": org_id,
-                    "initiator": "self_improvement",
-                    "title": f"Improve: {area['area']} capability",
-                    "description": (
-                        f"Tool '{area['area']}' has {area['current_success_rate']:.0%} success rate. "
-                        f"Target: {area['target_rate']:.0%}. Need to study patterns and edge cases."
-                    ),
-                    "trigger_memory_ids": [],
-                    "expected_value": 0.7,
-                    "urgency": 0.7,
-                    "confidence": area["confidence"],
-                    "status": "proposed",
-                    "created_at": datetime.utcnow(),
-                    "metadata": {
-                        "improvement_type": "tool_reliability",
-                        "target_area": area["area"],
-                        "current_success_rate": area["current_success_rate"],
-                        "target_success_rate": area["target_rate"],
-                    },
-                }
-                goals.append(goal)
-        
+        for tool_name, reliability in profile.tool_reliability.items():
+            success_rate = reliability.get("success_rate_30d", 1.0)
+            sample_size = reliability.get("sample_size_30d", 0)
+            if sample_size < 3:
+                continue  # too few samples to be confident
+            if success_rate >= tool_success_threshold:
+                continue
+
+            target_rate = min(1.0, success_rate + 0.25)
+            # Confidence is higher when we have more samples
+            confidence = min(0.95, 0.50 + sample_size / 100.0)
+
+            goal = {
+                "id": str(uuid.uuid4()),
+                "organization_id": org_id,
+                "initiator": "self_improvement",
+                "title": f"Improve: {tool_name} reliability",
+                "description": (
+                    f"Tool '{tool_name}' has {success_rate:.0%} 30-day success rate "
+                    f"({sample_size} calls). Target: {target_rate:.0%}. "
+                    f"Investigate failure patterns and add guardrails."
+                ),
+                "trigger_memory_ids": [],
+                "expected_value": min(1.0, (target_rate - success_rate) * 1.5),
+                "urgency": 1.0 - success_rate,
+                "confidence": confidence,
+                "status": "proposed",
+                "created_at": datetime.now(timezone.utc),
+                "metadata": {
+                    "improvement_type": "tool_reliability",
+                    "target_area": tool_name,
+                    "current_success_rate": success_rate,
+                    "target_success_rate": target_rate,
+                    "sample_size_30d": sample_size,
+                },
+            }
+            goals.append(goal)
+
+        # Sort by urgency (lowest success rate first)
+        goals.sort(key=lambda g: g["urgency"], reverse=True)
         return goals
     
     async def estimate_goal_value(

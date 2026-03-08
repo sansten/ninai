@@ -137,6 +137,7 @@ from app.models.federated_knowledge import (
     PrivacyPolicy,
     FederatedContribution,
 )
+from app.models.strategy_library import StrategyLibraryEntry
 
 __all__ = [
     # Base
@@ -322,4 +323,6 @@ __all__ = [
     "OrgBenchmark",
     "PrivacyPolicy",
     "FederatedContribution",
+    # Strategy Learning (Outcome-Driven Strategy Learning)
+    "StrategyLibraryEntry",
 ]

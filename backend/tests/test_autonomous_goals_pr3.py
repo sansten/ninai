@@ -182,54 +182,54 @@ class TestIntrinsicMotivationService:
 
     @pytest.mark.asyncio
     async def test_predict_user_needs(self):
-        """Test user need prediction."""
-        svc = IntrinsicMotivationService(session=None)
-        
-        history = [
-            {
-                "domain": "billing",
-                "last_accessed": "2024-03-01",
-                "frequency_days": 7,
-            },
-            {
-                "domain": "reports",
-                "last_accessed": "2024-03-02",
-                "frequency_days": 14,
-            }
-        ]
-        
-        goals = await svc.predict_user_needs(history)
-        
+        """Test user need prediction with mocked audit log results."""
+        from unittest.mock import AsyncMock, MagicMock
+
+        mock_row1 = MagicMock()
+        mock_row1.resource_type = "billing"
+        mock_row1.event_count = 10
+        mock_row2 = MagicMock()
+        mock_row2.resource_type = "reports"
+        mock_row2.event_count = 5
+
+        mock_result = MagicMock()
+        mock_result.all = MagicMock(return_value=[mock_row1, mock_row2])
+
+        mock_session = MagicMock()
+        mock_session.execute = AsyncMock(return_value=mock_result)
+
+        svc = IntrinsicMotivationService(session=mock_session)
+        goals = await svc.predict_user_needs(org_id="org1")
+
         assert isinstance(goals, list)
-        if goals:
-            assert goals[0]["initiator"] == "prediction"
-    
+        assert len(goals) == 2
+        assert goals[0]["initiator"] == "prediction"
+        assert goals[0]["metadata"]["domain"] == "billing"
+
     @pytest.mark.asyncio
     async def test_detect_self_improvement_needs(self):
-        """Test self-improvement need detection."""
-        svc = IntrinsicMotivationService(session=None)
-        
-        tool_performance = [
-            {
-                "area": "data_analysis",
-                "current_success_rate": 0.6,
-                "target_rate": 0.9,
-                "confidence": 0.8,
-            },
-            {
-                "area": "report_generation",
-                "current_success_rate": 0.95,
-                "target_rate": 0.95,
-                "confidence": 0.7,
-            }
-        ]
-        
-        goals = await svc.detect_self_improvement_needs(tool_performance)
-        
+        """Test self-improvement need detection with a mocked SelfModelProfile."""
+        from unittest.mock import AsyncMock, MagicMock
+
+        mock_profile = MagicMock()
+        mock_profile.tool_reliability = {
+            "memory.search": {"success_rate_30d": 0.45, "sample_size_30d": 10},
+            "memory.get": {"success_rate_30d": 0.95, "sample_size_30d": 20},
+        }
+
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none = MagicMock(return_value=mock_profile)
+
+        mock_session = MagicMock()
+        mock_session.execute = AsyncMock(return_value=mock_result)
+
+        svc = IntrinsicMotivationService(session=mock_session)
+        goals = await svc.detect_self_improvement_needs(org_id="org1")
+
         assert isinstance(goals, list)
-        # Should identify underperforming area
-        if goals:
-            assert any(g.get("urgency", 0) > 0.5 for g in goals)
+        assert len(goals) == 1  # only memory.search is below threshold
+        assert goals[0]["initiator"] == "self_improvement"
+        assert goals[0]["urgency"] > 0.3
     
     @pytest.mark.asyncio
     async def test_estimate_goal_value_curiosity(self):
