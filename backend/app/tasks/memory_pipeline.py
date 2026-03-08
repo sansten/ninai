@@ -72,6 +72,7 @@ def build_memory_dag(
     enrich = chain(
         classification_task.si(**base_kwargs),
         metadata_task.si(**base_kwargs),
+        semantic_normalization_task.si(**base_kwargs),
     )
 
     topics_then_patterns = chain(
@@ -219,6 +220,20 @@ def logseq_export_task(self, org_id: str, memory_id: str, initiator_user_id: str
     runner = AgentRunner(service_user_id=getattr(settings, "SYSTEM_TASK_USER_ID", None) or None)
     ctx = PipelineContext(org_id=org_id, memory_id=memory_id, initiator_user_id=initiator_user_id, trace_id=trace_id, storage=storage)
     res = _run_async(runner.run_agent(ctx=ctx, agent_name="logseq_export", attempt=self.request.retries + 1))
+    return res.model_dump(mode="json") if hasattr(res, "model_dump") else res
+
+
+@celery_app.task(
+    bind=True,
+    max_retries=5,
+    autoretry_for=(Exception,),
+    dont_autoretry_for=(ValueError,),
+    retry_backoff=True,
+)
+def semantic_normalization_task(self, org_id: str, memory_id: str, initiator_user_id: str | None = None, trace_id: str | None = None, storage: str = "long_term"):
+    runner = AgentRunner(service_user_id=getattr(settings, "SYSTEM_TASK_USER_ID", None) or None)
+    ctx = PipelineContext(org_id=org_id, memory_id=memory_id, initiator_user_id=initiator_user_id, trace_id=trace_id, storage=storage)
+    res = _run_async(runner.run_agent(ctx=ctx, agent_name="semantic_normalization", attempt=self.request.retries + 1))
     return res.model_dump(mode="json") if hasattr(res, "model_dump") else res
 
 

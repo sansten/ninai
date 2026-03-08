@@ -207,6 +207,18 @@ class MemoryMetadata(Base, UUIDMixin, TimestampMixin):
         doc="Original memory ID if this was promoted",
     )
     
+    # Phase 6: Semantic Normalization (written by SemanticNormalizationAgent)
+    semantic_intent: Mapped[Optional[str]] = mapped_column(
+        String(100),
+        nullable=True,
+        doc="Intent: document_decision|report_issue|share_learning|request_action|record_status|capture_context|general",
+    )
+    business_domain: Mapped[Optional[str]] = mapped_column(
+        String(100),
+        nullable=True,
+        doc="Business domain: engineering|sales|finance|support|hr|legal|product|marketing|operations|general",
+    )
+
     # Full-text search support (for hybrid search)
     # This column is automatically maintained by database trigger
     # See migration: 2026_01_27_add_fts_hybrid_search.py
