@@ -20,6 +20,7 @@ from app.agents.entity_resolution_agent import EntityResolutionAgent
 from app.agents.semantic_normalization_agent import SemanticNormalizationAgent
 from app.agents.silo_propagation_agent import SiloPropagationAgent
 from app.agents.org_attention_agent import OrgAttentionAgent
+from app.agents.proactive_memory_push_agent import ProactiveMemoryPushAgent
 from app.agents.topic_modeling_agent import TopicModelingAgent
 
 
@@ -64,5 +65,9 @@ def get_agent(agent_name: str) -> Optional[BaseAgent]:
 
     if name in {"org_attention", "orgattention", "orgattentionagent"}:
         return OrgAttentionAgent()
+
+    if name in {"proactive_push", "proactivepush", "proactivememorpush",
+                "proactivememory", "proactivememorypush", "proactivememorypushagent"}:
+        return ProactiveMemoryPushAgent()
 
     return None
