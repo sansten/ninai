@@ -34,6 +34,7 @@ from app.agents.world_model_agent import WorldModelAgent
 from app.agents.credibility_agent import CredibilityAgent
 from app.agents.playbook_agent import PlaybookAgent
 from app.agents.goal_decomposition_agent import GoalDecompositionAgent
+from app.agents.uncertainty_reporting_agent import UncertaintyReportingAgent
 
 
 def get_agent(agent_name: str) -> Optional[BaseAgent]:
@@ -118,5 +119,9 @@ def get_agent(agent_name: str) -> Optional[BaseAgent]:
 
     if name in {"goal_decomposition", "goaldecomposition", "goaldecompositionagent"}:
         return GoalDecompositionAgent()
+
+    if name in {"uncertainty_reporting", "uncertaintyreporting", "uncertaintyreportingagent",
+                "uncertainty_agent"}:
+        return UncertaintyReportingAgent()
 
     return None
