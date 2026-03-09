@@ -26,9 +26,12 @@ from app.agents.adaptive_conflict_resolution_agent import AdaptiveConflictResolu
 from app.agents.memory_decay_agent import MemoryDecayAgent
 from app.agents.memory_consolidation_agent import MemoryConsolidationAgent
 from app.agents.proactive_memory_push_agent import ProactiveMemoryPushAgent
+from app.agents.temporal_reasoning_agent import TemporalReasoningAgent
+from app.agents.episodic_grouping_agent import EpisodicGroupingAgent
 from app.agents.predictive_monitor_agent import PredictiveMonitorAgent
 from app.agents.topic_modeling_agent import TopicModelingAgent
 from app.agents.world_model_agent import WorldModelAgent
+from app.agents.credibility_agent import CredibilityAgent
 
 
 def get_agent(agent_name: str) -> Optional[BaseAgent]:
@@ -98,5 +101,14 @@ def get_agent(agent_name: str) -> Optional[BaseAgent]:
 
     if name in {"memory_consolidation", "memoryconsolidation", "memoryconsolidationagent"}:
         return MemoryConsolidationAgent()
+
+    if name in {"temporal_reasoning", "temporalreasoning", "temporalreasoningagent"}:
+        return TemporalReasoningAgent()
+
+    if name in {"episodic_grouping", "episodicgrouping", "episodicgroupingagent"}:
+        return EpisodicGroupingAgent()
+
+    if name in {"credibility", "credibility_agent", "credibilityagent"}:
+        return CredibilityAgent()
 
     return None
