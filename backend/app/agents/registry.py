@@ -35,6 +35,7 @@ from app.agents.credibility_agent import CredibilityAgent
 from app.agents.playbook_agent import PlaybookAgent
 from app.agents.goal_decomposition_agent import GoalDecompositionAgent
 from app.agents.uncertainty_reporting_agent import UncertaintyReportingAgent
+from app.agents.narrative_synthesis_agent import NarrativeSynthesisAgent
 
 
 def get_agent(agent_name: str) -> Optional[BaseAgent]:
@@ -123,5 +124,9 @@ def get_agent(agent_name: str) -> Optional[BaseAgent]:
     if name in {"uncertainty_reporting", "uncertaintyreporting", "uncertaintyreportingagent",
                 "uncertainty_agent"}:
         return UncertaintyReportingAgent()
+
+    if name in {"narrative_synthesis", "narrativesynthesis", "narrativesynthesisagent",
+                "narrative_agent"}:
+        return NarrativeSynthesisAgent()
 
     return None
