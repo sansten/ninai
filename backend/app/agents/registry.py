@@ -36,6 +36,8 @@ from app.agents.playbook_agent import PlaybookAgent
 from app.agents.goal_decomposition_agent import GoalDecompositionAgent
 from app.agents.uncertainty_reporting_agent import UncertaintyReportingAgent
 from app.agents.narrative_synthesis_agent import NarrativeSynthesisAgent
+from app.agents.feedback_integration_agent import FeedbackIntegrationAgent
+from app.agents.anomaly_detection_agent import AnomalyDetectionAgent
 
 
 def get_agent(agent_name: str) -> Optional[BaseAgent]:
@@ -128,5 +130,13 @@ def get_agent(agent_name: str) -> Optional[BaseAgent]:
     if name in {"narrative_synthesis", "narrativesynthesis", "narrativesynthesisagent",
                 "narrative_agent"}:
         return NarrativeSynthesisAgent()
+
+    if name in {"feedback_integration", "feedbackintegration", "feedbackintegrationagent",
+                "feedback_agent"}:
+        return FeedbackIntegrationAgent()
+
+    if name in {"anomaly_detection", "anomalydetection", "anomalydetectionagent",
+                "anomaly_agent"}:
+        return AnomalyDetectionAgent()
 
     return None
