@@ -23,6 +23,7 @@ from app.agents.org_attention_agent import OrgAttentionAgent
 from app.agents.causal_reasoning_agent import CausalReasoningAgent
 from app.agents.conflict_detection_agent import ConflictDetectionAgent
 from app.agents.proactive_memory_push_agent import ProactiveMemoryPushAgent
+from app.agents.predictive_monitor_agent import PredictiveMonitorAgent
 from app.agents.topic_modeling_agent import TopicModelingAgent
 from app.agents.world_model_agent import WorldModelAgent
 
@@ -75,6 +76,9 @@ def get_agent(agent_name: str) -> Optional[BaseAgent]:
 
     if name in {"world_model", "worldmodel", "worldmodelagent"}:
         return WorldModelAgent()
+
+    if name in {"predictive_monitor", "predictivemonitor", "predictivemonitoragent"}:
+        return PredictiveMonitorAgent()
 
     if name in {"causal_reasoning", "causalreasoning", "causalreasoningagent"}:
         return CausalReasoningAgent()
