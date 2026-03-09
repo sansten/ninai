@@ -1,15 +1,16 @@
-"""Memory enrichment read API — Phase 26.
+"""Memory enrichment read API — Phase 26 / 27.
 
 Exposes the enrichment pipeline outputs as a clean read API so dashboards,
 copilots, and external tools can query a memory's fully-enriched state without
 knowing internal agent structure.
 
 Endpoints:
-  GET  /memories/{memory_id}/enrichment   — full merged enrichment dict
-  GET  /memories/{memory_id}/narrative    — Phase 23 narrative output
-  GET  /memories/{memory_id}/uncertainty  — Phase 22 uncertainty report
-  GET  /memories/{memory_id}/anomalies    — Phase 25 anomaly report
-  POST /memories/{memory_id}/feedback     — submit human review verdict
+  GET  /memories/{memory_id}/enrichment         — full merged enrichment dict
+  GET  /memories/{memory_id}/narrative          — Phase 23 narrative output
+  GET  /memories/{memory_id}/uncertainty        — Phase 22 uncertainty report
+  GET  /memories/{memory_id}/anomalies          — Phase 25 anomaly report
+  GET  /memories/{memory_id}/query-intelligence — Phase 27 query intelligence
+  POST /memories/{memory_id}/feedback           — submit human review verdict
 """
 
 from __future__ import annotations
@@ -56,11 +57,13 @@ _ENRICHMENT_AGENTS = {
     "NarrativeSynthesisAgent",
     "FeedbackIntegrationAgent",
     "AnomalyDetectionAgent",
+    "QueryIntelligenceAgent",
 }
 
 _NARRATIVE_AGENTS = {"NarrativeSynthesisAgent"}
 _UNCERTAINTY_AGENTS = {"UncertaintyReportingAgent"}
 _ANOMALY_AGENTS = {"AnomalyDetectionAgent"}
+_QUERY_INTELLIGENCE_AGENTS = {"QueryIntelligenceAgent"}
 
 
 # ---------------------------------------------------------------------------
@@ -103,6 +106,16 @@ class AnomalyResponse(BaseModel):
     severity: str | None = None
     affected_fields: list[str] = Field(default_factory=list)
     anomaly_score: float | None = None
+    confidence: float | None = None
+    retrieved_at: datetime
+
+
+class QueryIntelligenceResponse(BaseModel):
+    memory_id: str
+    query_intent: str | None = None
+    extracted_entities: list[str] = Field(default_factory=list)
+    dynamic_filters: dict = Field(default_factory=dict)
+    suggested_agents: list[str] = Field(default_factory=list)
     confidence: float | None = None
     retrieved_at: datetime
 
@@ -281,6 +294,37 @@ async def get_anomalies(
         severity=outputs.get("severity"),
         affected_fields=outputs.get("affected_fields") or [],
         anomaly_score=outputs.get("anomaly_score"),
+        confidence=outputs.get("confidence"),
+    )
+
+
+@router.get(
+    "/{memory_id}/query-intelligence",
+    response_model=QueryIntelligenceResponse,
+    summary="Query intelligence report for a memory",
+)
+async def get_query_intelligence(
+    memory_id: str,
+    tenant: TenantContext = Depends(get_tenant_context),
+    db: AsyncSession = Depends(get_db),
+):
+    await set_tenant_context(
+        db, tenant.user_id, tenant.org_id, tenant.roles_string, tenant.clearance_level
+    )
+    runs = await _load_agent_outputs(db, tenant.org_id, memory_id, _QUERY_INTELLIGENCE_AGENTS)
+    if not runs:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No query intelligence report found",
+        )
+    outputs = _merge_outputs(runs)
+    return QueryIntelligenceResponse(
+        memory_id=memory_id,
+        retrieved_at=datetime.now(timezone.utc),
+        query_intent=outputs.get("query_intent"),
+        extracted_entities=outputs.get("extracted_entities") or [],
+        dynamic_filters=outputs.get("dynamic_filters") or {},
+        suggested_agents=outputs.get("suggested_agents") or [],
         confidence=outputs.get("confidence"),
     )
 
