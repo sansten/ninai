@@ -71,6 +71,7 @@ celery_app = Celery(
         "app.tasks.goals",
         "app.tasks.self_model",
         "app.tasks.agent_processes",
+        "app.tasks.feature_readiness_task",
         *_enterprise_includes,
     ],
 )
@@ -136,6 +137,9 @@ celery_app.conf.update(
         "app.tasks.agent_processes.dequeue_next_process_task": {"queue": "q.maintenance"},
         "app.tasks.agent_processes.schedule_dequeue_and_run_task": {"queue": "q.maintenance"},
 
+        # Feature readiness (Phase 28)
+        "app.tasks.feature_readiness_task.evaluate_feature_readiness_task": {"queue": "q.maintenance"},
+
         # Memory activation scoring (lightweight async updates)
         "app.services.memory_activation.tasks.memory_access_update_task": {"queue": "q.agent_enrich"},
         "app.services.memory_activation.tasks.coactivation_update_task": {"queue": "q.agent_graph"},
@@ -163,6 +167,11 @@ celery_app.conf.update(
         "dispatch-webhooks": {
             "task": "app.tasks.webhooks.dispatch_webhooks_task",
             "schedule": 30.0,
+            "args": (),
+        },
+        "nightly-feature-readiness-evaluation": {
+            "task": "app.tasks.feature_readiness_task.evaluate_feature_readiness_task",
+            "schedule": crontab(minute=0, hour=3),
             "args": (),
         },
         **_enterprise_beat,
