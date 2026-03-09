@@ -33,6 +33,7 @@ from app.agents.topic_modeling_agent import TopicModelingAgent
 from app.agents.world_model_agent import WorldModelAgent
 from app.agents.credibility_agent import CredibilityAgent
 from app.agents.playbook_agent import PlaybookAgent
+from app.agents.goal_decomposition_agent import GoalDecompositionAgent
 
 
 def get_agent(agent_name: str) -> Optional[BaseAgent]:
@@ -114,5 +115,8 @@ def get_agent(agent_name: str) -> Optional[BaseAgent]:
 
     if name in {"playbook", "playbook_agent", "playbookagent"}:
         return PlaybookAgent()
+
+    if name in {"goal_decomposition", "goaldecomposition", "goaldecompositionagent"}:
+        return GoalDecompositionAgent()
 
     return None
