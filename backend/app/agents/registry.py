@@ -32,6 +32,7 @@ from app.agents.predictive_monitor_agent import PredictiveMonitorAgent
 from app.agents.topic_modeling_agent import TopicModelingAgent
 from app.agents.world_model_agent import WorldModelAgent
 from app.agents.credibility_agent import CredibilityAgent
+from app.agents.playbook_agent import PlaybookAgent
 
 
 def get_agent(agent_name: str) -> Optional[BaseAgent]:
@@ -110,5 +111,8 @@ def get_agent(agent_name: str) -> Optional[BaseAgent]:
 
     if name in {"credibility", "credibility_agent", "credibilityagent"}:
         return CredibilityAgent()
+
+    if name in {"playbook", "playbook_agent", "playbookagent"}:
+        return PlaybookAgent()
 
     return None
