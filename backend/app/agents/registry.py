@@ -20,6 +20,8 @@ from app.agents.entity_resolution_agent import EntityResolutionAgent
 from app.agents.semantic_normalization_agent import SemanticNormalizationAgent
 from app.agents.silo_propagation_agent import SiloPropagationAgent
 from app.agents.org_attention_agent import OrgAttentionAgent
+from app.agents.causal_reasoning_agent import CausalReasoningAgent
+from app.agents.conflict_detection_agent import ConflictDetectionAgent
 from app.agents.proactive_memory_push_agent import ProactiveMemoryPushAgent
 from app.agents.predictive_monitor_agent import PredictiveMonitorAgent
 from app.agents.topic_modeling_agent import TopicModelingAgent
@@ -77,5 +79,11 @@ def get_agent(agent_name: str) -> Optional[BaseAgent]:
 
     if name in {"predictive_monitor", "predictivemonitor", "predictivemonitoragent"}:
         return PredictiveMonitorAgent()
+
+    if name in {"causal_reasoning", "causalreasoning", "causalreasoningagent"}:
+        return CausalReasoningAgent()
+
+    if name in {"conflict_detection", "conflictdetection", "conflictdetectionagent"}:
+        return ConflictDetectionAgent()
 
     return None
