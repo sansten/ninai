@@ -22,6 +22,7 @@ from app.agents.silo_propagation_agent import SiloPropagationAgent
 from app.agents.org_attention_agent import OrgAttentionAgent
 from app.agents.causal_reasoning_agent import CausalReasoningAgent
 from app.agents.conflict_detection_agent import ConflictDetectionAgent
+from app.agents.adaptive_conflict_resolution_agent import AdaptiveConflictResolutionAgent
 from app.agents.proactive_memory_push_agent import ProactiveMemoryPushAgent
 from app.agents.predictive_monitor_agent import PredictiveMonitorAgent
 from app.agents.topic_modeling_agent import TopicModelingAgent
@@ -85,5 +86,9 @@ def get_agent(agent_name: str) -> Optional[BaseAgent]:
 
     if name in {"conflict_detection", "conflictdetection", "conflictdetectionagent"}:
         return ConflictDetectionAgent()
+
+    if name in {"adaptive_conflict_resolution", "adaptiveconflictresolution",
+                "adaptiveconflictresolutionagent"}:
+        return AdaptiveConflictResolutionAgent()
 
     return None
