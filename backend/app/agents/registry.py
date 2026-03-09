@@ -38,6 +38,7 @@ from app.agents.uncertainty_reporting_agent import UncertaintyReportingAgent
 from app.agents.narrative_synthesis_agent import NarrativeSynthesisAgent
 from app.agents.feedback_integration_agent import FeedbackIntegrationAgent
 from app.agents.anomaly_detection_agent import AnomalyDetectionAgent
+from app.agents.query_intelligence_agent import QueryIntelligenceAgent
 
 
 def get_agent(agent_name: str) -> Optional[BaseAgent]:
@@ -138,5 +139,9 @@ def get_agent(agent_name: str) -> Optional[BaseAgent]:
     if name in {"anomaly_detection", "anomalydetection", "anomalydetectionagent",
                 "anomaly_agent"}:
         return AnomalyDetectionAgent()
+
+    if name in {"query_intelligence", "queryintelligence", "queryintelligenceagent",
+                "query_agent"}:
+        return QueryIntelligenceAgent()
 
     return None
