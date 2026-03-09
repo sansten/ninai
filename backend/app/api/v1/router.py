@@ -62,6 +62,7 @@ from app.api.v1.endpoints import (
     compositional_generalization_pr7,
     affective_memory_pr8,
     federated_memory_pr10,
+    memory_enrichment,
 )
 from app.api.v1.admin import routes as admin_routes
 from app.api.v1.endpoints import event_publishing_batch
@@ -404,4 +405,10 @@ api_router.include_router(
 api_router.include_router(
     features.router,
     tags=["Features"],
+)
+
+api_router.include_router(
+    memory_enrichment.router,
+    prefix="/memories",
+    tags=["Memory Enrichment"],
 )
