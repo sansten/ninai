@@ -138,6 +138,7 @@ from app.models.federated_knowledge import (
     FederatedContribution,
 )
 from app.models.strategy_library import StrategyLibraryEntry
+from app.models.feature_readiness import FeatureReadinessConfig
 
 __all__ = [
     # Base
@@ -325,4 +326,6 @@ __all__ = [
     "FederatedContribution",
     # Strategy Learning (Outcome-Driven Strategy Learning)
     "StrategyLibraryEntry",
+    # Phase 28: Feature Readiness Engine
+    "FeatureReadinessConfig",
 ]
