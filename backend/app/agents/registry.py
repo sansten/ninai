@@ -41,6 +41,7 @@ from app.agents.anomaly_detection_agent import AnomalyDetectionAgent
 from app.agents.query_intelligence_agent import QueryIntelligenceAgent
 from app.agents.orchestration_bus_agent import OrchestrationBusAgent
 from app.agents.audit_trail_agent import AuditTrailAgent
+from app.agents.human_review_queue_agent import HumanReviewQueueAgent
 
 
 def get_agent(agent_name: str) -> Optional[BaseAgent]:
@@ -151,5 +152,9 @@ def get_agent(agent_name: str) -> Optional[BaseAgent]:
 
     if name in {"audit_trail", "audittrail", "audittrailagent", "audit_agent"}:
         return AuditTrailAgent()
+
+    if name in {"human_review_queue", "humanreviewqueue", "humanreviewqueueagent",
+                "human_review_queue_agent"}:
+        return HumanReviewQueueAgent()
 
     return None
