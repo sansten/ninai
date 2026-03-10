@@ -45,6 +45,7 @@ from app.agents.human_review_queue_agent import HumanReviewQueueAgent
 from app.agents.playbook_execution_tracker_agent import PlaybookExecutionTrackerAgent
 from app.agents.multi_turn_goal_tracking_agent import MultiTurnGoalTrackingAgent
 from app.agents.adaptive_enrichment_budget_agent import AdaptiveEnrichmentBudgetAgent
+from app.agents.meta_cognitive_planning_agent import MetaCognitivePlanningAgent
 
 
 def get_agent(agent_name: str) -> Optional[BaseAgent]:
@@ -172,5 +173,9 @@ def get_agent(agent_name: str) -> Optional[BaseAgent]:
     if name in {"adaptive_enrichment_budget", "adaptiveenrichmentbudget",
                 "adaptiveenrichmentbudgetagent", "enrichment_budget"}:
         return AdaptiveEnrichmentBudgetAgent()
+
+    if name in {"meta_cognitive_planning", "metacognitiveplanning",
+                "metacognitiveplanningagent", "meta_cognitive"}:
+        return MetaCognitivePlanningAgent()
 
     return None
