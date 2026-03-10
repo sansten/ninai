@@ -40,6 +40,7 @@ from app.agents.feedback_integration_agent import FeedbackIntegrationAgent
 from app.agents.anomaly_detection_agent import AnomalyDetectionAgent
 from app.agents.query_intelligence_agent import QueryIntelligenceAgent
 from app.agents.orchestration_bus_agent import OrchestrationBusAgent
+from app.agents.audit_trail_agent import AuditTrailAgent
 
 
 def get_agent(agent_name: str) -> Optional[BaseAgent]:
@@ -147,5 +148,8 @@ def get_agent(agent_name: str) -> Optional[BaseAgent]:
 
     if name in {"orchestration_bus", "orchestrationbus", "orchestrationbusagent"}:
         return OrchestrationBusAgent()
+
+    if name in {"audit_trail", "audittrail", "audittrailagent", "audit_agent"}:
+        return AuditTrailAgent()
 
     return None
