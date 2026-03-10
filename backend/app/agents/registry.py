@@ -39,6 +39,7 @@ from app.agents.narrative_synthesis_agent import NarrativeSynthesisAgent
 from app.agents.feedback_integration_agent import FeedbackIntegrationAgent
 from app.agents.anomaly_detection_agent import AnomalyDetectionAgent
 from app.agents.query_intelligence_agent import QueryIntelligenceAgent
+from app.agents.orchestration_bus_agent import OrchestrationBusAgent
 
 
 def get_agent(agent_name: str) -> Optional[BaseAgent]:
@@ -143,5 +144,8 @@ def get_agent(agent_name: str) -> Optional[BaseAgent]:
     if name in {"query_intelligence", "queryintelligence", "queryintelligenceagent",
                 "query_agent"}:
         return QueryIntelligenceAgent()
+
+    if name in {"orchestration_bus", "orchestrationbus", "orchestrationbusagent"}:
+        return OrchestrationBusAgent()
 
     return None
