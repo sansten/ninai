@@ -42,6 +42,7 @@ from app.agents.query_intelligence_agent import QueryIntelligenceAgent
 from app.agents.orchestration_bus_agent import OrchestrationBusAgent
 from app.agents.audit_trail_agent import AuditTrailAgent
 from app.agents.human_review_queue_agent import HumanReviewQueueAgent
+from app.agents.playbook_execution_tracker_agent import PlaybookExecutionTrackerAgent
 
 
 def get_agent(agent_name: str) -> Optional[BaseAgent]:
@@ -156,5 +157,9 @@ def get_agent(agent_name: str) -> Optional[BaseAgent]:
     if name in {"human_review_queue", "humanreviewqueue", "humanreviewqueueagent",
                 "human_review_queue_agent"}:
         return HumanReviewQueueAgent()
+
+    if name in {"playbook_execution_tracker", "playbookexecutiontracker",
+                "playbookexecutiontrackeragent"}:
+        return PlaybookExecutionTrackerAgent()
 
     return None
