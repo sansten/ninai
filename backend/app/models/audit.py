@@ -9,7 +9,7 @@ These tables are designed for compliance and are append-only.
 from typing import Optional
 from datetime import datetime
 
-from sqlalchemy import DateTime, String, Text, Boolean, Integer, ForeignKey, Index
+from sqlalchemy import DateTime, Float, String, Text, Boolean, Integer, ForeignKey, Index
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.dialects.postgresql import UUID, JSONB, INET
 
@@ -284,3 +284,85 @@ class MemoryAccessLog(Base, UUIDMixin):
     def __repr__(self) -> str:
         status = "granted" if self.authorized else "denied"
         return f"<MemoryAccessLog {self.action} {status} at {self.timestamp}>"
+
+
+class AgentDecisionTrail(Base, UUIDMixin):
+    """Append-only log of every enrichment agent decision per memory — Phase 31.
+
+    One row per agent per enrichment run.  Enables "why did the system
+    decide X?" queries for enterprise compliance and explainability.
+    This table is append-only; rows are never updated or deleted.
+    """
+
+    __tablename__ = "agent_decision_trails"
+
+    # Timestamp (immutable — no updated_at)
+    timestamp: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        index=True,
+        doc="When the agent decision was recorded (UTC)",
+    )
+
+    # Memory reference
+    memory_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False),
+        nullable=False,
+        index=True,
+        doc="Memory this decision applies to",
+    )
+
+    # Tenant context
+    organization_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False),
+        nullable=False,
+        index=True,
+        doc="Organization owning the memory",
+    )
+
+    # Agent identity
+    agent_name: Mapped[str] = mapped_column(
+        String(120),
+        nullable=False,
+        doc="Name of the agent that made the decision",
+    )
+    agent_version: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        doc="Version of the agent",
+    )
+
+    # Decision
+    decision: Mapped[str] = mapped_column(
+        String(500),
+        nullable=False,
+        doc="Human-readable decision summary",
+    )
+    confidence: Mapped[float] = mapped_column(
+        Float,
+        nullable=False,
+        doc="Agent confidence in this decision [0, 1]",
+    )
+
+    # Reasoning snapshot (full agent outputs at decision time)
+    reasoning_snapshot: Mapped[dict] = mapped_column(
+        JSONB,
+        default=dict,
+        nullable=False,
+        doc="Snapshot of relevant enrichment outputs used in this decision",
+    )
+
+    # Correlation
+    trace_id: Mapped[Optional[str]] = mapped_column(
+        String(100),
+        nullable=True,
+        doc="Job/trace ID for correlating with enrichment run",
+    )
+
+    __table_args__ = (
+        Index("ix_agent_trail_memory_time", "memory_id", "timestamp"),
+        Index("ix_agent_trail_org_agent_time", "organization_id", "agent_name", "timestamp"),
+    )
+
+    def __repr__(self) -> str:
+        return f"<AgentDecisionTrail {self.agent_name} on {self.memory_id} at {self.timestamp}>"
