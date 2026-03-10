@@ -65,6 +65,7 @@ from app.api.v1.endpoints import (
     memory_enrichment,
     feature_readiness,
     knowledge_graph,
+    review_queue,
 )
 from app.api.v1.admin import routes as admin_routes
 from app.api.v1.endpoints import event_publishing_batch
@@ -425,4 +426,10 @@ api_router.include_router(
     knowledge_graph.router,
     prefix="/graph",
     tags=["Knowledge Graph"],
+)
+
+api_router.include_router(
+    review_queue.router,
+    prefix="/review",
+    tags=["Human Review Queue"],
 )
