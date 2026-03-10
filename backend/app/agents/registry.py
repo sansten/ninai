@@ -43,6 +43,7 @@ from app.agents.orchestration_bus_agent import OrchestrationBusAgent
 from app.agents.audit_trail_agent import AuditTrailAgent
 from app.agents.human_review_queue_agent import HumanReviewQueueAgent
 from app.agents.playbook_execution_tracker_agent import PlaybookExecutionTrackerAgent
+from app.agents.multi_turn_goal_tracking_agent import MultiTurnGoalTrackingAgent
 
 
 def get_agent(agent_name: str) -> Optional[BaseAgent]:
@@ -161,5 +162,10 @@ def get_agent(agent_name: str) -> Optional[BaseAgent]:
     if name in {"playbook_execution_tracker", "playbookexecutiontracker",
                 "playbookexecutiontrackeragent"}:
         return PlaybookExecutionTrackerAgent()
+
+    if name in {"multi_turn_goal_tracking", "multiturngoaltracking",
+                "multiturngoaltracingagent", "multiturngoaltrackinagent",
+                "multiturngoaltrackingagent", "multi_turn_goal"}:
+        return MultiTurnGoalTrackingAgent()
 
     return None
