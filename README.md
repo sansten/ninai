@@ -1,4 +1,4 @@
-# Ninai — Cognitive Operating System for Enterprise
+# Ninai — Cognitive OS for Enterprise AI Agents
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
@@ -6,15 +6,15 @@
 
 **Apps write raw data. Ninai makes sense of it.**
 
-Ninai is not a memory cache or a vector search wrapper. It is a Cognitive OS: a reasoning layer that sits between your applications and their stored knowledge, continuously enriching what comes in, linking entities across silos, assembling full context on read, and reasoning about what it knows — without any of that logic living in your application code.
+Ninai is not a memory cache or a vector search wrapper. It is a Cognitive OS: a reasoning layer that sits between your enterprise AI agents and their stored knowledge, continuously enriching what comes in, linking entities across silos, assembling full context on read, and reasoning proactively — without any of that logic living in your agent or application code.
 
 ---
 
 ## The Core Problem
 
-Enterprise applications accumulate knowledge in silos. A CRM knows about customers. A ticketing system knows about incidents. A document store knows about procedures. None of them know what the others know, and none of them can reason across boundaries.
+Enterprise AI agents accumulate knowledge in silos. A CRM agent knows about customers. A ticketing agent knows about incidents. A document agent knows about procedures. None of them know what the others know, and none of them can reason across boundaries.
 
-Dropping a vector database in front of each silo doesn't fix this. You still get isolated retrieval with no understanding of causality, conflict, temporal change, or entity identity across systems.
+Dropping a vector database in front of each agent doesn't fix this. You still get isolated retrieval with no understanding of causality, conflict, temporal change, or entity identity across systems.
 
 Ninai approaches this differently:
 
