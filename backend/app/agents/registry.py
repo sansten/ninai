@@ -49,6 +49,7 @@ from app.agents.meta_cognitive_planning_agent import MetaCognitivePlanningAgent
 from app.agents.autonomous_goal_generation_agent import AutonomousGoalGenerationAgent
 from app.agents.theory_of_mind_agent import TheoryOfMindAgent
 from app.agents.memory_sleep_agent import MemorySleepAgent
+from app.agents.compositional_generalization_agent import CompositionalGeneralizationAgent
 
 
 def get_agent(agent_name: str) -> Optional[BaseAgent]:
@@ -190,5 +191,9 @@ def get_agent(agent_name: str) -> Optional[BaseAgent]:
 
     if name in {"memory_sleep", "memorysleep", "memorysleepagent"}:
         return MemorySleepAgent()
+
+    if name in {"compositional_generalization", "compositionalgeneralization",
+                "compositionalgeneralizationagent"}:
+        return CompositionalGeneralizationAgent()
 
     return None
