@@ -611,16 +611,33 @@ class CausalReasoningService:
     # Validation: Update edge strength from new observations
     # =========================================================================
 
+    async def get_edges(
+        self,
+        cause_entity_id: Optional[str] = None,
+        effect_entity_id: Optional[str] = None,
+    ) -> List[CausalEdge]:
+        """Return edges filtered by cause and/or effect entity IDs."""
+        conditions = [CausalEdge.organization_id == self.org_id]
+        if cause_entity_id:
+            conditions.append(CausalEdge.cause_entity_id == cause_entity_id)
+        if effect_entity_id:
+            conditions.append(CausalEdge.effect_entity_id == effect_entity_id)
+
+        stmt = select(CausalEdge).where(and_(*conditions)).order_by(CausalEdge.strength.desc())
+        result = await self.session.execute(stmt)
+        return list(result.scalars().all())
+
     async def validate_edge(
-        self, edge_id: str, new_evidence: Dict[str, Any]
+        self, edge_id: str, success: bool, strength_adjustment: float = 0.1
     ) -> Optional[CausalEdge]:
         """
-        Update edge strength based on new observed evidence.
-        
+        Update edge strength based on observed outcome.
+
         Args:
             edge_id: Edge to validate
-            new_evidence: {success: bool, strength_adjustment: float}
-            
+            success: Whether the causal prediction held
+            strength_adjustment: How much to adjust strength
+
         Returns:
             Updated CausalEdge
         """
@@ -636,15 +653,12 @@ class CausalReasoningService:
         if not edge:
             return None
 
-        success = new_evidence.get("success", False)
-        adjustment = new_evidence.get("strength_adjustment", 0.0)
-
         if success:
             edge.validation_count += 1
-            edge.strength = min(1.0, edge.strength + adjustment)
+            edge.strength = min(1.0, edge.strength + strength_adjustment)
         else:
             edge.invalidation_count += 1
-            edge.strength = max(0.0, edge.strength - adjustment)
+            edge.strength = max(0.0, edge.strength - strength_adjustment)
 
         edge.last_validated_at = datetime.now(timezone.utc)
         self.session.add(edge)

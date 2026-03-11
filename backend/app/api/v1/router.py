@@ -66,6 +66,7 @@ from app.api.v1.endpoints import (
     feature_readiness,
     knowledge_graph,
     review_queue,
+    causal,
 )
 from app.api.v1.admin import routes as admin_routes
 from app.api.v1.endpoints import event_publishing_batch
@@ -432,4 +433,9 @@ api_router.include_router(
     review_queue.router,
     prefix="/review",
     tags=["Human Review Queue"],
+)
+
+api_router.include_router(
+    causal.router,
+    tags=["Causal Reasoning"],
 )
