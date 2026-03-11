@@ -51,6 +51,7 @@ from app.agents.theory_of_mind_agent import TheoryOfMindAgent
 from app.agents.memory_sleep_agent import MemorySleepAgent
 from app.agents.compositional_generalization_agent import CompositionalGeneralizationAgent
 from app.agents.emotional_affective_memory_agent import EmotionalAffectiveMemoryAgent
+from app.agents.multimodal_deep_memory_agent import MultimodalDeepMemoryAgent
 
 
 def get_agent(agent_name: str) -> Optional[BaseAgent]:
@@ -200,5 +201,10 @@ def get_agent(agent_name: str) -> Optional[BaseAgent]:
     if name in {"emotional_affective_memory", "emotionalaffectivememory",
                 "emotionalaffectivememoryagent", "emotional_affective"}:
         return EmotionalAffectiveMemoryAgent()
+
+    if name in {"multimodal_deep_memory", "multimodaldeepmemory",
+                "multimodaldeepmemoryagent", "multimodal_memory",
+                "multimodalmemory"}:
+        return MultimodalDeepMemoryAgent()
 
     return None
