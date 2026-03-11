@@ -25,6 +25,7 @@ from uuid import uuid4
 from sqlalchemy import and_, select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.agents.llm.ollama_breaker import create_ollama_client
 from app.core.config import settings
 from app.models.causal_edge import CausalEdge, CounterfactualScenario
 from app.models.memory_fact import MemoryFact, MemoryFactStatus
@@ -277,15 +278,99 @@ class CausalReasoningService:
     async def _discover_via_llm(
         self, episode: MemoryEpisode, members: List[tuple]
     ) -> List[CausalEdge]:
+        """Ask LLM to identify causal relationships in the episode.
+
+        Builds a compact prompt from the episode's memory content_previews,
+        calls Ollama for a JSON list of causal pairs, validates that both
+        cause_id and effect_id belong to the episode, then persists edges.
+        Returns an empty list on any LLM failure so the caller is not blocked.
         """
-        Ask LLM to identify causal relationships in episode.
-        
-        Prompt: "In this conversation, what causes what?"
-        """
-        # Placeholder for LLM integration
-        # In production, call LLM with episode text, parse causal edges
-        logger.info("LLM causal discovery not yet implemented")
-        return []
+        if not members:
+            return []
+
+        # Build a compact summary (cap at 10 memories to keep the prompt small)
+        items = []
+        for membership, memory in members[:10]:
+            items.append({
+                "id": str(memory.id),
+                "pos": membership.position,
+                "text": (memory.content_preview or "")[:200],
+            })
+
+        memory_lines = "\n".join(
+            f"  [{i['pos']}] id={i['id']}: {i['text']}" for i in items
+        )
+        prompt = (
+            "You are a causal reasoning engine for an enterprise memory OS. "
+            "Output JSON only. Do not hallucinate.\n\n"
+            "Analyze the following memories from a single episode and identify "
+            "direct causal relationships between them.\n\n"
+            f"EPISODE_ID: {episode.id}\n"
+            f"MEMORIES (ordered by position):\n{memory_lines}\n\n"
+            "Return JSON with key 'causal_pairs': a list of objects, each with:\n"
+            "  cause_id   — memory id from the list above\n"
+            "  effect_id  — memory id from the list above (must differ from cause_id)\n"
+            "  mechanism  — one of: direct, indirect, conditional\n"
+            "  strength   — float 0.1..1.0\n"
+            "Only include pairs where causation is clearly evident. "
+            "Both ids must appear in the list above."
+        )
+
+        client = create_ollama_client(
+            base_url=str(getattr(settings, "OLLAMA_BASE_URL", "http://localhost:11434")),
+            model=str(getattr(settings, "OLLAMA_MODEL", "qwen2.5:7b")),
+            timeout_seconds=float(getattr(settings, "OLLAMA_TIMEOUT_SECONDS", 5.0)),
+            max_concurrency=int(getattr(settings, "OLLAMA_MAX_CONCURRENCY", 2)),
+        )
+
+        try:
+            resp = await client.complete_json(prompt=prompt, schema_hint={})
+        except Exception as exc:
+            logger.warning("LLM causal discovery failed: %s", exc)
+            return []
+
+        if not isinstance(resp, dict):
+            return []
+
+        raw_pairs = resp.get("causal_pairs")
+        if not isinstance(raw_pairs, list):
+            return []
+
+        valid_ids = {i["id"] for i in items}
+        edges: List[CausalEdge] = []
+
+        for pair in raw_pairs:
+            if not isinstance(pair, dict):
+                continue
+            cause_id = str(pair.get("cause_id") or "")
+            effect_id = str(pair.get("effect_id") or "")
+            if (
+                cause_id not in valid_ids
+                or effect_id not in valid_ids
+                or cause_id == effect_id
+            ):
+                continue
+            mechanism = str(pair.get("mechanism") or "direct")
+            strength = float(pair.get("strength") or 0.5)
+            strength = max(0.1, min(1.0, strength))
+
+            try:
+                edge = await self._create_or_update_edge(
+                    cause_entity_id=cause_id,
+                    cause_entity_type="memory",
+                    effect_entity_id=effect_id,
+                    effect_entity_type="memory",
+                    mechanism=mechanism,
+                    initial_strength=strength,
+                    evidence_memory_ids=[str(episode.id)],
+                )
+                if edge:
+                    edges.append(edge)
+            except Exception as exc:
+                logger.warning("Failed to persist LLM causal edge %s→%s: %s", cause_id, effect_id, exc)
+
+        logger.info("LLM causal discovery found %d edges for episode %s", len(edges), episode.id)
+        return edges
 
     # =========================================================================
     # Prediction: What will happen if...?

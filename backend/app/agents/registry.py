@@ -46,6 +46,7 @@ from app.agents.playbook_execution_tracker_agent import PlaybookExecutionTracker
 from app.agents.multi_turn_goal_tracking_agent import MultiTurnGoalTrackingAgent
 from app.agents.adaptive_enrichment_budget_agent import AdaptiveEnrichmentBudgetAgent
 from app.agents.meta_cognitive_planning_agent import MetaCognitivePlanningAgent
+from app.agents.autonomous_goal_generation_agent import AutonomousGoalGenerationAgent
 
 
 def get_agent(agent_name: str) -> Optional[BaseAgent]:
@@ -177,5 +178,9 @@ def get_agent(agent_name: str) -> Optional[BaseAgent]:
     if name in {"meta_cognitive_planning", "metacognitiveplanning",
                 "metacognitiveplanningagent", "meta_cognitive"}:
         return MetaCognitivePlanningAgent()
+
+    if name in {"autonomous_goal_generation", "autonomousgoalgeneration",
+                "autonomousgoalgenerationagent"}:
+        return AutonomousGoalGenerationAgent()
 
     return None
