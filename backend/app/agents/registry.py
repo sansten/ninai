@@ -48,6 +48,7 @@ from app.agents.adaptive_enrichment_budget_agent import AdaptiveEnrichmentBudget
 from app.agents.meta_cognitive_planning_agent import MetaCognitivePlanningAgent
 from app.agents.autonomous_goal_generation_agent import AutonomousGoalGenerationAgent
 from app.agents.theory_of_mind_agent import TheoryOfMindAgent
+from app.agents.memory_sleep_agent import MemorySleepAgent
 
 
 def get_agent(agent_name: str) -> Optional[BaseAgent]:
@@ -186,5 +187,8 @@ def get_agent(agent_name: str) -> Optional[BaseAgent]:
 
     if name in {"theory_of_mind", "theoryofmind", "theoryofmindagent"}:
         return TheoryOfMindAgent()
+
+    if name in {"memory_sleep", "memorysleep", "memorysleepagent"}:
+        return MemorySleepAgent()
 
     return None
