@@ -1,90 +1,161 @@
-# Ninai Memory OS for AI Agents
+# Ninai — Cognitive Operating System for Enterprise
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-blue.svg)](https://www.typescriptlang.org/)
+[![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-green.svg)](https://fastapi.tiangolo.com/)
 
-**Multi-tenant agent memory, built to not leak data. Postgres RLS, explainable retrieval, full audit trail.**
+**Apps write raw data. Ninai makes sense of it.**
 
-## The Problem We Solved
+Ninai is not a memory cache or a vector search wrapper. It is a Cognitive OS: a reasoning layer that sits between your applications and their stored knowledge, continuously enriching what comes in, linking entities across silos, assembling full context on read, and reasoning about what it knows — without any of that logic living in your application code.
 
-We were building a platform where agents needed to remember things—user context, API patterns, decision history. Standard RAG solutions exist, but they all have the same flaw: **they treat memory like a library**, not like a conversation.
+---
 
-Standard RAG:
-- Indexing is designed for **huge, diverse corpora** (Wikipedia, documents, web)
-- Returns top-10 similar chunks
-- Collapses into dense regions when retrieving from bounded dialogue streams
+## The Core Problem
 
-Agent memory is **fundamentally different**:
-- Small, coherent, temporally-linked conversations
-- Often redundant across sessions (same user, same questions)
-- Needs strict isolation (Company A can't read Company B's memories)
-- Needs governance (don't let bad information into agent decisions)
+Enterprise applications accumulate knowledge in silos. A CRM knows about customers. A ticketing system knows about incidents. A document store knows about procedures. None of them know what the others know, and none of them can reason across boundaries.
 
-So we built Ninai: a memory system designed **for agents, not documents**.
+Dropping a vector database in front of each silo doesn't fix this. You still get isolated retrieval with no understanding of causality, conflict, temporal change, or entity identity across systems.
 
-```python
-from ninai import NinaiClient
+Ninai approaches this differently:
 
-client = NinaiClient(api_key="nai_...", api_base="http://localhost:8000/api/v1")
+- Every piece of data written to Ninai is **automatically enriched**: entities extracted, normalized, linked to the world model, scored for credibility, checked for conflicts with existing knowledge
+- Every read assembles **full context**: causal chains, related episodes, peer signals, anomalies, attention-weighted relevance across silos
+- The system **reasons proactively**: generating goals it should pursue, monitoring for anomalies, consolidating redundant knowledge, flagging inconsistencies before they surface in agent responses
+- **Multi-tenant isolation** is enforced at the database layer via PostgreSQL RLS — application bugs cannot leak data across org boundaries
 
-# Store a memory (goes to review queue)
-memory = client.memories.create(
-    content="Deploy via: kubectl apply -f manifest.yaml",
-    tags=["devops", "kubernetes"],
-    classification="internal"
-)
+---
 
-# Retrieve with full explanation
-results = client.memories.search(
-    query="How do I deploy?",
-    tags=["devops"],
-    limit=5
-)
-# Includes scoring breakdown, why each result matched, audit trail
+## What Ninai Actually Does
+
+### Data Enrichment on Write
+
+When an application writes a memory, Ninai runs a pipeline of agents before storing it:
+
+- **Semantic normalization** — synonyms resolved, units standardized, terminology canonicalized across the org vocabulary
+- **Entity resolution** — "AWS" and "Amazon Web Services" in the same context become the same entity; cross-silo duplicates are merged
+- **World model integration** — new facts are linked into a graph of entities, relationships, and causal edges
+- **Credibility scoring** — source reliability, consensus across silos, and confidence are factored into a credibility signal
+- **Conflict detection** — incoming knowledge is checked against existing facts; conflicts are flagged for resolution or human review
+- **Silo propagation** — facts relevant to other silos are forwarded, so finance learns what ops knows when it matters
+
+### Context Assembly on Read
+
+When an agent queries Ninai, it doesn't get raw search results. It gets assembled context:
+
+- Semantically matched memories ranked by an 8-component activation score (relevance, recency, frequency, importance, confidence, context match, provenance, risk)
+- Causal chains explaining why things happened
+- Episodic groupings that reconstruct what was happening around the time of relevant events
+- Peer signals from agents and silos that bear on the query
+- Uncertainty estimates so the agent knows what it doesn't know
+- A narrative synthesis — a structured summary of what the system believes, with confidence
+
+### Autonomous Reasoning
+
+Ninai runs background processes that don't wait to be asked:
+
+- **Predictive monitoring** — tracks world state, detects when predictions diverge from reality
+- **Anomaly detection** — identifies outliers across entity behavior and system metrics
+- **Memory consolidation** — merges redundant facts, strengthens weak memories, prunes stale knowledge
+- **Memory decay** — relevance ages over time so old, unconfirmed facts don't crowd out recent signal
+- **Proactive memory push** — pushes relevant context to agents before they ask for it
+- **Autonomous goal generation** — identifies knowledge gaps, low-reliability tools, and high-activity domains; generates goals the system should pursue on its own
+
+### Human-in-the-Loop
+
+Not every decision should be fully automated:
+
+- **Human review queue** — ambiguous facts, high-stakes conflicts, and low-confidence outputs are routed to reviewers
+- **Audit and explainability trail** — every agent decision is logged with inputs, reasoning, and outputs; fully queryable
+- **Adaptive conflict resolution** — conflicts that can be resolved heuristically are; those that can't are escalated
+
+### Multi-Agent Coordination
+
+Ninai treats agents as first-class entities:
+
+- **Orchestration bus** — agents register capabilities and emit signals; others subscribe and react
+- **Theory of mind modeling** — the system builds belief models of users and peer agents: what does this user know? what is this agent weak at? adjusts tone and collaboration strategy accordingly
+- **Playbook execution tracking** — multi-step procedures are tracked across turns; partial progress is preserved
+- **Multi-turn goal tracking** — goals decomposed across many interactions stay coherent
+
+---
+
+## Architecture
+
+```
+Applications
+    │  write raw data
+    ▼
+Enrichment Pipeline (per write)
+    ├── SemanticNormalizationAgent
+    ├── EntityResolutionAgent
+    ├── WorldModelAgent          → World Model Graph (Qdrant + Postgres)
+    ├── CredibilityAgent
+    ├── ConflictDetectionAgent
+    ├── AdaptiveConflictResolutionAgent
+    └── SiloPropagationAgent     → other silos
+
+Storage Layer
+    ├── PostgreSQL (RLS-enforced, per-tenant)   — facts, entities, audit, review queue
+    ├── Qdrant                                  — vector embeddings
+    └── Redis                                   — cache, Celery broker
+
+Background Processes (Celery)
+    ├── PredictiveMonitorAgent
+    ├── AnomalyDetectionAgent
+    ├── MemoryDecayAgent
+    ├── MemoryConsolidationAgent
+    ├── ProactiveMemoryPushAgent
+    └── AutonomousGoalGenerationAgent
+
+Query Path (per read)
+    ├── QueryIntelligenceAgent   — intent classification, query expansion
+    ├── ContextAmplifierAgent    — expert context from silos
+    ├── OrgAttentionAgent        — attention-weighted relevance
+    ├── CausalReasoningAgent     — causal chain assembly
+    ├── EpisodicGroupingAgent    — episode reconstruction
+    ├── TemporalReasoningAgent   — time-aware context ordering
+    ├── NarrativeSynthesisAgent  — structured summary with confidence
+    └── UncertaintyReportingAgent — what we don't know
+
+Cognitive Layer
+    ├── GoalDecompositionAgent
+    ├── MetaCognitivePlanningAgent
+    ├── TheoryOfMindAgent        — user + peer agent belief models
+    ├── PlaybookAgent + PlaybookExecutionTrackerAgent
+    ├── MultiTurnGoalTrackingAgent
+    ├── AuditTrailAgent
+    ├── HumanReviewQueueAgent
+    └── OrchestrationBusAgent
+
+LLM Backend
+    └── Ollama (local, default: qwen2.5:7b)
+        └── heuristic fallback on every agent (AGENT_STRATEGY=heuristic|llm)
 ```
 
----
-
-## What Makes Ninai Different
-
-We didn't build another vector database. We built a **memory operating system** with:
-
-- **RLS-first security** — Postgres Row-Level Security enforces org isolation at the database layer. App bugs cannot leak data across tenants. Period.
-- **Governed knowledge** — Submit → Review Queue → Approval → Immutable Version. Bad information is caught before agents use it.
-- **Explainable retrieval** — Every search result shows you the scoring breakdown. Why did this match? Relevance 0.8, Recency 0.3, Context gate passed? You can see it all.
-- **Hierarchical memory** — Messages → Episodes → Semantic Facts → Topics. Prevents dense-region collapse where everything similar gets returned.
-- **Uncertainty-gated expansion** — Only include deeper context (raw messages) if they actually reduce the LLM's prediction uncertainty. Saves tokens.
-- **No vendor lock-in** — Core is pure open-source (MIT). Enterprise add-ons (SCIM, managed SLAs) are separate and optional.
-
-Most memory systems treat security as a feature. **We made it the foundation.** Everything else builds on that.
+**Key architectural rules across all agents:**
+- Every agent has a heuristic path that requires no LLM — the system degrades gracefully when Ollama is unavailable
+- Every service call is wrapped in try/except with fault isolation — one agent failing does not cascade
+- All database queries are scoped via `set_tenant_context()` before execution — RLS enforces the rest
+- EMA-based learning (`new = 0.75 * prev + 0.25 * outcome`) for strategy and tool reliability tracking
 
 ---
 
-## What You Get
+## Stack
 
-| What | Why | Trade-off |
-|------|-----|-----------|
-| **RLS-backed isolation** | No cross-tenant data leaks, even if your app code has bugs | Requires Postgres 13+, slightly higher CPU on complex queries |
-| **Knowledge approval workflows** | Bad/outdated info never contaminates agent behavior | Manual process—can bottleneck if you get lots of submissions |
-| **8-component activation scoring** | Captures relevance, recency, frequency, importance, confidence, context, provenance, risk | More complex than simple vector similarity, harder to tune |
-| **Explicit versioning + audit logs** | Regulatory compliance, ability to understand why an agent made a decision | Adds storage overhead (immutable logs) |
-| **Hierarchical memory (4-level)** | Prevents "dense region collapse" in bounded dialogue—better quality retrieval | Overhead: requires semantic distillation, topic clustering |
-| **Works today with Postgres + Qdrant** | No Kubernetes, no managed services required | You manage the databases; scale horizontally yourself |
-
-**What we're NOT:**
-- A real-time knowledge base with sub-100ms latency (we target p95 <500ms)
-- A replacement for full-text search (we focus on semantic + metadata)
-- A magic solution to prompt injection (we have PolicyGuard, but still apply defense-in-depth)
-- Enterprise-ready with SLAs (OSS—bring your own monitoring/alerting)
+| Component | Technology |
+|-----------|-----------|
+| API | FastAPI (async) |
+| ORM | SQLAlchemy async |
+| Database | PostgreSQL 15+ with RLS |
+| Vector store | Qdrant |
+| Cache / broker | Redis |
+| Task queue | Celery |
+| Local LLM | Ollama (qwen2.5:7b default) |
+| Runtime | Python 3.12+ |
 
 ---
 
-## Quick Start (5 Minutes)
-
-Honestly, you just need Docker, Postgres, and Qdrant. Everything else is optional.
-
-### Get It Running
+## Quick Start
 
 ```bash
 git clone https://github.com/sansten/ninai.git
@@ -92,201 +163,164 @@ cd ninai
 docker compose up -d --build
 ```
 
-Open **http://localhost:3000**. You'll see a clean dashboard.
+Open **http://localhost:3000**.
 
-Demo credentials (change these immediately in production):
-- **dev@ninai.dev** / `dev12345` — Can submit, search, view
-- **reviewer@ninai.dev** / `review1234` — Can approve/reject submissions
-- **admin@ninai.dev** / `admin1234` — Full access
+Demo credentials (change in production):
+- `dev@ninai.dev` / `dev12345` — submit, search, view
+- `reviewer@ninai.dev` / `review1234` — approve/reject submissions
+- `admin@ninai.dev` / `admin1234` — full access
 
-### Try It
+### Write a memory
 
-**Via Python SDK:**
 ```python
 from ninai import NinaiClient
 
-c = NinaiClient(api_base_url="http://localhost:8000/api/v1", api_key="dev-token")
+client = NinaiClient(api_base_url="http://localhost:8000/api/v1", api_key="dev-token")
 
-# Create (goes to review queue)
-c.memories.create(content="K8s deploy: kubectl apply -f manifest.yaml", tags=["devops"])
-
-# Search (after approval)
-results = c.memories.search("kubernetes deployment", limit=5)
-for r in results:
-    print(f"Score: {r.score:.2f} | {r.content}")
+# Ninai enriches this automatically: entity extraction, credibility scoring,
+# conflict checking, world model linking, silo propagation
+client.memories.create(
+    content="Deploy to production via: kubectl apply -f manifests/prod.yaml",
+    tags=["devops", "kubernetes"],
+    classification="internal"
+)
 ```
 
-**Via REST:**
+### Query with assembled context
+
+```python
+results = client.memories.search(
+    query="How do we deploy to production?",
+    tags=["devops"],
+    limit=5
+)
+# Returns: scored results + causal context + episode summary +
+#          uncertainty estimate + narrative synthesis
+```
+
+### REST
+
 ```bash
 curl -X POST http://localhost:8000/api/v1/memories/search \
   -H "Authorization: Bearer dev-token" \
   -H "Content-Type: application/json" \
-  -d '{"query_text": "kubernetes", "limit": 5}'
+  -d '{"query_text": "kubernetes deployment", "limit": 5}'
 ```
-
-Done. You now have multi-tenant memory with RLS enforcement running locally.
 
 ---
 
-## How It Works
+## Security
 
-Think of it like a **post office system for agent memory**.
+Ninai makes multi-tenant isolation a foundation, not a feature.
 
-**The Control Plane** (your local postmaster):
-- Routes all submissions through a review queue
-- Prevents junk mail (bad memories) from entering the system
-- Maintains an audit log of every sorting decision
+**How it works:** Every request sets a Postgres session variable (`SET LOCAL app.current_org_id = 'org_abc'`). RLS policies attached to every table enforce this at the database layer — your application code never needs a WHERE clause for tenant filtering. A bug in application logic cannot return another org's data.
 
-**The Data Plane** (the actual mail sorting):
-- Sorts memories by topic (devops, customer-service, api-design)
-- Retrieves what's most relevant to a query
-- Enforces that Company A can't access Company B's mail
+**What is protected:**
+- Cross-tenant data leakage — enforced at database layer, survives app bugs
+- SQL injection — RLS applies regardless of query shape
+- Unauthorized knowledge promotion — review queue gates all submissions
+- Decision audit trail — every agent action is logged immutably
 
-```
-User Story → Submit Memory → Review Queue → Approved Memories
-                                ↓ (rejected)
-                            Audit Log (why?)
+**What you manage:**
+- Network TLS (configure your reverse proxy or load balancer)
+- DDoS protection
+- Credential security and SSO integration
 
-Search Query → Vector Similarity → RLS Filter → Scoring → Explanation
-```
-
-Under the hood:
-- **Postgres** stores memories with RLS policies (database-level tenant isolation)
-- **Qdrant** does semantic search (vector similarity)
-- **FastAPI** orchestrates and enforces approval workflows
-- **React** gives you the dashboard
-
-### Directory Structure
-
-The codebase is organized by concern:
-
-```
-backend/
-├── api/              # REST endpoints users call
-├── services/         # Business logic (search, approval, scoring)
-├── models/           # Database schema + RLS policies
-├── middleware/       # Authentication + tenant context
-└── core/             # Configuration + database setup
-
-frontend/
-├── pages/            # Dashboard, search, review queue
-├── components/       # Reusable UI elements
-├── hooks/            # React custom hooks (useAuth, useMemory)
-└── services/         # API client library
-
-docker/
-├── postgres/         # RLS policy scripts
-└── qdrant/           # Vector DB configuration
-```
-
-Full architecture details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+See [docs/SECURITY.md](docs/SECURITY.md) for full threat model.
 
 ---
 
-## Security: Why Database-Level Isolation Matters
+## Cognitive Capabilities (Phase Status)
 
-The problem most memory systems ignore: **your app code will have bugs**. 
+| Phase | Capability | Status |
+|-------|-----------|--------|
+| 1–3 | Uncertainty gating, adaptive strategy, cognitive context bus | Done |
+| 4 | Unified World Model Graph | Done |
+| 5 | Predictive World State Monitor | Done |
+| 6 | Semantic Normalization | Done |
+| 7 | Entity Resolution | Done |
+| 8 | Expert Context Amplifier | Done |
+| 9 | Cross-Silo Signal Propagation | Done |
+| 10 | Organizational Attention Model | Done |
+| 11 | Proactive Memory Push | Done |
+| 12 | Causal Reasoning Engine | Done |
+| 13 | Cross-Silo Conflict Detection | Done |
+| 14 | Adaptive Conflict Resolution | Done |
+| 15 | Memory Decay & Relevance Aging | Done |
+| 16 | Memory Consolidation Engine | Done |
+| 17 | Temporal Reasoning Engine | Done |
+| 18 | Episodic Memory Grouping | Done |
+| 19 | Credibility Scoring | Done |
+| 20 | Playbook / Skill Memory | Done |
+| 21 | Goal Decomposition | Done |
+| 22 | Uncertainty Reporting | Done |
+| 23 | Narrative Synthesis | Done |
+| 24 | Feedback Integration & Self-Correction | Done |
+| 25 | Anomaly Detection | Done |
+| 26 | Enrichment API Surface | Done |
+| 27 | Query Intelligence Layer | Done |
+| 28 | Feature Readiness Engine | Done |
+| 29 | Cross-Agent Orchestration Bus | Done |
+| 30 | Tenant-Scoped Knowledge Graph API | Done |
+| 31 | Audit & Explainability Trail | Done |
+| 32 | Human Review Queue | Done |
+| 33 | Playbook Execution Tracker | Done |
+| 34 | Multi-Turn Goal Tracking | Done |
+| 35 | Adaptive Enrichment Budget | Done |
+| 36 | Meta-Cognitive Planning | Done |
+| 37 | Autonomous Goal Generation & Intrinsic Motivation | Done |
+| 38 | Theory of Mind & Multi-Agent Modeling | Done |
+| 39 | Causal API Surface | Planned |
+| 40 | Memory Sleep Cycle | Planned |
+| 41 | Compositional Generalization Engine | Planned |
+| 42 | Emotional & Affective Memory | Planned |
+| 43 | Multimodal Deep Memory | Planned |
+| 44 | Federated Memory & Collective Intelligence | Planned |
 
-When bugs happen, standard setups like this break:
-
-```
-Client 1 (Company A)
-    ↓
-App → "SELECT * FROM memories WHERE owner_id = current_user"
-    ↓
-Oh wait. A bug set owner_id = NULL
-    ↓
-Returns Company B's memories
-```
-
-Ninai does it differently:
-
-```
-Client 1 (Company A) sets org_id = "org_abc"
-    ↓
-Database executes: "SET LOCAL app.current_org_id = 'org_abc'"
-    ↓
-App queries "SELECT * FROM memories" (no WHERE clause needed)
-    ↓
-Database RLS policy silently filters: WHERE org_id = current_setting('app.current_org_id')
-    ↓
-Returns only Company A's memories, even if app code is buggy
-```
-
-**The key difference:** RLS happens at the database layer, before your app code runs. A bug in your approval logic can't leak data across tenants. A SQL injection can't escape the org boundary.
-
-### What We Protect
-
-✅ **Cross-tenant data leakage** — Even with app bugs, you can't see other orgs' memories  
-✅ **SQL injection** — RLS applies regardless of query shape  
-✅ **Unauthorized approval** — Only designated reviewers can move memories forward  
-✅ **Audit trail tampering** — All operations logged immutably  
-✅ **Prompt injection** (PolicyGuard) — Bad knowledge blocked before reaching agents
-
-### Your Responsibilities
-
-❌ Network TLS (configure your reverse proxy)  
-❌ DDoS protection (Cloudflare, AWS WAF, etc.)  
-❌ Compromised credentials (use strong passwords + SSO)  
-❌ Insider threats (org admins see all org data—this is expected)  
-
-See [docs/SECURITY.md](docs/SECURITY.md) for threat modeling details.
+**3,252 tests passing** across the full agent suite.
 
 ---
 
 ## Testing
 
-### Unit Tests (No Database Required)
-
 ```bash
-python -m pytest -q
+# Unit tests (agents, services — no database required for most)
+cd backend
+python -m pytest tests/ -x -q
+
+# With Postgres (full integration suite)
+docker compose up -d postgres redis qdrant
+python -m pytest tests/ -q
 ```
 
-### Integration Tests (Postgres Required)
-
-```bash
-docker compose up -d postgres
-TEST_DB_URL=postgresql://... python -m pytest -q backend/tests/
-```
-
-### Cross-Tenant Isolation Tests
-
-```bash
-# Verify no data leakage between orgs
-python -m pytest -q -k "test_cross_tenant"
-```
+All agents test both the heuristic path (no LLM) and the LLM path (with Ollama mock), plus fallback behavior when the LLM fails.
 
 ---
 
-## Deployment
+## Configuration
 
-### Development
-
+**Backend** (`backend/.env`):
 ```bash
-docker compose up -d --build
+POSTGRES_HOST=localhost
+POSTGRES_USER=ninai
+POSTGRES_PASSWORD=ninai_dev_password
+POSTGRES_DB=ninai
+
+QDRANT_URL=http://localhost:6333
+REDIS_URL=redis://localhost:6379
+
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_MODEL=qwen2.5:7b
+OLLAMA_TIMEOUT_SECONDS=5.0
+
+AGENT_STRATEGY=llm      # or: heuristic (no LLM, faster, fully deterministic)
+APP_ENV=development
 ```
 
-### Production
-
-For production-grade deployment, see:
-- [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) — Self-managed runbook  
-- [ninai-deploy/](../ninai-deploy/) — Kubernetes manifests & Helm charts
-- [ninai-enterprise/](../ninai-enterprise/) — Enterprise editions with professional support
-
-### Environment Variables
-
-**Backend**:
-```bash
-DATABASE_URL=postgresql://ninai:password@postgres:5432/ninai
-QDRANT_URL=http://qdrant:6333
-REDIS_URL=redis://redis:6379  # Optional
-LOG_LEVEL=INFO
-```
-
-**Frontend**:
+**Frontend** (`frontend/.env`):
 ```bash
 VITE_API_BASE=http://localhost:8000/api/v1
-VITE_OIDC_CLIENT_ID=...  # Optional SSO
+VITE_OIDC_CLIENT_ID=...   # optional SSO
 VITE_OIDC_AUTHORITY=...
 ```
 
@@ -294,95 +328,80 @@ VITE_OIDC_AUTHORITY=...
 
 ## Authentication
 
-### Email/Password (Default)
+**Email/password** works out of the box, no external dependencies.
 
-No external dependencies required.
-
-### OIDC SSO (Optional)
-
-Supports Azure AD, Keycloak, Google, Okta, etc.:
-
+**OIDC SSO** (Azure AD, Keycloak, Google, Okta, etc.):
 ```bash
 AUTH_MODE=both
-OIDC_ISSUER=https://login.microsoftonline.com/tenant-id/v2.0  
+OIDC_ISSUER=https://login.microsoftonline.com/tenant-id/v2.0
 OIDC_CLIENT_ID=your-client-id
 OIDC_ALLOWED_EMAIL_DOMAINS=example.com
 ```
 
 ---
 
+## Deployment
+
+### Development
+```bash
+docker compose up -d --build
+```
+
+### Production
+- [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) — self-managed runbook
+- [ninai-deploy/](../ninai-deploy/) — Kubernetes manifests and Helm charts
+- [ninai-enterprise/](../ninai-enterprise/) — enterprise editions
+
+---
+
+## Directory Structure
+
+```
+backend/
+├── app/
+│   ├── agents/          # 38+ cognitive agents (one file per agent)
+│   ├── api/             # REST endpoints
+│   ├── services/        # Cognitive loop, strategy learning, world model
+│   ├── models/          # SQLAlchemy models + RLS
+│   ├── middleware/       # Auth, tenant context, rate limiting
+│   └── core/            # Config, database, bootstrap
+├── tests/               # 3,252 passing tests
+└── alembic/             # Schema migrations
+```
+
+---
+
 ## Contributing
 
-We actively welcome contributions!
+1. Fork and clone
+2. `cd backend && python -m pytest tests/ -x -q` — make sure everything passes
+3. Create a feature branch
+4. Keep commits concise and imperative (`feat: add X`, `fix: Y in Z`)
+5. Open a PR with a plain description and test plan
 
-1. **Read** [CONTRIBUTING.md](CONTRIBUTING.md)
-2. **Fork & clone**
-3. **Create a feature branch** (`git checkout -b feature/amazing-thing`)
-4. **Commit** with [Conventional Commits](https://www.conventionalcommits.org/)
-5. **Push & open a PR**
+### Code style
+- Python: Black, isort, ruff
+- Commits: [Conventional Commits](https://www.conventionalcommits.org/)
 
-### Code Style
-
-- **Python**: Black, isort, ruff
-- **TypeScript**: ESLint, Prettier
-- **Docs**: Markdown with working code examples
-
-### Getting Help
-
-- 💬 [GitHub Discussions](https://github.com/sansten/ninai/discussions)
-- 📧 opensource@sansten.com
-- 🐛 [Report bugs](https://github.com/sansten/ninai/issues)
+### Getting help
+- [GitHub Discussions](https://github.com/sansten/ninai/discussions)
+- [Report bugs](https://github.com/sansten/ninai/issues)
+- Email: opensource@sansten.com
 
 ---
 
-## Roadmap
+## Support
 
-| Phase | Status | Focus |
-|-------|--------|-------|
-| 1 | ✅ Done | Core memory CRUD, RLS multi-tenancy, vector search |
-| 2 | ✅ Done | Knowledge review queue, approval workflows, audit logging |
-| 3 | ✅ Done | Explainable retrieval, co-activation graphs, uncertainty gating |
-| 4 | 🚧 In Progress | Benchmarking (LoCoMo/PerLTQA), publication, researcher outreach |
+| Edition | Support | Cost |
+|---------|---------|------|
+| OSS | Community | Free (MIT) |
+| Enterprise Managed | Sansten, SLA 99.99% | Contact sales |
+| Enterprise Self-Managed | Commercial license | Contact sales |
 
-See [docs/ROADMAP.md](docs/ROADMAP.md) for more details.
-
----
-
-## Support & Editions
-
-| Edition | Support | SLA | Cost |
-|---------|---------|-----|------|
-| **OSS** | Community | None | Free |
-| **Enterprise Managed** | Sansten | 99.99% uptime | Contact sales |
-| **Enterprise Self-Managed** | Commercial | Custom | Contact sales |
-
-Interested in enterprise? Email **sales@sansten.com** or see [docs/EDITIONS.md](docs/EDITIONS.md).
-
----
-
-## Built With
-
-- [FastAPI](https://fastapi.tiangolo.com/) — Modern Python framework
-- [SQLAlchemy](https://www.sqlalchemy.org/) — ORM + SQL toolkit
-- [Qdrant](https://qdrant.tech/) — Vector database
-- [React 18](https://react.dev/) — UI library
-- [Tailwind CSS](https://tailwindcss.com/) — Styling
-- [PostgreSQL 15+](https://www.postgresql.org/) — Relational DB
-- [Alembic](https://alembic.sqlalchemy.org/) — Schema migrations
+**sales@sansten.com** — [docs/EDITIONS.md](docs/EDITIONS.md)
 
 ---
 
 ## License
 
-**MIT** — See [LICENSE](LICENSE) for details.
-
----
-
-## Questions?
-
-- ⭐ Star the repo if it helped!
-- 🐛 [Report bugs](https://github.com/sansten/ninai/issues/new)
-- 💡 [Share ideas](https://github.com/sansten/ninai/discussions)
-- 🤝 [Contribute code](CONTRIBUTING.md)
-
-**Email**: [support@sansten.com](mailto:support@sansten.com) | **Discussions**: [GitHub](https://github.com/sansten/ninai/discussions)
+MIT — see [LICENSE](LICENSE).
