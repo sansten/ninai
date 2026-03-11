@@ -238,6 +238,9 @@ class Settings(BaseSettings):
     # Global agent strategy (advanced): set to "heuristic" to disable LLM calls.
     AGENT_STRATEGY: str = "llm"  # llm | heuristic
 
+    # Enable LLM-based causal edge discovery (off by default to avoid slow Ollama calls).
+    ENABLE_LLM_CAUSAL_DISCOVERY: bool = False
+
     # ---------------------------------------------------------------------
     # Sandbox / reproducible demos
     # ---------------------------------------------------------------------
