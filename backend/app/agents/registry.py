@@ -50,6 +50,7 @@ from app.agents.autonomous_goal_generation_agent import AutonomousGoalGeneration
 from app.agents.theory_of_mind_agent import TheoryOfMindAgent
 from app.agents.memory_sleep_agent import MemorySleepAgent
 from app.agents.compositional_generalization_agent import CompositionalGeneralizationAgent
+from app.agents.emotional_affective_memory_agent import EmotionalAffectiveMemoryAgent
 
 
 def get_agent(agent_name: str) -> Optional[BaseAgent]:
@@ -195,5 +196,9 @@ def get_agent(agent_name: str) -> Optional[BaseAgent]:
     if name in {"compositional_generalization", "compositionalgeneralization",
                 "compositionalgeneralizationagent"}:
         return CompositionalGeneralizationAgent()
+
+    if name in {"emotional_affective_memory", "emotionalaffectivememory",
+                "emotionalaffectivememoryagent", "emotional_affective"}:
+        return EmotionalAffectiveMemoryAgent()
 
     return None
