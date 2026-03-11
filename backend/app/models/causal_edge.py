@@ -105,6 +105,24 @@ class CausalEdge(Base):
         Index("idx_causal_edges_strength", "organization_id", "strength"),
     )
 
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "organization_id": self.organization_id,
+            "cause_entity_id": self.cause_entity_id,
+            "cause_entity_type": self.cause_entity_type,
+            "effect_entity_id": self.effect_entity_id,
+            "effect_entity_type": self.effect_entity_type,
+            "mechanism": self.mechanism,
+            "strength": self.strength,
+            "latency_hours": self.latency_hours,
+            "evidence_memory_ids": self.evidence_memory_ids or [],
+            "discovered_at": self.discovered_at.isoformat() if self.discovered_at else None,
+            "validation_count": self.validation_count,
+            "invalidation_count": self.invalidation_count,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
     def __repr__(self) -> str:
         return (
             f"<CausalEdge "

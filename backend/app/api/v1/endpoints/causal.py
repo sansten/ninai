@@ -37,7 +37,7 @@ from app.schemas.causal import (
 )
 from app.services.causal_reasoning_service import CausalReasoningService
 
-router = APIRouter(prefix="/v1/causal", tags=["causal"])
+router = APIRouter(prefix="/causal", tags=["causal"])
 
 
 @router.post("/discover/{episode_id}", response_model=DiscoverCausalEdgesResponse)
@@ -92,7 +92,11 @@ async def discover_causal_edges(
         ```
     """
     try:
-        service = CausalReasoningService(db, current_user.organization_id)
+        service = CausalReasoningService(
+            session=db,
+            user_id=str(current_user.id),
+            org_id=str(current_user.organization_id),
+        )
 
         # Discover edges in the episode
         edges = await service.discover_causal_edges_from_episode(episode_id)
@@ -140,7 +144,11 @@ async def get_causal_edges(
                 detail="Must specify from_entity or to_entity",
             )
 
-        service = CausalReasoningService(db, current_user.organization_id)
+        service = CausalReasoningService(
+            session=db,
+            user_id=str(current_user.id),
+            org_id=str(current_user.organization_id),
+        )
         edges = await service.get_edges(
             cause_entity_id=from_entity,
             effect_entity_id=to_entity,
@@ -199,7 +207,11 @@ async def predict_outcome(
         ```
     """
     try:
-        service = CausalReasoningService(db, current_user.organization_id)
+        service = CausalReasoningService(
+            session=db,
+            user_id=str(current_user.id),
+            org_id=str(current_user.organization_id),
+        )
 
         result = await service.predict(
             cause_fact_ids=request.cause_ids,
@@ -274,7 +286,11 @@ async def explain_effect(
         ```
     """
     try:
-        service = CausalReasoningService(db, current_user.organization_id)
+        service = CausalReasoningService(
+            session=db,
+            user_id=str(current_user.id),
+            org_id=str(current_user.organization_id),
+        )
 
         explanation = await service.explain(effect_fact_id=effect_id)
 
@@ -347,7 +363,11 @@ async def counterfactual_query(
         ```
     """
     try:
-        service = CausalReasoningService(db, current_user.organization_id)
+        service = CausalReasoningService(
+            session=db,
+            user_id=str(current_user.id),
+            org_id=str(current_user.organization_id),
+        )
 
         scenario = await service.counterfactual_query(
             condition=request.condition,
@@ -355,9 +375,9 @@ async def counterfactual_query(
         )
 
         return CounterfactualResponse(
-            scenario_id=scenario.get("scenario_id"),
-            condition=scenario.get("condition"),
-            status=scenario.get("status"),
+            scenario_id=scenario.get("scenario_id") or "",
+            condition=scenario.get("condition") or "",
+            status=scenario.get("status") or "pending",
         )
 
     except ValueError as e:
@@ -418,7 +438,11 @@ async def estimate_causal_effect(
         ```
     """
     try:
-        service = CausalReasoningService(db, current_user.organization_id)
+        service = CausalReasoningService(
+            session=db,
+            user_id=str(current_user.id),
+            org_id=str(current_user.organization_id),
+        )
 
         result = await service.do_calculus(treatment=treatment, outcome_var=outcome)
 
@@ -498,7 +522,11 @@ async def validate_edge(
         ```
     """
     try:
-        service = CausalReasoningService(db, current_user.organization_id)
+        service = CausalReasoningService(
+            session=db,
+            user_id=str(current_user.id),
+            org_id=str(current_user.organization_id),
+        )
 
         edge = await service.validate_edge(
             edge_id=request.edge_id,
@@ -511,7 +539,7 @@ async def validate_edge(
             strength=edge.strength,
             validation_count=edge.validation_count,
             invalidation_count=edge.invalidation_count,
-            last_validated_at=edge.updated_at,
+            last_validated_at=edge.last_validated_at,
         )
 
     except ValueError as e:

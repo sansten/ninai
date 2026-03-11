@@ -90,7 +90,7 @@ class CounterfactualResponse(BaseModel):
 
     scenario_id: str
     condition: str
-    status: str
+    status: str = "pending"
 
 
 class DoCalculusRequest(BaseModel):
