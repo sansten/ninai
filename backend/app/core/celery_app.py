@@ -72,6 +72,7 @@ celery_app = Celery(
         "app.tasks.self_model",
         "app.tasks.agent_processes",
         "app.tasks.feature_readiness_task",
+        "app.tasks.memory_sleep_pipeline",
         *_enterprise_includes,
     ],
 )
@@ -140,6 +141,9 @@ celery_app.conf.update(
         # Feature readiness (Phase 28)
         "app.tasks.feature_readiness_task.evaluate_feature_readiness_task": {"queue": "q.maintenance"},
 
+        # Memory sleep pipeline (Phase 40)
+        "app.tasks.memory_sleep_pipeline.memory_sleep_task": {"queue": "q.maintenance"},
+
         # Memory activation scoring (lightweight async updates)
         "app.services.memory_activation.tasks.memory_access_update_task": {"queue": "q.agent_enrich"},
         "app.services.memory_activation.tasks.coactivation_update_task": {"queue": "q.agent_graph"},
@@ -172,6 +176,11 @@ celery_app.conf.update(
         "nightly-feature-readiness-evaluation": {
             "task": "app.tasks.feature_readiness_task.evaluate_feature_readiness_task",
             "schedule": crontab(minute=0, hour=3),
+            "args": (),
+        },
+        "nightly-memory-sleep-cycle": {
+            "task": "app.tasks.memory_sleep_pipeline.memory_sleep_task",
+            "schedule": crontab(minute=0, hour=2),
             "args": (),
         },
         **_enterprise_beat,
