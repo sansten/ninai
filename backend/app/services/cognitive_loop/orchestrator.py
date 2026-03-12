@@ -14,7 +14,7 @@ Idempotency (best-effort):
 
 from __future__ import annotations
 
-import asyncio
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
@@ -153,17 +153,28 @@ class LoopOrchestrator:
         goal_type = _classify_goal_type(goal)
         session_domain = str((getattr(sess, "context_snapshot", None) or {}).get("domain", "general")).strip() or "general"
 
-        # Fetch strategy hints and cognitive context concurrently — both are
-        # independent pre-loop operations used across all iterations.
+        # Fetch strategy hints and cognitive context sequentially. Both helpers
+        # use the same AsyncSession under the hood, and concurrent DB use on a
+        # single session can leave transactions in a failed state.
+        @asynccontextmanager
+        async def _optional_savepoint():
+            begin_nested = getattr(getattr(self.repo, "session", None), "begin_nested", None)
+            if callable(begin_nested):
+                async with begin_nested():
+                    yield
+                return
+            yield
+
         async def _fetch_strategy_hints() -> dict[str, Any] | None:
             if not self.strategy_learning:
                 return None
             try:
-                return await self.strategy_learning.get_strategy_hints(
-                    org_id=tool_ctx.org_id,
-                    goal_type=goal_type,
-                    domain=session_domain,
-                )
+                async with _optional_savepoint():
+                    return await self.strategy_learning.get_strategy_hints(
+                        org_id=tool_ctx.org_id,
+                        goal_type=goal_type,
+                        domain=session_domain,
+                    )
             except Exception:
                 return None
 
@@ -171,17 +182,16 @@ class LoopOrchestrator:
             if not self.context_aggregator:
                 return None
             try:
-                return await self.context_aggregator.aggregate(
-                    org_id=tool_ctx.org_id,
-                    goal=goal,
-                ) or None
+                async with _optional_savepoint():
+                    return await self.context_aggregator.aggregate(
+                        org_id=tool_ctx.org_id,
+                        goal=goal,
+                    ) or None
             except Exception:
                 return None
 
-        strategy_hints, cognitive_context = await asyncio.gather(
-            _fetch_strategy_hints(),
-            _fetch_cognitive_context(),
-        )
+        strategy_hints = await _fetch_strategy_hints()
+        cognitive_context = await _fetch_cognitive_context()
 
         final_status = "failed"
 
