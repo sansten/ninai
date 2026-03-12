@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -73,7 +73,7 @@ def _mock_db(runs: list[_FakeRun], add_ok: bool = True):
 
     session.execute = AsyncMock(side_effect=_execute)
     if add_ok:
-        session.add = AsyncMock()
+        session.add = MagicMock()
         session.commit = AsyncMock()
 
     return session

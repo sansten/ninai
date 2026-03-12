@@ -92,7 +92,7 @@ def _mock_db(runs: list[_FakeRun]):
         return _Result([])
 
     session.execute = AsyncMock(side_effect=_execute)
-    session.add = AsyncMock()
+    session.add = MagicMock()
     session.commit = AsyncMock()
     return session
 
@@ -113,7 +113,7 @@ def _mock_db_two_queries(first_runs: list[_FakeRun], second_runs: list[_FakeRun]
         return _Result([])
 
     session.execute = AsyncMock(side_effect=_execute)
-    session.add = AsyncMock()
+    session.add = MagicMock()
     session.commit = AsyncMock()
     return session
 
