@@ -6,6 +6,7 @@ Enables learning from video walkthroughs and auto-generating playbooks.
 """
 
 from datetime import datetime
+import hashlib
 from typing import List, Optional, Dict, Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,6 +14,7 @@ from sqlalchemy import select
 
 from app.models.multimodal_memory import ProceduralMemoryFromVideo
 from app.models.memory_attachment import MemoryAttachment
+from app.models.playbook import Playbook, PlaybookScopeType
 
 
 class ProceduralMemoryFromVideoService:
@@ -162,8 +164,29 @@ class ProceduralMemoryFromVideoService:
         if not procedure:
             raise ValueError(f"Procedure {procedure_id} not found")
 
-        # Generate playbook ID (would be created in Playbook table)
+        # Create a lightweight playbook row for the extracted procedure.
         playbook_id = self._generate_uuid()
+        signature_seed = f"{procedure.organization_id}:{procedure.domain}:{procedure.procedure_title}"
+        playbook = Playbook(
+            id=playbook_id,
+            organization_id=procedure.organization_id,
+            scope_type=PlaybookScopeType.ORGANIZATION,
+            scope_id=None,
+            title=procedure.procedure_title,
+            problem_signature={
+                "domain": procedure.domain,
+                "source": "procedural_video",
+                "procedure_id": procedure.id,
+                **(playbook_data or {}),
+            },
+            signature_hash=hashlib.sha256(signature_seed.encode()).hexdigest(),
+            steps=procedure.extracted_steps or [],
+            constraints={"generated_from_video": True},
+            success_rate=float(procedure.confidence_score or 0.75),
+            evidence={"procedure_id": procedure.id},
+        )
+        self.session.add(playbook)
+        await self.session.flush()
         procedure.generated_playbook_id = playbook_id
 
         await self.session.flush()
