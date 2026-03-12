@@ -7,6 +7,7 @@ Handles embeddings, OCR, object detection, and visual search.
 
 import json
 import re
+import uuid
 from datetime import datetime
 from typing import List, Optional, Dict, Any, Tuple
 
@@ -39,6 +40,13 @@ class VisionMemoryService:
             "input": ["input", "field", "text", "password", "email", "search"],
         }
 
+    def _validate_attachment_id(self, attachment_id: str) -> None:
+        """Raise ValueError for malformed UUID attachment IDs."""
+        try:
+            uuid.UUID(str(attachment_id))
+        except (TypeError, ValueError, AttributeError):
+            raise ValueError(f"Attachment {attachment_id} not found")
+
     async def extract_image_embeddings(
         self,
         attachment_id: str,
@@ -50,6 +58,8 @@ class VisionMemoryService:
         Uses simulated CLIP embeddings and object detection.
         In production, integrate with real vision models (CLIP, YOLOv8, etc).
         """
+        self._validate_attachment_id(attachment_id)
+
         # Fetch attachment
         stmt = select(MemoryAttachment).where(
             MemoryAttachment.id == attachment_id
@@ -107,6 +117,8 @@ class VisionMemoryService:
 
         Identifies elements (buttons, text fields, menus) and their positions.
         """
+        self._validate_attachment_id(attachment_id)
+
         # Fetch attachment
         stmt = select(MemoryAttachment).where(
             MemoryAttachment.id == attachment_id

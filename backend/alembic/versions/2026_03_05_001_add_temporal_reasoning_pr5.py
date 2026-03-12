@@ -13,8 +13,8 @@ from sqlalchemy.dialects import postgresql
 
 
 # revision identifiers, used by Alembic.
-revision = '2026_03_05_001_add_temporal_reasoning_pr5'
-down_revision = '2026_03_04_001_add_tool_capability_pr4'
+revision = '20260305_pr5_temporal'
+down_revision = '20260304_pr4_toolcap'
 branch_labels = None
 depends_on = None
 

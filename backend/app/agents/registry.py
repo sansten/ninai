@@ -52,6 +52,7 @@ from app.agents.memory_sleep_agent import MemorySleepAgent
 from app.agents.compositional_generalization_agent import CompositionalGeneralizationAgent
 from app.agents.emotional_affective_memory_agent import EmotionalAffectiveMemoryAgent
 from app.agents.multimodal_deep_memory_agent import MultimodalDeepMemoryAgent
+from app.agents.federated_memory_agent import FederatedMemoryAgent
 
 
 def get_agent(agent_name: str) -> Optional[BaseAgent]:
@@ -206,5 +207,10 @@ def get_agent(agent_name: str) -> Optional[BaseAgent]:
                 "multimodaldeepmemoryagent", "multimodal_memory",
                 "multimodalmemory"}:
         return MultimodalDeepMemoryAgent()
+
+    if name in {"federated_memory", "federatedmemory",
+                "federatedmemoryagent", "collective_intelligence",
+                "collectiveintelligence"}:
+        return FederatedMemoryAgent()
 
     return None

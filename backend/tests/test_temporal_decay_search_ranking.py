@@ -86,6 +86,8 @@ async def test_temporal_decay_downranks_older_memories(monkeypatch):
 
     session = AsyncMock()
     session.execute = _execute
+    session.add = MagicMock()
+    session.add_all = MagicMock()
 
     svc = MemoryService(session=session, user_id=user_id, org_id=org_id, clearance_level=0)
     svc.permission_checker.check_memory_access = AsyncMock(

@@ -1,7 +1,7 @@
 """Add Federated Memory & Collective Intelligence models (PR-10)
 
 Revision ID: federated_memory_pr10
-Revises: multimodal_memory_pr9
+Revises: 20260202_hierarchy_knn
 Create Date: 2026-02-02 10:00:00.000000+00:00
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision: str = "federated_memory_pr10"
-down_revision: Union[str, None] = "multimodal_memory_pr9"  # Adjust to actual previous revision
+down_revision: Union[str, None] = "20260202_hierarchy_knn"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

@@ -276,7 +276,6 @@ class TestRunHeuristicAsync:
 # MetaCognitivePlanningAgent
 # ---------------------------------------------------------------------------
 
-@pytest.mark.asyncio
 class TestMetaCognitivePlanningAgent:
     def _agent(self) -> MetaCognitivePlanningAgent:
         return MetaCognitivePlanningAgent()

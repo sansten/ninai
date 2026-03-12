@@ -9,8 +9,8 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
-revision = '2026_03_04_001_add_tool_capability_pr4'
-down_revision = '2026_03_03_002_add_autonomous_goals_pr3'
+revision = '20260304_pr4_toolcap'
+down_revision = '20260303_pr3_goals'
 branch_labels = None
 depends_on = None
 
@@ -23,9 +23,8 @@ def upgrade() -> None:
         'DATA_ANALYSIS', 'API_CALL', 'CODE_EXECUTION', 'KNOWLEDGE_RETRIEVAL',
         'TEXT_GENERATION', 'IMAGE_GENERATION', 'WEB_SEARCH', 'MEMORY_QUERY',
         'SYSTEM_COMMAND',
-        name='tooltype'
+        name='tooltype',
     )
-    tool_type.create(op.get_bind(), checkfirst=True)
     
     # Create tool_capabilities table
     op.create_table(

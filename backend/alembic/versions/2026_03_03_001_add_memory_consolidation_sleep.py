@@ -10,11 +10,18 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 
+# revision identifiers, used by Alembic.
+revision = '20260303_pr2_sleep'
+down_revision = '20260302_causal_edges'
+branch_labels = None
+depends_on = None
+
+
 def upgrade():
     op.create_table(
         "consolidation_sessions",
-        sa.Column("id", sa.String(36), nullable=False),
-        sa.Column("organization_id", sa.String(36), nullable=False),
+        sa.Column("id", postgresql.UUID(as_uuid=False), nullable=False),
+        sa.Column("organization_id", postgresql.UUID(as_uuid=False), nullable=False),
         sa.Column("session_type", sa.String(32), nullable=False),
         sa.Column("started_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("completed_at", sa.DateTime(timezone=True), nullable=True),
@@ -35,9 +42,9 @@ def upgrade():
 
     op.create_table(
         "memory_arcs",
-        sa.Column("id", sa.String(36), nullable=False),
-        sa.Column("organization_id", sa.String(36), nullable=False),
-        sa.Column("memory_id", sa.String(36), nullable=False),
+        sa.Column("id", postgresql.UUID(as_uuid=False), nullable=False),
+        sa.Column("organization_id", postgresql.UUID(as_uuid=False), nullable=False),
+        sa.Column("memory_id", postgresql.UUID(as_uuid=False), nullable=False),
         sa.Column("measurements", postgresql.JSONB(astext_type=sa.Text()), nullable=False, server_default=sa.text("'[]'::jsonb")),
         sa.Column("trend", sa.String(32), nullable=False),
         sa.Column("trajectory_type", sa.String(64), nullable=False),

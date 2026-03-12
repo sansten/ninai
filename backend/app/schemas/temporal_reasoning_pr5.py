@@ -6,7 +6,7 @@ Pydantic models for validating temporal reasoning requests and responses.
 
 from datetime import datetime
 from typing import List, Optional, Dict, Any
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 
 # ============================================================================
@@ -129,6 +129,8 @@ class ForecastPoint(BaseModel):
 
 class ForecastResponse(BaseModel):
     """Response from trajectory forecasting."""
+    model_config = ConfigDict(protected_namespaces=())
+
     entity_id: str
     horizon_steps: int
     confidence_level: float
