@@ -96,6 +96,8 @@ async def test_feedback_rerank_downranks_negative_feedback(monkeypatch):
 
     session = AsyncMock()
     session.execute = _execute
+    session.add = MagicMock()
+    session.add_all = MagicMock()
 
     svc = MemoryService(session=session, user_id=user_id, org_id=org_id, clearance_level=0)
     svc.permission_checker.check_memory_access = AsyncMock(
@@ -179,6 +181,8 @@ async def test_feedback_rerank_boosts_positive_feedback(monkeypatch):
 
     session = AsyncMock()
     session.execute = _execute
+    session.add = MagicMock()
+    session.add_all = MagicMock()
 
     svc = MemoryService(session=session, user_id=user_id, org_id=org_id, clearance_level=0)
     svc.permission_checker.check_memory_access = AsyncMock(

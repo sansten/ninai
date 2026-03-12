@@ -21,6 +21,8 @@ class BaseSchema(BaseModel):
     model_config = ConfigDict(
         # Allow ORM mode for SQLAlchemy models
         from_attributes=True,
+        # Allow domain fields prefixed with model_ (e.g. model_snapshot)
+        protected_namespaces=(),
         # Validate default values
         validate_default=True,
         # Use enum values instead of names
