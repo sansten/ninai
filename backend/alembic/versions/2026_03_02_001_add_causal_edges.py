@@ -43,6 +43,13 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 
+# revision identifiers, used by Alembic.
+revision = '20260302_causal_edges'
+down_revision = '20260228_eval_harness'
+branch_labels = None
+depends_on = None
+
+
 def upgrade():
     # Create causal_edges table
     op.create_table(
