@@ -11,7 +11,7 @@ Comprehensive test suite for:
 import pytest
 from datetime import datetime, timedelta
 from uuid import uuid4
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 from app.models import (
     AutonomousGoal,
@@ -298,6 +298,8 @@ class TestIntrinsicMotivationService:
         """Test recording goal outcomes."""
         # Create a mock session
         mock_session = AsyncMock()
+        mock_session.add = MagicMock()
+        mock_session.commit = AsyncMock()
         svc = IntrinsicMotivationService(session=mock_session)
         
         org_id = str(uuid4())

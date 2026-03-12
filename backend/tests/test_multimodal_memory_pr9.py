@@ -689,11 +689,13 @@ async def test_find_similar_images(
     test_org_id: str,
 ):
     """Test finding visually similar images."""
+    attachment_ids = []
     for i in range(3):
+        attach_id = str(uuid.uuid4())
         attach = MemoryAttachment(
-            id=f"attach-sim-{i}",
+            id=attach_id,
             organization_id=test_org_id,
-            memory_id=f"mem-sim-{i}",
+            memory_id=str(uuid.uuid4()),
             file_name=f"similar_{i}.png",
             file_path=f"/uploads/similar_{i}.png",
             content_type="image/png",
@@ -703,15 +705,16 @@ async def test_find_similar_images(
             is_deleted=False,
         )
         db_session.add(attach)
+        attachment_ids.append(attach_id)
 
     await db_session.commit()
 
     vision_svc = VisionMemoryService(db_session)
-    for i in range(3):
-        await vision_svc.extract_image_embeddings(f"attach-sim-{i}", test_org_id)
+    for attach_id in attachment_ids:
+        await vision_svc.extract_image_embeddings(attach_id, test_org_id)
 
     similar = await vision_svc.find_similar_images(
-        "attach-sim-0", test_org_id, limit=2
+        attachment_ids[0], test_org_id, limit=2
     )
 
     assert isinstance(similar, list)
@@ -1003,6 +1006,7 @@ async def test_list_procedures_by_domain(
     test_org_id: str,
 ):
     """Test listing procedures filtered by domain."""
+    attachment_ids = {}
     for domain in ["deployment", "setup"]:
         attach_id = str(uuid.uuid4())
         attachment = MemoryAttachment(
@@ -1018,14 +1022,14 @@ async def test_list_procedures_by_domain(
             is_deleted=False,
         )
         db_session.add(attachment)
+        attachment_ids[domain] = attach_id
 
     await db_session.commit()
 
     proc_svc = ProceduralMemoryFromVideoService(db_session)
     for domain in ["deployment", "setup"]:
-        attach_id = f"{domain}_attach"
         await proc_svc.extract_procedure_from_video(
-            attach_id, test_org_id, domain, 600
+            attachment_ids[domain], test_org_id, domain, 600
         )
 
     deployment_procs = await proc_svc.list_procedures(

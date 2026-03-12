@@ -28,6 +28,8 @@ async def _build_service_with_memories(memories: list[SimpleNamespace]) -> Memor
 
     session = AsyncMock()
     session.execute = _execute
+    session.add = MagicMock()
+    session.add_all = MagicMock()
 
     svc = MemoryService(session=session, user_id="user", org_id="org", clearance_level=0)
     svc.permission_checker.check_memory_access = AsyncMock(

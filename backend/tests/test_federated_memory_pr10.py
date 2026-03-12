@@ -6,6 +6,7 @@ Tests models, services, and API endpoints.
 """
 
 from datetime import datetime, timedelta
+from unittest.mock import patch
 import uuid
 import pytest
 from sqlalchemy import select
@@ -395,25 +396,26 @@ async def test_aggregate_with_privacy():
         "org3": [12, 22, 32],
     }
     
-    # Test private mean
-    private_mean = dp_service.aggregate_with_privacy(
-        org_data_dict=org_data,
-        aggregation_type="mean",
-        epsilon=1.0,
-    )
-    
-    # True mean across all data points is 22.44...
-    assert 15 < private_mean < 30  # Should be reasonably close
-    
-    # Test private sum
-    private_sum = dp_service.aggregate_with_privacy(
-        org_data_dict=org_data,
-        aggregation_type="sum",
-        epsilon=1.0,
-    )
-    
-    true_sum = sum([sum(vals) for vals in org_data.values()])  # 201
-    assert 150 < private_sum < 250  # Should be in ballpark
+    with patch.object(dp_service, "_sample_laplace", return_value=0.0):
+        # Test private mean
+        private_mean = dp_service.aggregate_with_privacy(
+            org_data_dict=org_data,
+            aggregation_type="mean",
+            epsilon=1.0,
+        )
+
+        # True mean across all data points is 22.33...
+        assert private_mean == pytest.approx(22.3333, abs=0.001)
+
+        # Test private sum
+        private_sum = dp_service.aggregate_with_privacy(
+            org_data_dict=org_data,
+            aggregation_type="sum",
+            epsilon=1.0,
+        )
+
+        true_sum = sum(sum(vals) for vals in org_data.values())  # 201
+        assert private_sum == true_sum
 
 
 @pytest.mark.asyncio
