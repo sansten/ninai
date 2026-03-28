@@ -571,38 +571,91 @@ function SecuritySettings() {
   );
 }
 
+const NOTIFICATION_ITEMS = [
+  { id: 'security', label: 'Security Alerts', desc: 'Get notified about security events like failed logins or permission changes' },
+  { id: 'access', label: 'Access Denials', desc: 'Notifications when a memory or resource access is denied for your account' },
+  { id: 'team', label: 'Team Activity', desc: 'Updates about team membership changes, new members, or role reassignments' },
+  { id: 'system', label: 'System Updates', desc: 'Important platform announcements, maintenance windows, and version updates' },
+] as const;
+
+type NotificationKey = typeof NOTIFICATION_ITEMS[number]['id'];
+
 /**
  * Notifications Settings Tab
  */
 function NotificationSettings() {
+  const queryClient = useQueryClient();
+
+  const { data: meData, isLoading } = useQuery({
+    queryKey: ['me'],
+    queryFn: async () => {
+      const res = await apiClient.get<{ preferences?: { notifications?: Record<NotificationKey, boolean> } }>('/auth/me');
+      return res.data;
+    },
+  });
+
+  const savedPrefs = meData?.preferences?.notifications ?? {};
+  const getChecked = (id: NotificationKey) => savedPrefs[id] !== false; // default on
+
+  const saveMutation = useMutation({
+    mutationFn: async (notifications: Record<string, boolean>) => {
+      const res = await apiClient.patch('/auth/me', { preferences: { notifications } });
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['me'] });
+      toast.success('Notification preferences saved');
+    },
+    onError: (error) => {
+      toast.error(getErrorMessage(error));
+    },
+  });
+
+  function handleToggle(id: NotificationKey, checked: boolean) {
+    const current: Record<string, boolean> = {};
+    for (const item of NOTIFICATION_ITEMS) {
+      current[item.id] = getChecked(item.id);
+    }
+    current[id] = checked;
+    saveMutation.mutate(current);
+  }
+
   return (
     <div className="space-y-6">
       <div>
         <h3 className="text-lg font-medium text-gray-900">Notification Preferences</h3>
         <p className="text-sm text-gray-500 mt-1">
-          Choose how you want to be notified about activity.
+          Choose how you want to be notified about activity. Changes are saved immediately.
         </p>
       </div>
 
-      <div className="space-y-4">
-        {[
-          { id: 'security', label: 'Security Alerts', desc: 'Get notified about security events' },
-          { id: 'access', label: 'Access Denials', desc: 'Notifications when access is denied' },
-          { id: 'team', label: 'Team Activity', desc: 'Updates about team changes' },
-          { id: 'system', label: 'System Updates', desc: 'Important system announcements' },
-        ].map((item) => (
-          <div key={item.id} className="flex items-center justify-between card">
-            <div>
-              <p className="font-medium text-gray-900">{item.label}</p>
-              <p className="text-sm text-gray-500">{item.desc}</p>
+      {isLoading ? (
+        <div className="flex items-center gap-2 text-sm text-gray-400">
+          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary-600" />
+          Loading preferences…
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {NOTIFICATION_ITEMS.map((item) => (
+            <div key={item.id} className="flex items-center justify-between card">
+              <div>
+                <p className="font-medium text-gray-900">{item.label}</p>
+                <p className="text-sm text-gray-500">{item.desc}</p>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="sr-only peer"
+                  checked={getChecked(item.id)}
+                  disabled={saveMutation.isPending}
+                  onChange={(e) => handleToggle(item.id, e.target.checked)}
+                />
+                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600 disabled:opacity-50"></div>
+              </label>
             </div>
-            <label className="relative inline-flex items-center cursor-pointer">
-              <input type="checkbox" className="sr-only peer" defaultChecked />
-              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
-            </label>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
