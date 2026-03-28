@@ -5,14 +5,17 @@ Exposes runtime-editable configuration (DB-backed) to system administrators.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.core.database import get_db
+from app.core.database import get_db, set_tenant_context
 from app.middleware.tenant_context import TenantContext, require_org_admin
+from app.models.org_feedback_learning_config import OrgFeedbackLearningConfig
 from app.schemas.admin_settings import (
     AuthConfig,
     AuthConfigResponse,
@@ -21,6 +24,15 @@ from app.schemas.admin_settings import (
     EnvSettingsResponse,
 )
 from app.services.app_settings_service import get_effective_auth_config, update_auth_config_overrides
+
+
+class FeedbackLearningResponse(BaseModel):
+    updated_thresholds: dict
+    stopwords: list
+    heuristic_weights: dict
+    calibration_delta: dict
+    last_agent_version: Optional[str] = None
+    updated_at: Optional[str] = None
 
 
 router = APIRouter()
@@ -107,3 +119,43 @@ async def get_env_settings(
         )
 
     return EnvSettingsResponse(items=items)
+
+
+@router.get("/feedback-learning", response_model=FeedbackLearningResponse)
+async def get_feedback_learning_config(
+    tenant: TenantContext = Depends(require_org_admin()),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return the current feedback learning calibration for this organisation."""
+    await set_tenant_context(db, tenant.user_id, tenant.org_id, tenant.roles_string, tenant.clearance_level)
+    result = await db.execute(
+        select(OrgFeedbackLearningConfig).where(
+            OrgFeedbackLearningConfig.organization_id == tenant.org_id
+        )
+    )
+    row = result.scalar_one_or_none()
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No calibration data found for this organisation")
+    return FeedbackLearningResponse(
+        updated_thresholds=row.updated_thresholds or {},
+        stopwords=row.stopwords or [],
+        heuristic_weights=row.heuristic_weights or {},
+        calibration_delta=row.calibration_delta or {},
+        last_agent_version=row.last_agent_version,
+        updated_at=row.updated_at.isoformat() if row.updated_at else None,
+    )
+
+
+@router.delete("/feedback-learning", status_code=status.HTTP_204_NO_CONTENT)
+async def reset_feedback_learning_config(
+    tenant: TenantContext = Depends(require_org_admin()),
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete the feedback learning calibration row for this organisation, forcing a fresh start."""
+    await set_tenant_context(db, tenant.user_id, tenant.org_id, tenant.roles_string, tenant.clearance_level)
+    await db.execute(
+        delete(OrgFeedbackLearningConfig).where(
+            OrgFeedbackLearningConfig.organization_id == tenant.org_id
+        )
+    )
+    await db.commit()
