@@ -20,6 +20,7 @@ const UsersPage = lazy(() => import('@/pages/users/UsersPage').then(m => ({ defa
 const AuditPage = lazy(() => import('@/pages/audit/AuditPage').then(m => ({ default: m.AuditPage })));
 const SettingsPage = lazy(() => import('@/pages/settings/SettingsPage').then(m => ({ default: m.SettingsPage })));
 const KnowledgeReviewPage = lazy(() => import('@/pages/review/KnowledgeReviewPage').then(m => ({ default: m.KnowledgeReviewPage })));
+const MemoryInsightsPage = lazy(() => import('@/pages/insights/MemoryInsightsPage').then(m => ({ default: m.MemoryInsightsPage })));
 
 // Admin pages (lazy loaded)
 const AdminDashboard = lazy(() => import('@/pages/admin/Dashboard'));
@@ -121,6 +122,7 @@ export default function App() {
         <Route path="/users" element={<Suspense fallback={<LoadingFallback />}><UsersPage /></Suspense>} />
         <Route path="/audit" element={<Suspense fallback={<LoadingFallback />}><AuditPage /></Suspense>} />
         <Route path="/review" element={<Suspense fallback={<LoadingFallback />}><KnowledgeReviewPage /></Suspense>} />
+        <Route path="/insights" element={<Suspense fallback={<LoadingFallback />}><MemoryInsightsPage /></Suspense>} />
         <Route path="/settings" element={<Suspense fallback={<LoadingFallback />}><SettingsPage /></Suspense>} />
         
         {/* Admin routes - lazy loaded */}

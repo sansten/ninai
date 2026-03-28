@@ -130,8 +130,22 @@ function buildFrontendEnvSnippet(cfg: {
   ].join('\n');
 }
 
+type LogseqConfig = {
+  effective: { export_base_dir: string; org_export_dir: string; last_nightly_export_at: string | null };
+  overrides: Record<string, string>;
+};
+
+type FeedbackConfig = {
+  updated_thresholds: Record<string, unknown>;
+  stopwords: string[];
+  heuristic_weights: Record<string, unknown>;
+  calibration_delta: Record<string, unknown>;
+  last_agent_version: string | null;
+  updated_at: string | null;
+};
+
 export function AdminSettingsTab() {
-  const [subtab, setSubtab] = useState<'auth' | 'env' | 'knowledge' | 'operations' | 'backups' | 'license'>('auth');
+  const [subtab, setSubtab] = useState<'auth' | 'env' | 'knowledge' | 'operations' | 'backups' | 'license' | 'logseq' | 'feedback'>('auth');
   const { hasAdminOperations } = useEnterpriseFeatures();
 
   const authQuery = useQuery<AuthConfigResponse>({
@@ -150,6 +164,54 @@ export function AdminSettingsTab() {
       const res = await apiClient.get('/admin/settings/env');
       return res.data;
     },
+  });
+
+  const logseqQuery = useQuery<LogseqConfig>({
+    queryKey: ['admin', 'logseq', 'config'],
+    enabled: subtab === 'logseq',
+    queryFn: async () => {
+      const res = await apiClient.get('/logseq/export/config');
+      return res.data;
+    },
+  });
+
+  const [logseqDir, setLogseqDir] = useState('');
+  useEffect(() => {
+    const override = logseqQuery.data?.overrides?.export_base_dir ?? '';
+    setLogseqDir(override);
+  }, [logseqQuery.data]);
+
+  const logseqSaveMutation = useMutation({
+    mutationFn: async (dir: string | null) => {
+      const res = await apiClient.put('/logseq/export/config', { export_base_dir: dir || null });
+      return res.data as LogseqConfig;
+    },
+    onSuccess: (data) => {
+      setLogseqDir(data.overrides?.export_base_dir ?? '');
+      toast.success('Logseq export path updated');
+    },
+    onError: (error) => toast.error(getErrorMessage(error)),
+  });
+
+  const feedbackQuery = useQuery<FeedbackConfig>({
+    queryKey: ['admin', 'feedback-learning'],
+    enabled: subtab === 'feedback',
+    queryFn: async () => {
+      const res = await apiClient.get('/admin/feedback-learning');
+      return res.data;
+    },
+  });
+
+  const feedbackResetMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiClient.delete('/admin/feedback-learning');
+      return res.data;
+    },
+    onSuccess: () => {
+      toast.success('Feedback learning calibration reset to defaults');
+      feedbackQuery.refetch();
+    },
+    onError: (error) => toast.error(getErrorMessage(error)),
   });
 
   const effective = authQuery.data?.effective;
@@ -288,6 +350,20 @@ export function AdminSettingsTab() {
           onClick={() => setSubtab('license')}
         >
           License
+        </button>
+        <button
+          type="button"
+          className={subtab === 'logseq' ? 'btn-primary' : 'btn-secondary'}
+          onClick={() => setSubtab('logseq')}
+        >
+          Logseq Export
+        </button>
+        <button
+          type="button"
+          className={subtab === 'feedback' ? 'btn-primary' : 'btn-secondary'}
+          onClick={() => setSubtab('feedback')}
+        >
+          Feedback Learning
         </button>
       </div>
 
@@ -439,6 +515,159 @@ export function AdminSettingsTab() {
       {subtab === 'backups' && <BackupTab />}
 
       {subtab === 'license' && <LicenseTab />}
+
+      {subtab === 'logseq' && (
+        <div className="space-y-6">
+          <div>
+            <h3 className="text-base font-semibold text-gray-900">Logseq Export Configuration</h3>
+            <p className="mt-1 text-sm text-gray-500">
+              Controls where write-to-disk exports are stored on the server. Leave blank to use the default path from the environment (<code className="text-xs bg-gray-100 px-1 rounded">LOGSEQ_EXPORT_DIR</code>).
+            </p>
+          </div>
+
+          {logseqQuery.isLoading && <div className="text-sm text-gray-500">Loading…</div>}
+          {logseqQuery.isError && <div className="text-sm text-red-600">Failed to load Logseq config.</div>}
+
+          {logseqQuery.data && (
+            <div className="space-y-5">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm">
+                <div>
+                  <p className="text-xs text-gray-500 mb-0.5">Effective base directory</p>
+                  <p className="font-mono text-gray-800 break-all">{logseqQuery.data.effective.export_base_dir}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500 mb-0.5">Org export directory</p>
+                  <p className="font-mono text-gray-800 break-all">{logseqQuery.data.effective.org_export_dir}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500 mb-0.5">Last nightly export</p>
+                  <p className="text-gray-700">
+                    {logseqQuery.data.effective.last_nightly_export_at
+                      ? new Date(logseqQuery.data.effective.last_nightly_export_at).toLocaleString()
+                      : 'Never'}
+                  </p>
+                </div>
+              </div>
+
+              <div>
+                <label className="label">Export Base Directory Override</label>
+                <input
+                  type="text"
+                  className="input w-full max-w-xl"
+                  placeholder="e.g. /data/logseq-exports  (blank = use env default)"
+                  value={logseqDir}
+                  onChange={(e) => setLogseqDir(e.target.value)}
+                />
+                <p className="mt-1 text-xs text-gray-500">
+                  Org exports will land in <code className="bg-gray-100 px-1 rounded">&lt;base_dir&gt;/&lt;org_id&gt;/</code>.
+                  Send blank to revert to the environment default.
+                </p>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  className="btn-primary"
+                  disabled={logseqSaveMutation.isPending}
+                  onClick={() => logseqSaveMutation.mutate(logseqDir || null)}
+                >
+                  {logseqSaveMutation.isPending ? 'Saving…' : 'Save'}
+                </button>
+                {logseqQuery.data.overrides?.export_base_dir && (
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    disabled={logseqSaveMutation.isPending}
+                    onClick={() => { setLogseqDir(''); logseqSaveMutation.mutate(null); }}
+                  >
+                    Reset to default
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {subtab === 'feedback' && (
+        <div className="space-y-6">
+          <div>
+            <h3 className="text-base font-semibold text-gray-900">Feedback Learning Calibration</h3>
+            <p className="mt-1 text-sm text-gray-500">
+              Read-only view of the thresholds and weights the <span className="font-medium">FeedbackIntegrationAgent</span> has
+              automatically calibrated from human review decisions. Resetting clears all learned values and lets the agent start fresh.
+            </p>
+          </div>
+
+          {feedbackQuery.isLoading && <div className="text-sm text-gray-500">Loading…</div>}
+          {feedbackQuery.isError && (
+            <div className="text-sm text-gray-500 italic">
+              No calibration data found for this organisation yet. The FeedbackIntegrationAgent writes here after its first successful run.
+            </div>
+          )}
+
+          {feedbackQuery.data && (
+            <div className="space-y-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+                <div>
+                  <p className="text-xs font-medium text-gray-500 mb-1">Agent version</p>
+                  <p className="text-gray-700">{feedbackQuery.data.last_agent_version ?? '—'}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-gray-500 mb-1">Last calibrated</p>
+                  <p className="text-gray-700">
+                    {feedbackQuery.data.updated_at
+                      ? new Date(feedbackQuery.data.updated_at).toLocaleString()
+                      : '—'}
+                  </p>
+                </div>
+              </div>
+
+              {([
+                { key: 'updated_thresholds', label: 'Updated Thresholds', desc: 'Calibrated decision thresholds (e.g. minimum confidence score to auto-approve)' },
+                { key: 'heuristic_weights', label: 'Heuristic Weights', desc: 'Feature importance weights derived from accepted/rejected review outcomes' },
+                { key: 'calibration_delta', label: 'Last Calibration Delta', desc: 'The change applied during the most recent calibration run' },
+              ] as const).map(({ key, label, desc }) => (
+                <div key={key}>
+                  <p className="text-xs font-medium text-gray-700 mb-0.5">{label}</p>
+                  <p className="text-xs text-gray-400 mb-1">{desc}</p>
+                  <pre className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-xs font-mono overflow-x-auto">
+                    {JSON.stringify(feedbackQuery.data[key], null, 2) || '{}'}
+                  </pre>
+                </div>
+              ))}
+
+              {feedbackQuery.data.stopwords.length > 0 && (
+                <div>
+                  <p className="text-xs font-medium text-gray-700 mb-0.5">Learned Stopwords</p>
+                  <p className="text-xs text-gray-400 mb-1">Terms the agent has learned to ignore when comparing memory content</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {feedbackQuery.data.stopwords.map((w) => (
+                      <span key={w} className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600">{w}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="pt-2 border-t border-gray-100">
+                <button
+                  type="button"
+                  className="btn-secondary text-red-600 border-red-200 hover:bg-red-50"
+                  disabled={feedbackResetMutation.isPending}
+                  onClick={() => {
+                    if (window.confirm('Reset all feedback learning calibration for this organisation? The agent will start fresh on its next run.')) {
+                      feedbackResetMutation.mutate();
+                    }
+                  }}
+                >
+                  {feedbackResetMutation.isPending ? 'Resetting…' : 'Reset calibration'}
+                </button>
+                <p className="mt-1.5 text-xs text-gray-400">This cannot be undone. The agent will re-learn from future review decisions.</p>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
