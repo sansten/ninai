@@ -67,6 +67,10 @@ from app.api.v1.endpoints import (
     knowledge_graph,
     review_queue,
     causal,
+    memory_insights,
+    compliance,
+    digests,
+    ws_stream as ws_stream_endpoint,
 )
 from app.api.v1.admin import routes as admin_routes
 from app.api.v1.endpoints import event_publishing_batch
@@ -438,4 +442,26 @@ api_router.include_router(
 api_router.include_router(
     causal.router,
     tags=["Causal Reasoning"],
+)
+
+api_router.include_router(
+    memory_insights.router,
+    prefix="/memories",
+    tags=["Memory Insights"],
+)
+
+api_router.include_router(
+    compliance.router,
+    tags=["Compliance (GDPR)"],
+)
+
+api_router.include_router(
+    digests.router,
+    prefix="/digests",
+    tags=["Intelligence Digest"],
+)
+
+api_router.include_router(
+    ws_stream_endpoint.router,
+    tags=["Real-Time Event Stream"],
 )

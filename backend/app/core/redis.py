@@ -166,15 +166,58 @@ class RedisClient:
     async def exists(cls, key: str) -> bool:
         """
         Check if a key exists in Redis.
-        
+
         Args:
             key: Cache key
-        
+
         Returns:
             bool: True if key exists
         """
         client = await cls.get_client()
         return await client.exists(key) > 0
+
+    # ------------------------------------------------------------------
+    # Redis Streams (P45 — Real-Time Event Bus)
+    # ------------------------------------------------------------------
+
+    @classmethod
+    async def xadd(cls, stream: str, fields: dict, maxlen: int = 1000) -> str:
+        """Append an entry to a Redis Stream.
+
+        Args:
+            stream:  Stream key (e.g. ``events:{org_id}``).
+            fields:  Mapping of field names → string values to store.
+            maxlen:  Approximate max length cap (MAXLEN ~N). Prevents unbounded growth.
+
+        Returns:
+            The auto-generated entry ID assigned by Redis (e.g. ``1718000000000-0``).
+        """
+        client = await cls.get_client()
+        entry_id = await client.xadd(stream, fields, maxlen=maxlen, approximate=True)
+        return entry_id
+
+    @classmethod
+    async def xread(
+        cls,
+        streams: dict[str, str],
+        count: int = 100,
+        block_ms: int = 0,
+    ) -> list:
+        """Read new entries from one or more Redis Streams.
+
+        Args:
+            streams:  Mapping of ``{stream_key: last_id}``.  Use ``"0"`` to read
+                      from the beginning, ``"$"`` to read only new entries.
+            count:    Maximum number of entries to return per stream.
+            block_ms: Milliseconds to block waiting for new entries (0 = no block).
+
+        Returns:
+            List of ``[stream_key, [(entry_id, fields_dict), ...]]`` tuples,
+            or an empty list when no new entries exist within the block window.
+        """
+        client = await cls.get_client()
+        result = await client.xread(streams, count=count, block=block_ms or None)
+        return result or []
 
 
 # Convenience function for dependency injection
