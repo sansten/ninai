@@ -765,15 +765,13 @@ async def search_memories(
             request_id=request_id,
         )
 
-        # Persist audit logs + retrieval explanations (both use flush-only writes).
-        await db.commit()
-        
         elapsed_ms = (time.perf_counter() - start_time) * 1000
 
         enrichment = {"facts_used": None, "disputed_facts": None}
         if include_enrichment:
             fact_service = FactService(db, tenant.org_id)
-            enrichment_data = await fact_service.get_enrichment_for_memories([memory.id for memory in results])
+            result_ids = [m.id for m in results]
+            enrichment_data = await fact_service.get_enrichment_for_memories(result_ids)
             enrichment["facts_used"] = enrichment_data.get("facts_used", [])
             enrichment["disputed_facts"] = enrichment_data.get("disputed_facts", [])
 
@@ -793,7 +791,7 @@ async def search_memories(
             disputed_facts=enrichment["disputed_facts"],
             playbooks=playbooks,
         )
-    
+
     except PermissionError as e:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

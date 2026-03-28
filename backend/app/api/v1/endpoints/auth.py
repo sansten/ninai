@@ -37,6 +37,7 @@ from app.models.user import User, UserRole, Role
 from app.schemas.auth import (
     LoginRequest,
     LoginResponse,
+    UserUpdate,
     AuthMethodsResponse,
     OidcExchangeRequest,
     RefreshTokenRequest,
@@ -507,6 +508,45 @@ async def get_current_user(
         clearance_level=user.clearance_level,
         created_at=user.created_at,
         last_login_at=user.last_login_at,
+        preferences=user.preferences or {},
+        organization_id=tenant.org_id if tenant.org_id else None,
+        roles=tenant.roles,
+    )
+
+
+@router.patch("/me", response_model=UserResponse)
+async def patch_current_user(
+    body: UserUpdate,
+    tenant: TenantContext = Depends(get_tenant_context),
+    db: AsyncSession = Depends(get_db),
+):
+    """Update current user's profile and/or preferences."""
+    result = await db.execute(select(User).where(User.id == tenant.user_id))
+    user = result.scalar_one_or_none()
+
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    if body.full_name is not None:
+        user.full_name = body.full_name
+    if body.avatar_url is not None:
+        user.avatar_url = body.avatar_url
+    if body.preferences is not None:
+        user.preferences = {**(user.preferences or {}), **body.preferences}
+
+    await db.commit()
+    await db.refresh(user)
+
+    return UserResponse(
+        id=user.id,
+        email=user.email,
+        full_name=user.full_name,
+        avatar_url=user.avatar_url,
+        is_active=user.is_active,
+        clearance_level=user.clearance_level,
+        created_at=user.created_at,
+        last_login_at=user.last_login_at,
+        preferences=user.preferences or {},
         organization_id=tenant.org_id if tenant.org_id else None,
         roles=tenant.roles,
     )

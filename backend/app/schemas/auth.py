@@ -48,7 +48,7 @@ class TokenResponse(BaseSchema):
 
 class UserResponse(BaseSchema):
     """User information response."""
-    
+
     id: str
     email: str
     full_name: str
@@ -57,7 +57,8 @@ class UserResponse(BaseSchema):
     clearance_level: int
     created_at: datetime
     last_login_at: Optional[datetime] = None
-    
+    preferences: dict = {}
+
     # Current org context
     organization_id: Optional[str] = None
     organization_name: Optional[str] = None

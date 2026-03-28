@@ -64,10 +64,11 @@ async def complete_json(
     else:
         client = create_ollama_client(
             base_url=str(getattr(settings, "OLLAMA_BASE_URL", "http://localhost:11434")),
-            model=str(getattr(settings, "OLLAMA_MODEL", "qwen2.5:7b")),
+            model=str(settings.get_ollama_model("planning")),
             timeout_seconds=float(getattr(settings, "OLLAMA_TIMEOUT_SECONDS", 10.0)),
             max_concurrency=int(getattr(settings, "OLLAMA_MAX_CONCURRENCY", 2)),
             use_circuit_breaker=True,
+            purpose="planning",
         )
 
         data = await client.complete_json(prompt=body.prompt, schema_hint=body.schema_hint or {})
