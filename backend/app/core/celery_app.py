@@ -73,6 +73,8 @@ celery_app = Celery(
         "app.tasks.agent_processes",
         "app.tasks.feature_readiness_task",
         "app.tasks.memory_sleep_pipeline",
+        "app.tasks.digest_pipeline",
+        "app.tasks.gdpr_pipeline",
         *_enterprise_includes,
     ],
 )
@@ -144,6 +146,12 @@ celery_app.conf.update(
         # Memory sleep pipeline (Phase 40)
         "app.tasks.memory_sleep_pipeline.memory_sleep_task": {"queue": "q.maintenance"},
 
+        # Intelligence digest pipeline (P46)
+        "app.tasks.digest_pipeline.digest_task": {"queue": "q.maintenance"},
+
+        # GDPR deletion pipeline (P47)
+        "app.tasks.gdpr_pipeline.process_deletion_task": {"queue": "q.maintenance"},
+
         # Memory activation scoring (lightweight async updates)
         "app.services.memory_activation.tasks.memory_access_update_task": {"queue": "q.agent_enrich"},
         "app.services.memory_activation.tasks.coactivation_update_task": {"queue": "q.agent_graph"},
@@ -181,6 +189,11 @@ celery_app.conf.update(
         "nightly-memory-sleep-cycle": {
             "task": "app.tasks.memory_sleep_pipeline.memory_sleep_task",
             "schedule": crontab(minute=0, hour=2),
+            "args": (),
+        },
+        "daily-intelligence-digest": {
+            "task": "app.tasks.digest_pipeline.digest_task",
+            "schedule": crontab(minute=0, hour=6),
             "args": (),
         },
         **_enterprise_beat,
