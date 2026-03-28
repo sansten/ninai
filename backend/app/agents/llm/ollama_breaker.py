@@ -12,6 +12,7 @@ from app.agents.llm.ollama import OllamaClient as BaseOllamaClient
 from app.agents.llm.tool_events import ToolEventSink
 from app.core.llm_integration import call_llm_with_breaker
 from app.core.circuit_breaker import CircuitBreakerOpen
+from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -72,6 +73,7 @@ def create_ollama_client(
     timeout_seconds: float = 30.0,
     max_concurrency: int | None = None,
     use_circuit_breaker: bool = True,
+    purpose: str | None = None,
 ) -> BaseOllamaClient:
     """
     Create an Ollama client with optional circuit breaker.
@@ -82,10 +84,35 @@ def create_ollama_client(
         timeout_seconds: Request timeout
         max_concurrency: Max concurrent requests
         use_circuit_breaker: Whether to wrap with circuit breaker
+        purpose: Optional logical purpose label (planning, reasoning, etc.)
 
     Returns:
         OllamaClient (with or without circuit breaker)
     """
+    inferred_purpose = purpose
+    if not inferred_purpose:
+        purpose_candidates = {
+            "planning": settings.get_ollama_model("planning"),
+            "reasoning": settings.get_ollama_model("reasoning"),
+            "distillation": settings.get_ollama_model("distillation"),
+            "boundary": settings.get_ollama_model("boundary"),
+            "uncertainty": settings.get_ollama_model("uncertainty"),
+            "agents": settings.get_ollama_model("agents"),
+            "default": settings.get_ollama_model(),
+        }
+        for candidate_purpose, candidate_model in purpose_candidates.items():
+            if str(candidate_model).strip() == str(model).strip():
+                inferred_purpose = candidate_purpose
+                break
+
+    logger.info(
+        "llm.model_route provider=ollama purpose=%s model=%s base_url=%s circuit_breaker=%s",
+        inferred_purpose or "default",
+        model,
+        base_url,
+        use_circuit_breaker,
+    )
+
     client = BaseOllamaClient(
         base_url=base_url,
         model=model,

@@ -323,7 +323,7 @@ class QueryIntelligenceAgent(BaseAgent):
             )
             client = create_ollama_client(
                 base_url=str(getattr(settings, "OLLAMA_BASE_URL", "http://localhost:11434")),
-                model=str(getattr(settings, "OLLAMA_MODEL", "llama3.1:8b")),
+                model=str(settings.get_ollama_model("agents")),
                 timeout_seconds=float(getattr(settings, "OLLAMA_TIMEOUT_SECONDS", 5.0)),
                 max_concurrency=int(getattr(settings, "OLLAMA_MAX_CONCURRENCY", 2)),
             )

@@ -43,7 +43,6 @@ logger = logging.getLogger(__name__)
 THETA_TOPIC: float = 0.45          # cosine *distance* threshold for topic shift
 THETA_TIME: timedelta = timedelta(minutes=30)
 FANO_NK: int = 12                  # max messages per episode before sub-split
-OLLAMA_URL: str = getattr(settings, "OLLAMA_URL", None) or "http://ollama:11434"
 
 
 def _cosine_distance(a: List[float], b: List[float]) -> float:
@@ -72,10 +71,20 @@ async def _llm_intent_boundary(prev_text: str, curr_text: str) -> tuple[bool, fl
         "No other text."
     )
     try:
+        model_name = settings.get_ollama_model("boundary")
+        logger.info(
+            "llm.model_route provider=ollama purpose=boundary model=%s base_url=%s",
+            model_name,
+            settings.OLLAMA_BASE_URL,
+        )
         async with httpx.AsyncClient(timeout=15) as client:
             resp = await client.post(
-                f"{OLLAMA_URL}/api/generate",
-                json={"model": "llama3", "prompt": prompt, "stream": False},
+                f"{settings.OLLAMA_BASE_URL}/api/generate",
+                json={
+                    "model": model_name,
+                    "prompt": prompt,
+                    "stream": False,
+                },
             )
             resp.raise_for_status()
             data = resp.json()

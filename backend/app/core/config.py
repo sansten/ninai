@@ -228,6 +228,14 @@ class Settings(BaseSettings):
     )
     # Default local model (override via env OLLAMA_MODEL)
     OLLAMA_MODEL: str = "qwen2.5:7b"
+    # Optional per-purpose model overrides (fall back to OLLAMA_MODEL when unset).
+    OLLAMA_MODEL_FAST: str | None = None
+    OLLAMA_MODEL_REASONING: str | None = None
+    OLLAMA_MODEL_PLANNING: str | None = None
+    OLLAMA_MODEL_DISTILLATION: str | None = None
+    OLLAMA_MODEL_BOUNDARY: str | None = None
+    OLLAMA_MODEL_UNCERTAINTY: str | None = None
+    OLLAMA_MODEL_AGENTS: str | None = None
     # Keep this low so missing Ollama doesn't stall the pipeline; agents will
     # fall back to heuristics automatically.
     OLLAMA_TIMEOUT_SECONDS: float = 5.0
@@ -341,6 +349,31 @@ class Settings(BaseSettings):
     def is_production(self) -> bool:
         """Check if running in production mode."""
         return self.APP_ENV == "production"
+
+    def get_ollama_model(self, purpose: str | None = None) -> str:
+        """Resolve the Ollama model for a specific purpose.
+
+        If no purpose-specific override is configured, this returns OLLAMA_MODEL.
+        """
+        default_model = str(self.OLLAMA_MODEL or "").strip() or "qwen2.5:7b"
+        if not purpose:
+            return default_model
+
+        purpose_key = str(purpose).strip().lower()
+        overrides = {
+            "fast": self.OLLAMA_MODEL_FAST,
+            "reasoning": self.OLLAMA_MODEL_REASONING,
+            "planning": self.OLLAMA_MODEL_PLANNING,
+            "distillation": self.OLLAMA_MODEL_DISTILLATION,
+            "boundary": self.OLLAMA_MODEL_BOUNDARY,
+            "uncertainty": self.OLLAMA_MODEL_UNCERTAINTY,
+            "agents": self.OLLAMA_MODEL_AGENTS,
+            "enrichment": self.OLLAMA_MODEL_AGENTS,
+        }
+        selected = overrides.get(purpose_key)
+        if selected and str(selected).strip():
+            return str(selected).strip()
+        return default_model
 
 
 @lru_cache
