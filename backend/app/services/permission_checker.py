@@ -262,7 +262,7 @@ class PermissionChecker:
                     )
         
         # Check for super admin
-        if "*:*" in permissions or "admin:*" in permissions:
+        if "*" in permissions or "*:*" in permissions or "admin:*" in permissions:
             return AccessDecision(
                 allowed=True,
                 reason="User has admin privileges",

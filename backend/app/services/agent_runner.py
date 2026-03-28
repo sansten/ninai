@@ -94,7 +94,7 @@ class AgentRunner:
         return v if v in {"llm", "heuristic"} else "llm"
 
     def _cache_model(self) -> str:
-        m = str(getattr(settings, "OLLAMA_MODEL", "") or "").strip()
+        m = str(settings.get_ollama_model("agents") or "").strip()
         return m or "default"
 
     def _should_cache_agent(self, agent_name: str) -> bool:

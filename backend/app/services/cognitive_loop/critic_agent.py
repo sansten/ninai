@@ -33,7 +33,7 @@ class CriticAgent:
     def _default_llm(self) -> LLMClient:
         return OllamaClient(
             base_url=str(getattr(settings, "OLLAMA_BASE_URL", "http://localhost:11434")),
-            model=str(getattr(settings, "OLLAMA_MODEL", "qwen2.5:7b")),
+            model=str(settings.get_ollama_model("reasoning")),
             timeout_seconds=float(getattr(settings, "OLLAMA_TIMEOUT_SECONDS", 5.0)),
             max_concurrency=int(getattr(settings, "OLLAMA_MAX_CONCURRENCY", 2)),
         )
