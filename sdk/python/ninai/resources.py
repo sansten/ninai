@@ -99,8 +99,12 @@ class MemoriesResource:
         
         if title:
             payload["title"] = title
-        if scope_id:
-            payload["scope_id"] = scope_id
+        # Auto-resolve scope_id from the client's organization when not provided
+        resolved_scope_id = scope_id or (
+            self._client.organization_id if scope != "personal" else None
+        )
+        if resolved_scope_id:
+            payload["scope_id"] = resolved_scope_id
         if source_type:
             payload["source_type"] = source_type
         if source_id:
@@ -162,6 +166,7 @@ class MemoriesResource:
         tags: Optional[List[str]] = None,
         limit: int = 10,
         threshold: float = 0.7,
+        hybrid: bool = False,
     ) -> SearchResult:
         """
         Search memories using semantic similarity.
@@ -172,6 +177,7 @@ class MemoriesResource:
             tags: Filter by tags
             limit: Maximum number of results
             threshold: Minimum similarity score (0-1)
+            hybrid: Enable hybrid lexical+vector ranking
             
         Returns:
             SearchResult: Search results with matching memories
@@ -185,6 +191,10 @@ class MemoriesResource:
             params["scope"] = scope
         if tags:
             params["tags"] = ",".join(tags)
+        if threshold is not None:
+            params["score_threshold"] = threshold
+        if hybrid:
+            params["hybrid"] = True
         
         response = self._client._get("/memories/search", params=params)
 

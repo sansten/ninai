@@ -128,7 +128,7 @@ Cognitive Layer
     └── OrchestrationBusAgent
 
 LLM Backend
-    └── Ollama (local, default: qwen2.5:7b)
+    └── Ollama (local, default: qwen2.5:0.5b)
         └── heuristic fallback on every agent (AGENT_STRATEGY=heuristic|llm)
 ```
 
@@ -150,7 +150,7 @@ LLM Backend
 | Vector store | Qdrant |
 | Cache / broker | Redis |
 | Task queue | Celery |
-| Local LLM | Ollama (qwen2.5:7b default) |
+| Local LLM | Ollama (qwen2.5:0.5b default) |
 | Runtime | Python 3.12+ |
 
 ---
@@ -310,7 +310,7 @@ QDRANT_URL=http://localhost:6333
 REDIS_URL=redis://localhost:6379
 
 OLLAMA_BASE_URL=http://localhost:11434
-OLLAMA_MODEL=qwen2.5:7b
+OLLAMA_MODEL=qwen2.5:0.5b
 OLLAMA_TIMEOUT_SECONDS=5.0
 
 AGENT_STRATEGY=llm      # or: heuristic (no LLM, faster, fully deterministic)

@@ -56,6 +56,12 @@ services:
       # Local-first LLM (Ollama)
       - OLLAMA_BASE_URL=http://ollama:11434
       - OLLAMA_MODEL=qwen2.5:7b
+      - OLLAMA_MODEL_FAST=qwen2.5:0.5b
+      - OLLAMA_MODEL_PLANNING=qwen2.5:7b
+      - OLLAMA_MODEL_DISTILLATION=qwen2.5:7b
+      - OLLAMA_MODEL_BOUNDARY=qwen2.5:0.5b
+      - OLLAMA_MODEL_UNCERTAINTY=qwen2.5:0.5b
+      - OLLAMA_MODEL_AGENTS=qwen2.5:7b
     depends_on:
       postgres:
         condition: service_healthy
@@ -219,6 +225,12 @@ services:
       # Local-first LLM (Ollama)
       - OLLAMA_BASE_URL=http://ollama:11434
       - OLLAMA_MODEL=qwen2.5:7b
+      - OLLAMA_MODEL_FAST=qwen2.5:0.5b
+      - OLLAMA_MODEL_PLANNING=qwen2.5:7b
+      - OLLAMA_MODEL_DISTILLATION=qwen2.5:7b
+      - OLLAMA_MODEL_BOUNDARY=qwen2.5:0.5b
+      - OLLAMA_MODEL_UNCERTAINTY=qwen2.5:0.5b
+      - OLLAMA_MODEL_AGENTS=qwen2.5:7b
     depends_on:
       - redis
       - postgres
@@ -242,6 +254,12 @@ services:
       # Local-first LLM (Ollama)
       - OLLAMA_BASE_URL=http://ollama:11434
       - OLLAMA_MODEL=qwen2.5:7b
+      - OLLAMA_MODEL_FAST=qwen2.5:0.5b
+      - OLLAMA_MODEL_PLANNING=qwen2.5:7b
+      - OLLAMA_MODEL_DISTILLATION=qwen2.5:7b
+      - OLLAMA_MODEL_BOUNDARY=qwen2.5:0.5b
+      - OLLAMA_MODEL_UNCERTAINTY=qwen2.5:0.5b
+      - OLLAMA_MODEL_AGENTS=qwen2.5:7b
     depends_on:
       - redis
     networks:

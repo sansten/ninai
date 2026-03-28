@@ -14,6 +14,7 @@ import {
   XMarkIcon,
   HomeIcon,
   CircleStackIcon,
+  ChartBarIcon,
   UserGroupIcon,
   UsersIcon,
   ClipboardDocumentListIcon,
@@ -45,6 +46,7 @@ function Sidebar({ mobile = false, onClose }: { mobile?: boolean; onClose?: () =
   const navigation: NavItem[] = [
     { name: 'Dashboard', href: '/dashboard', icon: HomeIcon },
     { name: 'Memories', href: '/memories', icon: CircleStackIcon },
+    { name: 'Insights', href: '/insights', icon: ChartBarIcon },
     ...(isReviewer ? [{ name: 'Review Queue', href: '/review', icon: ClipboardDocumentListIcon }] : []),
     { name: 'Teams', href: '/teams', icon: UserGroupIcon },
     ...(isAdmin ? [{ name: 'Users', href: '/users', icon: UsersIcon }] : []),
