@@ -74,6 +74,23 @@ class WebhookService:
         self.session.add(event)
         await self.session.flush()
 
+        # Publish to Redis Stream for real-time WebSocket delivery (P45).
+        # Best-effort: never let a Redis error block the DB write path.
+        try:
+            from app.core.redis import RedisClient
+            stream_key = f"events:{organization_id}"
+            await RedisClient.xadd(
+                stream_key,
+                {
+                    "event_type": event_type,
+                    "payload": json.dumps(payload, default=str),
+                    "event_id": str(event.id),
+                },
+                maxlen=1000,
+            )
+        except Exception:
+            pass
+
         subs_res = await self.session.execute(
             select(WebhookSubscription).where(
                 WebhookSubscription.organization_id == organization_id,
