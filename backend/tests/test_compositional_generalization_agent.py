@@ -534,7 +534,8 @@ async def test_llm_path_falls_back_to_heuristic_on_bad_response(monkeypatch):
                                        "OLLAMA_MODEL": "llama3.1:8b",
                                        "OLLAMA_TIMEOUT_SECONDS": 5.0,
                                        "OLLAMA_MAX_CONCURRENCY": 2,
-                                       "COMPOSITIONAL_STRATEGY": None})())
+                                       "COMPOSITIONAL_STRATEGY": None,
+                                       "get_ollama_model": lambda self, p=None: "llama3.1:8b"})())
 
     agent = CompositionalGeneralizationAgent()
     ctx = _ctx(
@@ -568,7 +569,8 @@ async def test_llm_path_accepts_valid_response(monkeypatch):
                                        "OLLAMA_MODEL": "llama3.1:8b",
                                        "OLLAMA_TIMEOUT_SECONDS": 5.0,
                                        "OLLAMA_MAX_CONCURRENCY": 2,
-                                       "COMPOSITIONAL_STRATEGY": None})())
+                                       "COMPOSITIONAL_STRATEGY": None,
+                                       "get_ollama_model": lambda self, p=None: "llama3.1:8b"})())
 
     agent = CompositionalGeneralizationAgent()
     ctx = _ctx(content="deploy application", subtasks=[])

@@ -270,7 +270,7 @@ def _make_context(
 class TestMemoryDecayAgentHeuristic:
     async def test_brand_new_memory_is_fresh(self):
         agent = MemoryDecayAgent()
-        ctx = _make_context(created_at=_NOW.isoformat())
+        ctx = _make_context(created_at=datetime.now(timezone.utc).isoformat())
         result = await agent.run("mem-1", ctx)
         assert result.status == "success"
         # Recently created memories should still be very fresh.
@@ -301,8 +301,9 @@ class TestMemoryDecayAgentHeuristic:
 
     async def test_recency_boost_applied(self):
         agent = MemoryDecayAgent()
-        old = (_NOW - timedelta(days=20)).isoformat()
-        laa = (_NOW - timedelta(days=1)).isoformat()
+        now = datetime.now(timezone.utc)
+        old = (now - timedelta(days=20)).isoformat()
+        laa = (now - timedelta(days=1)).isoformat()
         ctx_no_laa = _make_context(created_at=old, domain="sales")
         ctx_with_laa = _make_context(created_at=old, domain="sales", last_accessed_at=laa)
         r1 = await agent.run("mem-5a", ctx_no_laa)

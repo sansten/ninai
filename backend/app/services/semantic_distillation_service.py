@@ -44,7 +44,6 @@ logger = logging.getLogger(__name__)
 
 # ── Tunables ────────────────────────────────────────────────────────────
 TAU_QUALITY: float = 0.55   # minimum composite quality to promote
-OLLAMA_URL: str = getattr(settings, "OLLAMA_URL", None) or "http://ollama:11434"
 
 # ── Prompt template ─────────────────────────────────────────────────────
 DISTILLATION_PROMPT = """\
@@ -236,12 +235,22 @@ class SemanticDistillationService:
             f"[{i+1}] {m.content_preview}" for i, m in enumerate(messages)
         )
         prompt = DISTILLATION_PROMPT.format(messages=texts[:4000])
+        model_name = settings.get_ollama_model("distillation")
+        logger.info(
+            "llm.model_route provider=ollama purpose=distillation model=%s base_url=%s",
+            model_name,
+            settings.OLLAMA_BASE_URL,
+        )
 
         try:
             async with httpx.AsyncClient(timeout=30) as client:
                 resp = await client.post(
-                    f"{OLLAMA_URL}/api/generate",
-                    json={"model": "llama3", "prompt": prompt, "stream": False},
+                    f"{settings.OLLAMA_BASE_URL}/api/generate",
+                    json={
+                        "model": model_name,
+                        "prompt": prompt,
+                        "stream": False,
+                    },
                 )
                 resp.raise_for_status()
                 data = resp.json()

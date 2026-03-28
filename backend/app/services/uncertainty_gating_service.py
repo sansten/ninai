@@ -181,9 +181,15 @@ class UncertaintyGatingService:
 
     async def _call_ollama_with_logprobs(self, prompt: str) -> Dict[str, Any]:
         """Call Ollama API with logprobs enabled."""
+        model_name = settings.get_ollama_model("uncertainty")
+        logger.info(
+            "llm.model_route provider=ollama purpose=uncertainty model=%s base_url=%s",
+            model_name,
+            self.ollama_base_url,
+        )
         url = f"{self.ollama_base_url}/api/generate"
         payload = {
-            "model": settings.OLLAMA_MODEL,
+            "model": model_name,
             "prompt": prompt,
             "stream": False,
             "options": {
