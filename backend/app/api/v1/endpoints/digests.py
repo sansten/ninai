@@ -61,7 +61,7 @@ async def get_latest_digest(
 ) -> DigestReportResponse:
     """Return the most recent intelligence digest for the caller's organization."""
     svc = DigestService(db)
-    report = await svc.get_latest(ctx.organization_id, digest_type)
+    report = await svc.get_latest(ctx.org_id, digest_type)
     if report is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -79,7 +79,7 @@ async def list_digest_history(
 ) -> List[DigestReportResponse]:
     """Return paginated digest history for the caller's organization."""
     svc = DigestService(db)
-    reports = await svc.list_history(ctx.organization_id, digest_type, limit=limit)
+    reports = await svc.list_history(ctx.org_id, digest_type, limit=limit)
     return [DigestReportResponse.model_validate(r) for r in reports]
 
 
@@ -90,13 +90,13 @@ async def trigger_digest(
     ctx: TenantContext = Depends(get_tenant_context),
 ) -> dict:
     """Manually build and save a digest for the caller's org. Admin only."""
-    roles = set((ctx.roles or "").split(","))
+    roles = set(ctx.roles or [])
     if "admin" not in roles and "org_admin" not in roles and "system_admin" not in roles:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin role required")
 
     svc = DigestService(db)
     try:
-        report = await svc.build_digest(ctx.organization_id, digest_type)
+        report = await svc.build_digest(ctx.org_id, digest_type)
         saved = await svc.save_report(report)
     except Exception as exc:
         logger.exception("Manual digest trigger failed", extra={"org_id": ctx.organization_id})
