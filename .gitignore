@@ -101,6 +101,7 @@ docs_archive/
 *.md
 !README.md
 !backend/alembic/MIGRATIONS.md
+!backend/CLAUDE.md
 !CONTRIBUTING.md
 !CODE_OF_CONDUCT.md
 !SECURITY.md
