@@ -1010,3 +1010,163 @@ class MetaCognitiveResource:
         """Get known/uncertain/unknown domain snapshot."""
         return self._client._get("/v1/epistemic-state")
 
+
+class EnrichmentResource:
+    """Memory enrichment read API (Phase 26/27).
+
+    Exposes enrichment pipeline outputs as a read API so dashboards and
+    external tools can query a memory's fully-enriched state without knowing
+    internal agent structure.
+
+    Usage::
+
+        enrichment  = client.enrichment.get(memory_id)
+        narrative   = client.enrichment.narrative(memory_id)
+        anomalies   = client.enrichment.anomalies(memory_id)
+        uncertainty = client.enrichment.uncertainty(memory_id)
+    """
+
+    def __init__(self, client: "NinaiClient") -> None:
+        self._client = client
+
+    def get(self, memory_id: str) -> Dict[str, Any]:
+        """Full merged enrichment dict for a memory (all agents combined)."""
+        return self._client._get(f"/memories/{memory_id}/enrichment")
+
+    def narrative(self, memory_id: str) -> Dict[str, Any]:
+        """NarrativeSynthesisAgent output for a memory."""
+        return self._client._get(f"/memories/{memory_id}/narrative")
+
+    def uncertainty(self, memory_id: str) -> Dict[str, Any]:
+        """UncertaintyReportingAgent output for a memory."""
+        return self._client._get(f"/memories/{memory_id}/uncertainty")
+
+    def anomalies(self, memory_id: str) -> Dict[str, Any]:
+        """AnomalyDetectionAgent output for a memory."""
+        return self._client._get(f"/memories/{memory_id}/anomalies")
+
+    def query_intelligence(self, memory_id: str) -> Dict[str, Any]:
+        """QueryIntelligenceAgent output for a memory."""
+        return self._client._get(f"/memories/{memory_id}/query-intelligence")
+
+    def submit_feedback(
+        self,
+        memory_id: str,
+        verdict: str,
+        reason: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Submit a human review verdict for a memory."""
+        payload: Dict[str, Any] = {"verdict": verdict}
+        if reason:
+            payload["reason"] = reason
+        return self._client._post(f"/memories/{memory_id}/feedback", json=payload)
+
+
+class InsightsResource:
+    """Memory insights API (Phase 46).
+
+    Aggregate analytics for the insights dashboard.
+
+    Usage::
+
+        stats = client.insights.stats()
+        stats = client.insights.stats(days=7)
+    """
+
+    def __init__(self, client: "NinaiClient") -> None:
+        self._client = client
+
+    def stats(self, days: int = 30) -> Dict[str, Any]:
+        """Aggregate memory statistics for the tenant.
+
+        Args:
+            days: Lookback window for the creation trend (1-90, default 30).
+        """
+        return self._client._get("/memories/insights", params={"days": days})
+
+
+class DigestResource:
+    """Intelligence Digest API (Phase 46).
+
+    Ninai generates a nightly per-tenant narrative digest summarising memory
+    activity, freshness distribution, and anomaly highlights.
+
+    Usage::
+
+        latest  = client.digest.latest()
+        history = client.digest.history(limit=10)
+        client.digest.trigger()
+    """
+
+    def __init__(self, client: "NinaiClient") -> None:
+        self._client = client
+
+    def latest(self) -> Dict[str, Any]:
+        """Retrieve the most recent digest report for the caller's org."""
+        return self._client._get("/digests/latest")
+
+    def history(self, limit: int = 20, offset: int = 0) -> Dict[str, Any]:
+        """Paginated list of past digest reports."""
+        return self._client._get(
+            "/digests/history", params={"limit": limit, "offset": offset}
+        )
+
+    def trigger(self) -> Dict[str, Any]:
+        """Manually trigger a digest build (admin only)."""
+        return self._client._post("/digests/trigger")
+
+
+class ComplianceResource:
+    """GDPR / Compliance API (Phase 46).
+
+    Provides right-to-be-forgotten, data export, retention policy management,
+    and consent recording.
+
+    Usage::
+
+        policy = client.compliance.retention_policy()
+        client.compliance.set_retention_policy({"retention_days": 365})
+        client.compliance.request_deletion(user_id="u-123", reason="GDPR art. 17")
+        export = client.compliance.data_export()
+    """
+
+    def __init__(self, client: "NinaiClient") -> None:
+        self._client = client
+
+    def retention_policy(self) -> Dict[str, Any]:
+        """Get the current data retention policy for the org."""
+        return self._client._get("/compliance/retention-policy")
+
+    def set_retention_policy(self, policy: Dict[str, Any]) -> Dict[str, Any]:
+        """Replace the data retention policy (PUT)."""
+        return self._client._put("/compliance/retention-policy", json=policy)
+
+    def request_deletion(self, user_id: str, reason: str = "") -> Dict[str, Any]:
+        """Submit a right-to-be-forgotten deletion request."""
+        return self._client._post(
+            "/compliance/deletion-request",
+            json={"user_id": user_id, "reason": reason},
+        )
+
+    def deletion_status(self, request_id: str) -> Dict[str, Any]:
+        """Get the status of a deletion request."""
+        return self._client._get(f"/compliance/deletion-request/{request_id}")
+
+    def list_deletions(self) -> Dict[str, Any]:
+        """List all deletion requests for the org."""
+        return self._client._get("/compliance/deletion-requests")
+
+    def data_export(self) -> Dict[str, Any]:
+        """Export all personal data for the current user (GDPR portability)."""
+        return self._client._get("/compliance/data-export")
+
+    def record_consent(self, consent_type: str, granted: bool) -> Dict[str, Any]:
+        """Record a user consent decision."""
+        return self._client._post(
+            "/compliance/consent",
+            json={"consent_type": consent_type, "granted": granted},
+        )
+
+    def list_consents(self) -> Dict[str, Any]:
+        """List recorded consent entries for the current user."""
+        return self._client._get("/compliance/consent")
