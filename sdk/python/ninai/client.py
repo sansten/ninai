@@ -22,6 +22,10 @@ from ninai.exceptions import (
     ServerError,
 )
 from ninai.resources import (
+    EnrichmentResource,
+    InsightsResource,
+    DigestResource,
+    ComplianceResource,
     MemoriesResource,
     OrganizationsResource,
     TeamsResource,
@@ -120,6 +124,10 @@ class NinaiClient:
         self.temporal = TemporalResource(self)  # PR-5: Temporal Reasoning
         self.meta_cognitive = MetaCognitiveResource(self)  # PR-6: Meta-Cognitive Planning
         self.composition = CompositionResource(self)  # PR-7: Compositional Generalization
+        self.enrichment = EnrichmentResource(self)   # Phase 26/27: Enrichment read API
+        self.insights = InsightsResource(self)       # Phase 46: Memory insights
+        self.digest = DigestResource(self)           # Phase 46: Intelligence Digest
+        self.compliance = ComplianceResource(self)   # Phase 46: GDPR Compliance
 
         # Typed agent helpers
         self._goal_planner_agent: GoalPlannerAgent | None = None
@@ -141,21 +149,22 @@ class NinaiClient:
             self._meta_agent = MetaAgent(self)
         return self._meta_agent
     
-    def login(self, email: str, password: str) -> User:
+    def login(self, email: str, password: str, org_slug: Optional[str] = None) -> User:
         """
         Authenticate with email and password.
-        
+
         Args:
             email: User's email address
             password: User's password
-            
+            org_slug: Organization slug (required for multi-tenant installs)
+
         Returns:
             User: Authenticated user information
         """
-        response = self._client.post(
-            "/auth/login",
-            json={"email": email, "password": password},
-        )
+        payload: Dict[str, Any] = {"email": email, "password": password}
+        if org_slug:
+            payload["org_slug"] = org_slug
+        response = self._client.post("/auth/login", json=payload)
         
         self._handle_response_errors(response)
         
@@ -233,15 +242,16 @@ class NinaiClient:
         """Handle HTTP error responses."""
         if response.status_code < 400:
             return
-        
+
+        error_data: dict = {}
         try:
             error_data = response.json()
             message = error_data.get("detail", error_data.get("message", "Unknown error"))
         except Exception:
             message = response.text or f"HTTP {response.status_code}"
-        
+
         if response.status_code == 401:
-            raise AuthenticationError(message, response.status_code, error_data if 'error_data' in dir() else {})
+            raise AuthenticationError(message, response.status_code, error_data)
         elif response.status_code == 403:
             raise AuthorizationError(message, response.status_code)
         elif response.status_code == 404:
@@ -277,7 +287,13 @@ class NinaiClient:
         response = self._client.patch(path, headers=self._get_headers(), json=json)
         self._handle_response_errors(response)
         return response.json()
-    
+
+    def _put(self, path: str, json: Dict[str, Any] = None) -> Dict[str, Any]:
+        """Make a PUT request."""
+        response = self._client.put(path, headers=self._get_headers(), json=json)
+        self._handle_response_errors(response)
+        return response.json()
+
     def _delete(self, path: str) -> None:
         """Make a DELETE request."""
         response = self._client.delete(path, headers=self._get_headers())
