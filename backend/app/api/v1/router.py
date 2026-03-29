@@ -143,6 +143,14 @@ api_router.include_router(
     tags=["Memories"],
 )
 
+# memory_insights must be registered before memories to prevent /memories/insights
+# being matched by memories' /{memory_id} parametric route.
+api_router.include_router(
+    memory_insights.router,
+    prefix="/memories",
+    tags=["Memory Insights"],
+)
+
 api_router.include_router(
     memories.router,
     prefix="/memories",
@@ -442,12 +450,6 @@ api_router.include_router(
 api_router.include_router(
     causal.router,
     tags=["Causal Reasoning"],
-)
-
-api_router.include_router(
-    memory_insights.router,
-    prefix="/memories",
-    tags=["Memory Insights"],
 )
 
 api_router.include_router(
