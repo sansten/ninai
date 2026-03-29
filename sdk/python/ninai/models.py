@@ -69,12 +69,18 @@ class User(BaseModel):
     organization_id: Optional[str] = None
     organization_name: Optional[str] = None
     roles: List[str] = []
+    # Extra fields returned by the backend UserResponse but not always present
+    created_at: Optional[datetime] = None
+    last_login_at: Optional[datetime] = None
+    preferences: Dict[str, Any] = {}
+
+    model_config = {"extra": "ignore"}
 
 
 class AuthTokens(BaseModel):
     """Authentication tokens."""
     access_token: str
-    refresh_token: str
+    refresh_token: Optional[str] = None
     token_type: str = "bearer"
     expires_in: int
     user: User
@@ -91,7 +97,7 @@ class Memory(BaseModel):
     classification: str
     required_clearance: int = 0
     title: Optional[str] = None
-    content_preview: str
+    content_preview: Optional[str] = None
     tags: List[str] = []
     entities: Dict[str, Any] = {}
     extra_metadata: Dict[str, Any] = {}
@@ -104,6 +110,8 @@ class Memory(BaseModel):
     updated_at: datetime
     score: Optional[float] = None  # Present in search results
 
+    model_config = {"extra": "ignore"}
+
 
 class MemoryList(BaseModel):
     """Paginated list of memories."""
@@ -113,13 +121,17 @@ class MemoryList(BaseModel):
     page_size: int = 20
     has_more: bool = False
 
+    model_config = {"extra": "ignore"}
+
 
 class SearchResult(BaseModel):
     """Search results with memories and metadata."""
     items: List[Memory]
     total: int
-    query: str
+    query: Optional[str] = None
     took_ms: Optional[float] = None
+
+    model_config = {"extra": "ignore"}
 
 
 class Organization(BaseModel):
