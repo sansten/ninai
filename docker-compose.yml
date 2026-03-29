@@ -53,8 +53,11 @@ services:
       # Optional OCR sidecar (enabled in this compose)
       - OCR_SERVICE_URL=http://ocr:8000
       - OCR_SERVICE_TIMEOUT_SECONDS=5
-      # Local-first LLM (Ollama)
-      - OLLAMA_BASE_URL=http://ollama:11434
+      # Local-first LLM (Ollama).
+      # Default: host Ollama (run `ollama serve` on your machine).
+      # To use Docker Ollama instead: start with --profile ollama and set
+      # OLLAMA_BASE_URL=http://ollama:11434
+      - OLLAMA_BASE_URL=http://host.docker.internal:11434
       - OLLAMA_MODEL=qwen2.5:7b
       - OLLAMA_MODEL_FAST=qwen2.5:0.5b
       - OLLAMA_MODEL_PLANNING=qwen2.5:7b
@@ -222,8 +225,7 @@ services:
       - POSTGRES_HOST=postgres
       - REDIS_HOST=redis
       - QDRANT_HOST=qdrant
-      # Local-first LLM (Ollama)
-      - OLLAMA_BASE_URL=http://ollama:11434
+      - OLLAMA_BASE_URL=http://host.docker.internal:11434
       - OLLAMA_MODEL=qwen2.5:7b
       - OLLAMA_MODEL_FAST=qwen2.5:0.5b
       - OLLAMA_MODEL_PLANNING=qwen2.5:7b
@@ -251,8 +253,7 @@ services:
     environment:
       - CELERY_BROKER_URL=redis://redis:6379/1
       - CELERY_RESULT_BACKEND=redis://redis:6379/2
-      # Local-first LLM (Ollama)
-      - OLLAMA_BASE_URL=http://ollama:11434
+      - OLLAMA_BASE_URL=http://host.docker.internal:11434
       - OLLAMA_MODEL=qwen2.5:7b
       - OLLAMA_MODEL_FAST=qwen2.5:0.5b
       - OLLAMA_MODEL_PLANNING=qwen2.5:7b
@@ -267,10 +268,15 @@ services:
 
   # ---------------------------------------------------------------------------
   # Ollama (LLM for Summarization)
+  # Opt-in: docker-compose --profile ollama up -d
+  # Default behaviour: backend points to host Ollama (http://host.docker.internal:11434).
+  # Use this profile only when you want Ollama managed inside Docker.
   # ---------------------------------------------------------------------------
   ollama:
     image: ollama/ollama:latest
     container_name: ollama
+    profiles:
+      - ollama
     ports:
       - "11434:11434"
     volumes:
