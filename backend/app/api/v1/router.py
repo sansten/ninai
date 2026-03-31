@@ -70,6 +70,7 @@ from app.api.v1.endpoints import (
     memory_insights,
     compliance,
     digests,
+    proof,
     ws_stream as ws_stream_endpoint,
     connectors,
     cognitive_gateway,
@@ -463,6 +464,12 @@ api_router.include_router(
     digests.router,
     prefix="/digests",
     tags=["Intelligence Digest"],
+)
+
+api_router.include_router(
+    proof.router,
+    prefix="/proof",
+    tags=["Proof"],
 )
 
 api_router.include_router(
