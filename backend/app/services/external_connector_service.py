@@ -16,6 +16,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass, field
+from enum import Enum
 from typing import Any
 
 try:
@@ -31,10 +32,25 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 _MAX_ATTEMPTS = 3
-_BACKOFF_BASE = 1.0       # seconds; doubles each retry
-_DEFAULT_TIMEOUT = 10.0   # seconds
+_BACKOFF_BASE = 1.0         # seconds; doubles each retry
+_THROTTLE_BACKOFF_BASE = 5.0  # longer base for 429 throttle responses
+_DEFAULT_TIMEOUT = 10.0     # seconds
 
 _RETRYABLE_STATUS_CODES = frozenset({429, 500, 502, 503, 504})
+_TRANSIENT_STATUS_CODES = frozenset({500, 502, 503, 504})
+_THROTTLED_STATUS_CODE = 429
+
+
+class RetryClass(str, Enum):
+    """Error classification for retry and backoff decisions.
+
+    TRANSIENT  — network errors or 5xx server errors; retry with standard backoff.
+    THROTTLED  — 429 Too Many Requests; retry with longer backoff.
+    PERMANENT  — 4xx client errors (excl. 429); never retry.
+    """
+    TRANSIENT = "transient"
+    THROTTLED = "throttled"
+    PERMANENT = "permanent"
 
 # Action-type to default content-type mapping
 _CONTENT_TYPE_MAP: dict[str, str] = {
@@ -52,11 +68,12 @@ _CONTENT_TYPE_MAP: dict[str, str] = {
 
 @dataclass
 class DispatchResult:
-    status: str            # "success" | "failed"
+    status: str                    # "success" | "failed"
     http_status_code: int | None
     attempt_count: int
     error: str | None = None
     response_summary: dict = field(default_factory=dict)
+    retry_class: str | None = None  # RetryClass value of the terminal failure, or None on success
 
 
 # ---------------------------------------------------------------------------
@@ -72,8 +89,31 @@ def _build_headers(action_type: str, extra_headers: dict | None) -> dict[str, st
 
 
 def _backoff_seconds(attempt: int, base: float = _BACKOFF_BASE) -> float:
-    """Exponential backoff: 1s, 2s, 4s … capped at 30s."""
+    """Exponential backoff for transient errors: 1s, 2s, 4s … capped at 30s."""
     return min(base * (2 ** attempt), 30.0)
+
+
+def _throttle_backoff_seconds(attempt: int, base: float = _THROTTLE_BACKOFF_BASE) -> float:
+    """Longer exponential backoff for throttled (429) responses: 5s, 10s, 20s … capped at 60s."""
+    return min(base * (2 ** attempt), 60.0)
+
+
+def _classify_result(status_code: int | None, exc: Exception | None) -> RetryClass:
+    """Return the RetryClass for a failed-or-retryable HTTP result.
+
+    Rules:
+    - Any exception (network error, timeout) → TRANSIENT
+    - 429 → THROTTLED
+    - 5xx (500, 502, 503, 504) → TRANSIENT
+    - Anything else (4xx, unexpected) → PERMANENT
+    """
+    if exc is not None:
+        return RetryClass.TRANSIENT
+    if status_code == _THROTTLED_STATUS_CODE:
+        return RetryClass.THROTTLED
+    if status_code in _TRANSIENT_STATUS_CODES:
+        return RetryClass.TRANSIENT
+    return RetryClass.PERMANENT
 
 
 def _safe_response_summary(status_code: int, text: str) -> dict[str, Any]:
@@ -146,8 +186,10 @@ class ExternalConnectorService:
 
         last_error: str | None = None
         last_code: int | None = None
+        last_retry_class: RetryClass = RetryClass.TRANSIENT
 
         for attempt in range(self.max_attempts):
+            exc_caught: Exception | None = None
             try:
                 result = await self._send_once(
                     target_url=target_url,
@@ -166,29 +208,40 @@ class ExternalConnectorService:
                         response_summary=summary,
                     )
 
-                if last_code not in _RETRYABLE_STATUS_CODES:
+                last_retry_class = _classify_result(last_code, None)
+
+                # PERMANENT errors: do not retry — fail immediately.
+                if last_retry_class == RetryClass.PERMANENT:
                     return DispatchResult(
                         status="failed",
                         http_status_code=last_code,
                         attempt_count=attempt + 1,
-                        error=f"Non-retryable HTTP {last_code}",
+                        error=f"Permanent HTTP {last_code} — no retry",
                         response_summary=summary,
+                        retry_class=last_retry_class.value,
                     )
 
-                last_error = f"HTTP {last_code} (retryable)"
+                last_error = f"HTTP {last_code} ({last_retry_class.value})"
 
             except Exception as exc:
+                exc_caught = exc
+                last_retry_class = _classify_result(None, exc)
                 last_error = f"{type(exc).__name__}: {exc}"
                 logger.debug("dispatch attempt %d/%d failed: %s", attempt + 1, self.max_attempts, last_error)
 
             if attempt + 1 < self.max_attempts:
-                await asyncio.sleep(_backoff_seconds(attempt, self.backoff_base))
+                # Use longer backoff for throttled responses.
+                if last_retry_class == RetryClass.THROTTLED:
+                    await asyncio.sleep(_throttle_backoff_seconds(attempt, self.backoff_base * 5))
+                else:
+                    await asyncio.sleep(_backoff_seconds(attempt, self.backoff_base))
 
         return DispatchResult(
             status="failed",
             http_status_code=last_code,
             attempt_count=self.max_attempts,
             error=last_error or "max retries exhausted",
+            retry_class=last_retry_class.value,
         )
 
     async def _send_once(
