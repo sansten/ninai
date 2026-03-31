@@ -75,6 +75,7 @@ celery_app = Celery(
         "app.tasks.memory_sleep_pipeline",
         "app.tasks.digest_pipeline",
         "app.tasks.gdpr_pipeline",
+        "app.tasks.environment_sync",
         *_enterprise_includes,
     ],
 )
@@ -152,6 +153,10 @@ celery_app.conf.update(
         # GDPR deletion pipeline (P47)
         "app.tasks.gdpr_pipeline.process_deletion_task": {"queue": "q.maintenance"},
 
+        # Environment sync reconciliation (Phase 52)
+        "app.tasks.environment_sync.reconcile_environment_sync_org_task": {"queue": "q.maintenance"},
+        "app.tasks.environment_sync.reconcile_environment_sync_all_task": {"queue": "q.maintenance"},
+
         # Memory activation scoring (lightweight async updates)
         "app.services.memory_activation.tasks.memory_access_update_task": {"queue": "q.agent_enrich"},
         "app.services.memory_activation.tasks.coactivation_update_task": {"queue": "q.agent_graph"},
@@ -195,6 +200,11 @@ celery_app.conf.update(
             "task": "app.tasks.digest_pipeline.digest_task",
             "schedule": crontab(minute=0, hour=6),
             "args": (),
+        },
+        "reconcile-environment-sync": {
+            "task": "app.tasks.environment_sync.reconcile_environment_sync_all_task",
+            "schedule": 60.0,
+            "kwargs": {"max_lag_seconds": 30, "per_org_limit": 100},
         },
         **_enterprise_beat,
     },

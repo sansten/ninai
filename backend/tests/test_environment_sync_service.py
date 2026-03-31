@@ -239,3 +239,56 @@ class TestSummaryAndReplayTtl:
         clock.advance(6)
         third = svc.normalize_inbound(org_id="org-1", connector_type="webhook", payload=payload)
         assert svc.apply_inbound(third).status == "applied"
+
+
+class TestConnectorSummaries:
+    def test_connector_summaries_include_lag_and_divergence(self):
+        clock = _Clock(datetime(2026, 3, 31, 10, 0, 0, tzinfo=timezone.utc))
+        svc = EnvironmentSyncService(now_fn=clock.now)
+
+        a = svc.normalize_inbound(
+            org_id="org-1",
+            connector_type="webhook",
+            payload={"event_id": "e-1", "id": "obj-1", "title": "a"},
+        )
+        b = svc.normalize_inbound(
+            org_id="org-1",
+            connector_type="webhook",
+            payload={"event_id": "e-2", "id": "obj-2", "title": "b"},
+        )
+        svc.apply_inbound(a)
+        svc.apply_inbound(b)
+        svc.mark_internal_projection(
+            org_id="org-1",
+            connector_type="webhook",
+            external_object_id="obj-2",
+            internal_hash="different",
+        )
+
+        clock.advance(20)
+        summaries = svc.connector_summaries("org-1")
+        assert len(summaries) == 1
+        summary = summaries[0]
+        assert summary.connector_type == "webhook"
+        assert summary.object_count == 2
+        assert summary.diverged_objects == 1
+        assert summary.max_lag_seconds >= 20
+
+    def test_org_ids_lists_orgs_with_state(self):
+        svc = EnvironmentSyncService()
+        svc.apply_inbound(
+            svc.normalize_inbound(
+                org_id="org-a",
+                connector_type="webhook",
+                payload={"event_id": "a", "id": "obj-a", "title": "a"},
+            )
+        )
+        svc.apply_inbound(
+            svc.normalize_inbound(
+                org_id="org-b",
+                connector_type="webhook",
+                payload={"event_id": "b", "id": "obj-b", "title": "b"},
+            )
+        )
+
+        assert svc.org_ids() == ["org-a", "org-b"]
