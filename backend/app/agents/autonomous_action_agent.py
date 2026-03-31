@@ -37,6 +37,8 @@ from app.agents.llm.ollama_breaker import create_ollama_client
 from app.core.config import settings
 from app.services.action_policy_service import ActionPolicyService, evaluate_policy
 from app.services.external_connector_service import ExternalConnectorService, RetryClass
+from app.services.connector_observability_service import ConnectorObservabilityService, DispatchEvent
+from app.services.action_kill_switch_service import ActionKillSwitchService
 
 
 # ---------------------------------------------------------------------------
@@ -376,7 +378,15 @@ class AutonomousActionAgent(BaseAgent):
         policy_override = runtime.get("action_policy_config")
         connector_registry = runtime.get("connector_registry")
         execution_logger = runtime.get("action_execution_logger")
-        runtime_control = runtime.get("action_runtime_control") or {}
+        observability: ConnectorObservabilityService | None = runtime.get("action_observability")
+        kill_switch: ActionKillSwitchService | None = runtime.get("action_kill_switch")
+
+        # Resolve kill-switch state: explicit action_runtime_control wins;
+        # if absent but a kill-switch service is provided, derive from it.
+        runtime_control = runtime.get("action_runtime_control")
+        if runtime_control is None and kill_switch is not None and org_id:
+            runtime_control = kill_switch.build_runtime_control(org_id)
+        runtime_control = runtime_control or {}
 
         controls_enabled = bool(runtime_control.get("enabled", True))
         dry_run = bool(runtime_control.get("dry_run", False))
@@ -530,6 +540,25 @@ class AutonomousActionAgent(BaseAgent):
                                 outputs["_rollback_status"] = "compensated"
                             except Exception:
                                 outputs["_rollback_status"] = "compensation_failed"
+
+                    # Record dispatch outcome for observability.
+                    if observability is not None:
+                        try:
+                            _latency_ms = (
+                                (datetime.now(timezone.utc) - started_at).total_seconds() * 1000
+                            )
+                            observability.record(DispatchEvent(
+                                org_id=org_id,
+                                connector_type=str(action_type),
+                                status=dispatch_result.status,
+                                retry_class=dispatch_result.retry_class,
+                                rollback_policy=outputs.get("_rollback_policy"),
+                                rollback_triggered=bool(outputs.get("_rollback_triggered")),
+                                attempt_count=dispatch_attempts,
+                                latency_ms=round(_latency_ms, 2),
+                            ))
+                        except Exception:
+                            pass
 
         # Persist action execution audit when a logger is provided.
         if callable(getattr(execution_logger, "create", None)):
