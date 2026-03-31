@@ -41,14 +41,20 @@ from app.services.external_connector_service import (
 # Fixtures
 # ---------------------------------------------------------------------------
 
-def _ctx(enrichment: dict | None = None, content: str = "Test memory") -> dict:
+def _ctx(
+    enrichment: dict | None = None,
+    content: str = "Test memory",
+    runtime: dict | None = None,
+    org_id: str = "org-1",
+) -> dict:
     return {
+        "tenant": {"org_id": org_id},
         "memory": {
             "id": "test-mem-47",
             "content": content,
             "enrichment": enrichment or {},
         },
-        "runtime": {"job_id": "trace-47"},
+        "runtime": {"job_id": "trace-47", **(runtime or {})},
     }
 
 
@@ -601,6 +607,109 @@ class TestAutonomousActionAgentHeuristic:
 
         assert result.outputs["action_status"] == "failed"
         assert result.outputs["action_dispatched"] is False
+
+    @pytest.mark.asyncio
+    async def test_runtime_policy_override_can_force_human_review(self):
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.text = "ok"
+        client = MagicMock()
+        client.post = AsyncMock(return_value=resp)
+
+        svc = ExternalConnectorService(
+            backoff_base=0.001,
+            _http_client_factory=lambda: client,
+        )
+        agent = AutonomousActionAgent(connector_service=svc)
+
+        runtime = {
+            "action_policy_config": {
+                "auto_approve_threshold": 0.99,
+                "auto_approvable_action_types": ["pagerduty"],
+                "auto_approve_tiers": ["enterprise"],
+            }
+        }
+
+        with patch("app.agents.autonomous_action_agent.settings") as mock_settings:
+            mock_settings.AGENT_STRATEGY = "heuristic"
+            result = await agent.run("mem-47-policy", _ctx(_urgent_enrichment(), runtime=runtime))
+
+        assert result.outputs["policy_decision"] == "human_review_required"
+        assert result.outputs["action_status"] == "pending_review"
+        assert result.outputs["action_dispatched"] is False
+        client.post.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_uses_connector_registry_target_and_headers(self):
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.text = "ok"
+        client = MagicMock()
+        client.post = AsyncMock(return_value=resp)
+
+        svc = ExternalConnectorService(
+            backoff_base=0.001,
+            _http_client_factory=lambda: client,
+        )
+        agent = AutonomousActionAgent(connector_service=svc)
+
+        spec = MagicMock()
+        spec.id = "conn-123"
+        spec.target_url = "https://hooks.enterprise.example/action"
+
+        registry = MagicMock()
+        registry.get_for_action.return_value = spec
+        registry.build_dispatch_headers.return_value = {"Authorization": "Bearer X"}
+
+        runtime = {"connector_registry": registry}
+
+        with patch("app.agents.autonomous_action_agent.settings") as mock_settings:
+            mock_settings.AGENT_STRATEGY = "heuristic"
+            result = await agent.run("mem-47-reg", _ctx(_urgent_enrichment(), runtime=runtime, org_id="org-xyz"))
+
+        assert result.outputs["action_status"] == "success"
+        assert result.outputs["action_target"] == "https://hooks.enterprise.example/action"
+
+        registry.get_for_action.assert_called_once_with(org_id="org-xyz", connector_type="pagerduty")
+        client.post.assert_awaited_once()
+        kwargs = client.post.await_args.kwargs
+        assert kwargs["headers"]["Authorization"] == "Bearer X"
+        assert kwargs["json"]["org_tier"] == "enterprise"
+
+    @pytest.mark.asyncio
+    async def test_writes_action_execution_record_when_logger_provided(self):
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.text = "ok"
+        client = MagicMock()
+        client.post = AsyncMock(return_value=resp)
+
+        svc = ExternalConnectorService(
+            backoff_base=0.001,
+            _http_client_factory=lambda: client,
+        )
+        agent = AutonomousActionAgent(connector_service=svc)
+
+        logger = MagicMock()
+        logger.create = AsyncMock(return_value=MagicMock(id="ae-1"))
+
+        runtime = {
+            "session_id": "sess-1",
+            "action_execution_logger": logger,
+        }
+
+        with patch("app.agents.autonomous_action_agent.settings") as mock_settings:
+            mock_settings.AGENT_STRATEGY = "heuristic"
+            result = await agent.run("mem-47-audit", _ctx(_urgent_enrichment(), runtime=runtime, org_id="org-logger"))
+
+        assert result.outputs["action_status"] == "success"
+        logger.create.assert_awaited_once()
+        log_kwargs = logger.create.await_args.kwargs
+        assert log_kwargs["organization_id"] == "org-logger"
+        assert log_kwargs["session_id"] == "sess-1"
+        assert log_kwargs["status"] == "success"
+        assert log_kwargs["policy_decision"] == "auto_approved"
+        assert log_kwargs["payload_summary"]["mode"] == "summary"
 
 
 class TestAutonomousActionAgentLLM:
