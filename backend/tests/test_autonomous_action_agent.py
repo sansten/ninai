@@ -41,14 +41,18 @@ from app.services.external_connector_service import (
 # Fixtures
 # ---------------------------------------------------------------------------
 
-def _ctx(enrichment: dict | None = None, content: str = "Test memory") -> dict:
+def _ctx(
+    enrichment: dict | None = None,
+    content: str = "Test memory",
+    runtime: dict | None = None,
+) -> dict:
     return {
         "memory": {
             "id": "test-mem-47",
             "content": content,
             "enrichment": enrichment or {},
         },
-        "runtime": {"job_id": "trace-47"},
+        "runtime": {"job_id": "trace-47", **(runtime or {})},
     }
 
 
@@ -601,6 +605,67 @@ class TestAutonomousActionAgentHeuristic:
 
         assert result.outputs["action_status"] == "failed"
         assert result.outputs["action_dispatched"] is False
+
+    @pytest.mark.asyncio
+    async def test_runtime_kill_switch_denies_dispatch(self):
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.text = "ok"
+        client = MagicMock()
+        client.post = AsyncMock(return_value=resp)
+
+        svc = ExternalConnectorService(
+            backoff_base=0.001,
+            _http_client_factory=lambda: client,
+        )
+        agent = AutonomousActionAgent(connector_service=svc)
+
+        runtime = {
+            "action_runtime_control": {
+                "enabled": False,
+            }
+        }
+
+        with patch("app.agents.autonomous_action_agent.settings") as mock_settings:
+            mock_settings.AGENT_STRATEGY = "heuristic"
+            result = await agent.run("mem-47-kill", _ctx(_urgent_enrichment(), runtime=runtime))
+
+        assert result.outputs["action_status"] == "denied"
+        assert result.outputs["policy_decision"] == "denied"
+        assert result.outputs["action_dispatched"] is False
+        assert "runtime action control" in result.outputs.get("_runtime_control_reason", "")
+        client.post.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_runtime_dry_run_skips_external_call(self):
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.text = "ok"
+        client = MagicMock()
+        client.post = AsyncMock(return_value=resp)
+
+        svc = ExternalConnectorService(
+            backoff_base=0.001,
+            _http_client_factory=lambda: client,
+        )
+        agent = AutonomousActionAgent(connector_service=svc)
+
+        runtime = {
+            "action_runtime_control": {
+                "enabled": True,
+                "dry_run": True,
+            }
+        }
+
+        with patch("app.agents.autonomous_action_agent.settings") as mock_settings:
+            mock_settings.AGENT_STRATEGY = "heuristic"
+            result = await agent.run("mem-47-dryrun", _ctx(_urgent_enrichment(), runtime=runtime))
+
+        assert result.outputs["action_status"] == "success"
+        assert result.outputs["policy_decision"] == "auto_approved"
+        assert result.outputs["action_dispatched"] is False
+        assert result.outputs.get("_dry_run") is True
+        client.post.assert_not_called()
 
 
 class TestAutonomousActionAgentLLM:
