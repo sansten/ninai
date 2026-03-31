@@ -57,11 +57,17 @@ _VALID_POLICY_DECISIONS = frozenset({
 def _safe_payload_summary(payload: dict[str, Any]) -> dict[str, Any]:
     """Return a safe payload summary suitable for audit persistence."""
     payload = payload or {}
+    matched_playbook_id = payload.get("matched_playbook_id")
+    episode_id = payload.get("episode_id")
+    episode_label = payload.get("episode_label")
     return {
         "mode": "summary",
         "keys": sorted([str(k) for k in payload.keys()]),
         "keys_count": len(payload.keys()),
         "has_nested": any(isinstance(v, (dict, list)) for v in payload.values()),
+        "matched_playbook_id": str(matched_playbook_id or "") if matched_playbook_id else None,
+        "episode_id": str(episode_id or "") if episode_id else None,
+        "episode_label": str(episode_label or "")[:120] if episode_label else None,
     }
 
 # Default connector targets when no ConnectorRegistry is present (dev/demo mode)
