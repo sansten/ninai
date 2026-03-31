@@ -14,6 +14,8 @@ from app.agents.autonomous_action_agent import (
     _build_payload,
     _compute_dispatch_confidence,
     _compute_idempotency_key,
+    _select_rollback_policy,
+    _ROLLBACK_POLICIES,
     _validate_llm_outputs,
     run_heuristic,
 )
@@ -32,8 +34,11 @@ from app.services.action_policy_service import (
 from app.services.external_connector_service import (
     ExternalConnectorService,
     DispatchResult,
+    RetryClass,
     _build_headers,
     _backoff_seconds,
+    _throttle_backoff_seconds,
+    _classify_result,
     _safe_response_summary,
 )
 
@@ -1225,3 +1230,277 @@ class TestExecutorAgentRetryRollback:
         )
         assert result.step_results[0].status == "skipped"
         assert result.overall_status == "success"
+
+
+# ===========================================================================
+# RetryClass separation tests (Phase 51 Slice 3)
+# ===========================================================================
+
+class TestRetryClassSeparation:
+    """Tests for _classify_result, class-based backoff helpers, and DispatchResult.retry_class."""
+
+    # --- _classify_result unit tests ---
+
+    def test_classify_network_exception_is_transient(self):
+        assert _classify_result(None, ConnectionError("refused")) == RetryClass.TRANSIENT
+
+    def test_classify_timeout_is_transient(self):
+        assert _classify_result(None, TimeoutError("timeout")) == RetryClass.TRANSIENT
+
+    def test_classify_500_is_transient(self):
+        assert _classify_result(500, None) == RetryClass.TRANSIENT
+
+    def test_classify_502_is_transient(self):
+        assert _classify_result(502, None) == RetryClass.TRANSIENT
+
+    def test_classify_503_is_transient(self):
+        assert _classify_result(503, None) == RetryClass.TRANSIENT
+
+    def test_classify_504_is_transient(self):
+        assert _classify_result(504, None) == RetryClass.TRANSIENT
+
+    def test_classify_429_is_throttled(self):
+        assert _classify_result(429, None) == RetryClass.THROTTLED
+
+    def test_classify_400_is_permanent(self):
+        assert _classify_result(400, None) == RetryClass.PERMANENT
+
+    def test_classify_401_is_permanent(self):
+        assert _classify_result(401, None) == RetryClass.PERMANENT
+
+    def test_classify_403_is_permanent(self):
+        assert _classify_result(403, None) == RetryClass.PERMANENT
+
+    def test_classify_404_is_permanent(self):
+        assert _classify_result(404, None) == RetryClass.PERMANENT
+
+    # --- backoff helpers ---
+
+    def test_throttle_backoff_is_larger_than_standard_backoff(self):
+        for attempt in range(3):
+            assert _throttle_backoff_seconds(attempt) > _backoff_seconds(attempt)
+
+    def test_throttle_backoff_capped_at_60(self):
+        assert _throttle_backoff_seconds(100) == 60.0
+
+    def test_standard_backoff_capped_at_30(self):
+        assert _backoff_seconds(100) == 30.0
+
+    # --- DispatchResult carries retry_class ---
+
+    @pytest.mark.asyncio
+    async def test_permanent_failure_sets_retry_class(self):
+        svc = ExternalConnectorService(
+            backoff_base=0.001,
+            _http_client_factory=lambda: _make_client(400),
+        )
+        result = await svc.dispatch(
+            action_type="webhook", target_url="https://example.com", payload={},
+        )
+        assert result.status == "failed"
+        assert result.retry_class == RetryClass.PERMANENT.value
+
+    @pytest.mark.asyncio
+    async def test_transient_500_sets_retry_class(self):
+        svc = ExternalConnectorService(
+            max_attempts=2, backoff_base=0.001,
+            _http_client_factory=lambda: _make_client(500),
+        )
+        result = await svc.dispatch(
+            action_type="webhook", target_url="https://example.com", payload={},
+        )
+        assert result.status == "failed"
+        assert result.retry_class == RetryClass.TRANSIENT.value
+
+    @pytest.mark.asyncio
+    async def test_throttled_429_sets_retry_class(self):
+        svc = ExternalConnectorService(
+            max_attempts=2, backoff_base=0.001,
+            _http_client_factory=lambda: _make_client(429),
+        )
+        result = await svc.dispatch(
+            action_type="webhook", target_url="https://example.com", payload={},
+        )
+        assert result.status == "failed"
+        assert result.retry_class == RetryClass.THROTTLED.value
+
+    @pytest.mark.asyncio
+    async def test_permanent_400_never_retried(self):
+        """400 must fail on first attempt without retrying."""
+        call_count = 0
+
+        async def _post(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            resp = MagicMock()
+            resp.status_code = 400
+            resp.text = "bad request"
+            return resp
+
+        client = MagicMock()
+        client.post = _post
+        svc = ExternalConnectorService(
+            max_attempts=3, backoff_base=0.001,
+            _http_client_factory=lambda: client,
+        )
+        result = await svc.dispatch(
+            action_type="webhook", target_url="https://example.com", payload={},
+        )
+        assert result.status == "failed"
+        assert result.attempt_count == 1
+        assert call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_success_has_no_retry_class(self):
+        svc = ExternalConnectorService(
+            backoff_base=0.001,
+            _http_client_factory=lambda: _make_client(200),
+        )
+        result = await svc.dispatch(
+            action_type="webhook", target_url="https://example.com", payload={},
+        )
+        assert result.status == "success"
+        assert result.retry_class is None
+
+
+def _make_client(status_code: int, text: str = "ok"):
+    resp = MagicMock()
+    resp.status_code = status_code
+    resp.text = text
+    client = MagicMock()
+    client.post = AsyncMock(return_value=resp)
+    return client
+
+
+# ===========================================================================
+# Rollback policy mapping tests (Phase 51 Slice 3)
+# ===========================================================================
+
+class TestRollbackPolicyMapping:
+    # --- _select_rollback_policy unit tests ---
+
+    def test_webhook_policy_is_compensate(self):
+        assert _select_rollback_policy("webhook") == "compensate"
+
+    def test_pagerduty_policy_is_notify(self):
+        assert _select_rollback_policy("pagerduty") == "notify"
+
+    def test_jira_policy_is_notify(self):
+        assert _select_rollback_policy("jira") == "notify"
+
+    def test_slack_policy_is_none(self):
+        assert _select_rollback_policy("slack") == "none"
+
+    def test_generic_rest_policy_is_compensate(self):
+        assert _select_rollback_policy("generic_rest") == "compensate"
+
+    def test_unknown_action_type_defaults_to_none(self):
+        assert _select_rollback_policy("sms") == "none"
+
+    def test_rollback_policies_covers_all_valid_action_types(self):
+        for action_type in ("webhook", "pagerduty", "jira", "slack", "generic_rest"):
+            assert action_type in _ROLLBACK_POLICIES
+
+    # --- Integration tests via AutonomousActionAgent.run() ---
+
+    @pytest.mark.asyncio
+    async def test_failed_pagerduty_sets_notify_rollback(self):
+        """Terminal pagerduty failure records notify policy."""
+        svc = ExternalConnectorService(
+            backoff_base=0.001, max_attempts=1,
+            _http_client_factory=lambda: _make_client(500),
+        )
+        agent = AutonomousActionAgent(connector_service=svc)
+
+        with patch("app.agents.autonomous_action_agent.settings") as mock_settings:
+            mock_settings.AGENT_STRATEGY = "heuristic"
+            result = await agent.run("mem-rb-1", _ctx(_urgent_enrichment()))
+
+        assert result.outputs["action_status"] == "failed"
+        assert result.outputs.get("_rollback_policy") == "notify"
+        assert result.outputs.get("_rollback_triggered") is True
+        assert result.outputs.get("_rollback_status") == "notify_pending"
+        assert result.outputs.get("_rollback_class") == RetryClass.TRANSIENT.value
+
+    @pytest.mark.asyncio
+    async def test_failed_webhook_triggers_compensating_dispatch(self):
+        """Terminal webhook failure triggers a compensating POST."""
+        call_count = 0
+
+        async def _post(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            resp = MagicMock()
+            # 1st: original fails; 2nd: compensating succeeds
+            resp.status_code = 500 if call_count == 1 else 200
+            resp.text = "ok"
+            return resp
+
+        client = MagicMock()
+        client.post = _post
+
+        svc = ExternalConnectorService(
+            backoff_base=0.001, max_attempts=1,
+            _http_client_factory=lambda: client,
+        )
+        # Patch run_heuristic so the initial outputs are auto_approved + webhook.
+        # This lets us reach the dispatch block and test the compensate rollback path.
+        _heuristic_outputs = {
+            "action_dispatched": True,
+            "action_type": "webhook",
+            "action_status": "success",
+            "policy_decision": "auto_approved",
+            "dispatch_confidence": 0.95,
+            "action_target": None,
+            "rationale": "heuristic",
+        }
+        agent = AutonomousActionAgent(connector_service=svc)
+
+        with patch("app.agents.autonomous_action_agent.settings") as mock_settings, \
+             patch("app.agents.autonomous_action_agent.run_heuristic", return_value=_heuristic_outputs):
+            mock_settings.AGENT_STRATEGY = "heuristic"
+            result = await agent.run("mem-rb-2", _ctx(_urgent_enrichment()))
+
+        assert result.outputs.get("_rollback_policy") == "compensate"
+        assert result.outputs.get("_rollback_triggered") is True
+        assert result.outputs.get("_rollback_status") == "compensated"
+        assert call_count == 2  # original + compensating
+
+    @pytest.mark.asyncio
+    async def test_rollback_policy_forwarded_to_logger(self):
+        """rollback_policy kwarg is passed to execution_logger.create()."""
+        svc = ExternalConnectorService(
+            backoff_base=0.001, max_attempts=1,
+            _http_client_factory=lambda: _make_client(500),
+        )
+        agent = AutonomousActionAgent(connector_service=svc)
+
+        logger = MagicMock()
+        logger.create = AsyncMock(return_value=MagicMock(id="ae-rb"))
+
+        runtime = {"action_execution_logger": logger}
+
+        with patch("app.agents.autonomous_action_agent.settings") as mock_settings:
+            mock_settings.AGENT_STRATEGY = "heuristic"
+            await agent.run("mem-rb-3", _ctx(_urgent_enrichment(), runtime=runtime))
+
+        kwargs = logger.create.await_args.kwargs
+        assert "rollback_policy" in kwargs
+        assert kwargs["rollback_policy"] is not None
+
+    @pytest.mark.asyncio
+    async def test_successful_dispatch_has_no_rollback_outputs(self):
+        """On success, no rollback keys are set in outputs."""
+        svc = ExternalConnectorService(
+            backoff_base=0.001,
+            _http_client_factory=lambda: _make_client(200),
+        )
+        agent = AutonomousActionAgent(connector_service=svc)
+
+        with patch("app.agents.autonomous_action_agent.settings") as mock_settings:
+            mock_settings.AGENT_STRATEGY = "heuristic"
+            result = await agent.run("mem-rb-4", _ctx(_urgent_enrichment()))
+
+        assert result.outputs.get("action_status") == "success"
+        assert "_rollback_policy" not in result.outputs
+        assert "_rollback_triggered" not in result.outputs
