@@ -141,6 +141,7 @@ from app.models.federated_knowledge import (
 from app.models.strategy_library import StrategyLibraryEntry
 from app.models.feature_readiness import FeatureReadinessConfig
 from app.models.action_execution_record import ActionExecutionRecord
+from app.models.connector_registration import ConnectorRegistration
 
 __all__ = [
     # Base
@@ -336,4 +337,6 @@ __all__ = [
     "FeatureReadinessConfig",
     # Phase 47: Autonomous Action Engine
     "ActionExecutionRecord",
+    # Phase 48: Environment Connector Hub
+    "ConnectorRegistration",
 ]
