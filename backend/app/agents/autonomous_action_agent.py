@@ -53,6 +53,17 @@ _VALID_POLICY_DECISIONS = frozenset({
     "auto_approved", "human_review_required", "denied", None
 })
 
+
+def _safe_payload_summary(payload: dict[str, Any]) -> dict[str, Any]:
+    """Return a safe payload summary suitable for audit persistence."""
+    payload = payload or {}
+    return {
+        "mode": "summary",
+        "keys": sorted([str(k) for k in payload.keys()]),
+        "keys_count": len(payload.keys()),
+        "has_nested": any(isinstance(v, (dict, list)) for v in payload.values()),
+    }
+
 # Default connector targets when no ConnectorRegistry is present (dev/demo mode)
 _DEFAULT_TARGETS: dict[str, str] = {
     "pagerduty":   "https://events.pagerduty.com/v2/enqueue",
@@ -325,6 +336,13 @@ class AutonomousActionAgent(BaseAgent):
         memory = context.get("memory", {})
         enrichment = memory.get("enrichment", {})
         content = str(memory.get("content") or "")
+        runtime = context.get("runtime") or {}
+        org_id = str(((context.get("tenant") or {}).get("org_id") or "")).strip()
+        session_id = str(runtime.get("session_id") or "").strip() or None
+
+        policy_override = runtime.get("action_policy_config")
+        connector_registry = runtime.get("connector_registry")
+        execution_logger = runtime.get("action_execution_logger")
 
         strategy = getattr(settings, "AGENT_STRATEGY", "llm")
 
@@ -336,6 +354,13 @@ class AutonomousActionAgent(BaseAgent):
             except Exception:
                 outputs = run_heuristic(enrichment, content)
 
+        dispatch_payload: dict[str, Any] | None = None
+        dispatch_target: str | None = None
+        dispatch_connector_id: str | None = None
+        dispatch_http_status: int | None = None
+        dispatch_attempts: int = 0
+        dispatch_error: str | None = None
+
         # If auto_approved and we have a real connector, actually dispatch
         if (
             outputs.get("policy_decision") == "auto_approved"
@@ -343,18 +368,84 @@ class AutonomousActionAgent(BaseAgent):
             and self._connector is not None
         ):
             action_type = outputs.get("action_type") or "webhook"
-            target = outputs.get("action_target") or _DEFAULT_TARGETS.get(action_type, "")
-            payload = _build_payload(enrichment, content)
-            dispatch_result = await self._connector.dispatch(
+            org_tier = _extract_org_tier(enrichment)
+            dispatch_confidence = _compute_dispatch_confidence(enrichment)
+
+            # Re-evaluate using runtime org policy override if provided.
+            policy_decision = evaluate_policy(
                 action_type=action_type,
-                target_url=target,
-                payload=payload,
+                confidence=dispatch_confidence,
+                org_tier=org_tier,
+                org_config=policy_override if isinstance(policy_override, dict) else None,
             )
-            outputs["action_status"] = dispatch_result.status
-            outputs["action_dispatched"] = dispatch_result.status == "success"
-            outputs["_attempt_count"] = dispatch_result.attempt_count
-            if dispatch_result.error:
-                outputs["_dispatch_error"] = dispatch_result.error
+            outputs["policy_decision"] = policy_decision.decision
+            outputs["dispatch_confidence"] = dispatch_confidence
+
+            if policy_decision.decision != "auto_approved":
+                outputs["action_status"] = (
+                    "pending_review" if policy_decision.decision == "human_review_required" else "denied"
+                )
+                outputs["action_dispatched"] = False
+                outputs["action_target"] = None
+                dispatch_error = policy_decision.reason
+            else:
+                target = outputs.get("action_target") or _DEFAULT_TARGETS.get(action_type, "")
+                headers = None
+
+                # Use tenant connector registry when provided.
+                if connector_registry is not None and org_id:
+                    try:
+                        spec = connector_registry.get_for_action(org_id=org_id, connector_type=action_type)
+                    except Exception:
+                        spec = None
+                    if spec is not None:
+                        dispatch_connector_id = str(getattr(spec, "id", "") or "") or None
+                        target = str(getattr(spec, "target_url", "") or target)
+                        try:
+                            headers = connector_registry.build_dispatch_headers(spec)
+                        except Exception:
+                            headers = None
+
+                payload = _build_payload(enrichment, content)
+                dispatch_payload = payload
+                dispatch_target = target
+
+                dispatch_result = await self._connector.dispatch(
+                    action_type=action_type,
+                    target_url=target,
+                    payload=payload,
+                    headers=headers,
+                )
+                outputs["action_status"] = dispatch_result.status
+                outputs["action_dispatched"] = dispatch_result.status == "success"
+                outputs["action_target"] = target
+                outputs["_attempt_count"] = dispatch_result.attempt_count
+                dispatch_attempts = int(dispatch_result.attempt_count or 0)
+                dispatch_http_status = dispatch_result.http_status_code
+                if dispatch_result.error:
+                    outputs["_dispatch_error"] = dispatch_result.error
+                    dispatch_error = dispatch_result.error
+
+        # Persist action execution audit when a logger is provided.
+        if callable(getattr(execution_logger, "create", None)):
+            try:
+                await execution_logger.create(
+                    organization_id=org_id,
+                    session_id=session_id,
+                    action_type=str(outputs.get("action_type") or "webhook"),
+                    connector_id=dispatch_connector_id,
+                    target_url=dispatch_target,
+                    payload_summary=_safe_payload_summary(dispatch_payload or {}),
+                    status=str(outputs.get("action_status") or "no_action"),
+                    attempt_count=dispatch_attempts,
+                    http_status_code=dispatch_http_status,
+                    error_message=dispatch_error,
+                    policy_decision=str(outputs.get("policy_decision") or "pending"),
+                    confidence_at_dispatch=float(outputs.get("dispatch_confidence") or 0.0),
+                )
+            except Exception:
+                # Logging must never break action execution.
+                pass
 
         finished_at = datetime.now(timezone.utc)
         confidence = outputs.pop("dispatch_confidence", 0.0)
