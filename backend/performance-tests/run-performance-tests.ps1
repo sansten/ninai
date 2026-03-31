@@ -122,6 +122,7 @@ switch ($TestType) {
         Run-Test "queue-operations" | Out-Null
         Run-Test "alert-operations" | Out-Null
         Run-Test "snapshot-operations" | Out-Null
+        Run-Test "env-sync-soak" | Out-Null
     }
     "queue" {
         Write-Host "Running queue operations tests..." -ForegroundColor Cyan
@@ -138,9 +139,14 @@ switch ($TestType) {
         Write-Host ""
         Run-Test "snapshot-operations" | Out-Null
     }
+    "sync" {
+        Write-Host "Running environment sync soak/burst tests..." -ForegroundColor Cyan
+        Write-Host ""
+        Run-Test "env-sync-soak" | Out-Null
+    }
     default {
         Write-Host "❌ Unknown test type: $TestType" -ForegroundColor Red
-        Write-Host "Valid options: all, queue, alert, snapshot" -ForegroundColor Red
+        Write-Host "Valid options: all, queue, alert, snapshot, sync" -ForegroundColor Red
         exit 1
     }
 }
