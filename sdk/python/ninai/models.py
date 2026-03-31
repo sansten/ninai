@@ -224,3 +224,27 @@ class TopicRestructureResult(BaseModel):
     guidance_score_before: float
     guidance_score_after: float
     reassignment_ratio: float
+
+
+class ProofScorecard(BaseModel):
+    lead_time_gain_pct: float
+    sla_avoidance_rate: float
+    mttr_delta_pct: float
+    false_escalation_reduction_pct: float
+    incidents_count: int
+    score: float
+    reproducibility_hash: str
+
+
+class MonthlyImpactReport(BaseModel):
+    month: str
+    tenant_id: str
+    incidents_count: int
+    lead_time_saved_hours: float
+    mttr_saved_hours: float
+    avoided_sla_penalty: float
+    estimated_savings: float
+    operating_cost: float
+    net_impact: float
+    roi_pct: float
+    reproducibility_hash: str

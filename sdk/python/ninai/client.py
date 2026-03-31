@@ -38,6 +38,7 @@ from ninai.resources import (
     TemporalResource,
     MetaCognitiveResource,
     CompositionResource,
+    ProofResource,
 )
 from ninai.agents import GoalPlannerAgent, GoalLinkingAgent, MetaAgent
 from ninai.models import AuthTokens, User
@@ -128,6 +129,7 @@ class NinaiClient:
         self.insights = InsightsResource(self)       # Phase 46: Memory insights
         self.digest = DigestResource(self)           # Phase 46: Intelligence Digest
         self.compliance = ComplianceResource(self)   # Phase 46: GDPR Compliance
+        self.proof = ProofResource(self)             # Phase 54: Proof scorecard + ROI
 
         # Typed agent helpers
         self._goal_planner_agent: GoalPlannerAgent | None = None
