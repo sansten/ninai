@@ -370,6 +370,12 @@ class NarrativeSynthesisAgent(BaseAgent):
                 schema_hint={},
                 tool_event_sink=context.get("tool_event_sink"),
             )
+            # Normalize tone to lowercase so LLM variants like "CAUTION" still match
+            if isinstance(resp, dict) and isinstance(resp.get("tone"), str):
+                resp["tone"] = resp["tone"].lower()
+                if resp["tone"] not in _VALID_TONES:
+                    _tone_map = {"caution": "cautionary", "warning": "cautionary", "info": "informational", "critical": "urgent"}
+                    resp["tone"] = _tone_map.get(resp["tone"], "informational")
             if (
                 isinstance(resp, dict)
                 and isinstance(resp.get("narrative_text"), str)

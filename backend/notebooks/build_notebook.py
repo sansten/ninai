@@ -1,22 +1,31 @@
-{
- "nbformat": 4,
- "nbformat_minor": 5,
- "metadata": {
-  "kernelspec": {
-   "display_name": "Python 3",
-   "language": "python",
-   "name": "python3"
-  },
-  "language_info": {
-   "name": "python",
-   "version": "3.12.0"
-  }
- },
- "cells": [
-  {
-   "cell_type": "markdown",
-   "metadata": {},
-   "source": [
+"""Build ninai_kaggle_demo.ipynb — story-driven, heuristic-vs-LLM comparison."""
+import json
+
+cells = []
+
+
+def md(lines):
+    if isinstance(lines, str):
+        lines = [lines]
+    return {"cell_type": "markdown", "metadata": {}, "source": lines}
+
+
+def code(lines, outputs=None):
+    if isinstance(lines, str):
+        lines = [lines]
+    return {
+        "cell_type": "code",
+        "execution_count": None,
+        "metadata": {},
+        "outputs": outputs or [],
+        "source": lines,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Title
+# ---------------------------------------------------------------------------
+cells.append(md([
     "# Ninai Cognitive OS - Real-World Demo\n",
     "\n",
     "**One incident. Eight records. Watch Ninai discover what nobody told it.**\n",
@@ -39,15 +48,13 @@
     "| T-23h | Post-mortem: ES256 key rotation not applied to production |\n",
     "| T-1h  | **New latency spike — v2.5.0 just deployed** |\n",
     "\n",
-    "Nobody told Ninai any of this structure. It was ingested as 8 raw text records.\n"
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": null,
-   "metadata": {},
-   "outputs": [],
-   "source": [
+    "Nobody told Ninai any of this structure. It was ingested as 8 raw text records.\n",
+]))
+
+# ---------------------------------------------------------------------------
+# 0. Install deps
+# ---------------------------------------------------------------------------
+cells.append(code([
     "import subprocess, sys\n",
     "for _pkg in ['pandas', 'matplotlib', 'seaborn', 'httpx', 'tqdm', 'networkx', 'tabulate', 'nest_asyncio']:\n",
     "    subprocess.run([sys.executable, '-m', 'pip', 'install', '-q', _pkg], check=False)\n",
@@ -57,15 +64,13 @@
     "    _sdk = _pl.Path.cwd() / 'sdk' / 'python'\n",
     "if _sdk.exists():\n",
     "    subprocess.run([sys.executable, '-m', 'pip', 'install', '-q', str(_sdk)], check=False)\n",
-    "print('deps ready')\n"
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": null,
-   "metadata": {},
-   "outputs": [],
-   "source": [
+    "print('deps ready')\n",
+]))
+
+# ---------------------------------------------------------------------------
+# 1. Imports + config
+# ---------------------------------------------------------------------------
+cells.append(code([
     "import sys, os, json, time, asyncio\n",
     "from pathlib import Path\n",
     "\n",
@@ -111,15 +116,13 @@
     "    print('Ollama not available -- LLM cells will use reference outputs')\n",
     "\n",
     "plt.rcParams.update({'figure.dpi': 120, 'axes.spines.top': False, 'axes.spines.right': False})\n",
-    "print('imports ok | AGENT_STRATEGY =', os.environ.get('AGENT_STRATEGY'))\n"
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": null,
-   "metadata": {},
-   "outputs": [],
-   "source": [
+    "print('imports ok | AGENT_STRATEGY =', os.environ.get('AGENT_STRATEGY'))\n",
+]))
+
+# ---------------------------------------------------------------------------
+# 2. Story records
+# ---------------------------------------------------------------------------
+cells.append(code([
     "# 8 synthetic records that form a causal chain around an auth outage.\n",
     "# Ingested as raw text -- Ninai will discover the structure.\n",
     "STORY_RECORDS = [\n",
@@ -202,15 +205,13 @@
     "entity_counts = Counter(r['extra_metadata']['entity'] for r in STORY_RECORDS)\n",
     "for entity, count in entity_counts.items():\n",
     "    datasets = [r['extra_metadata']['dataset'] for r in STORY_RECORDS if r['extra_metadata']['entity'] == entity]\n",
-    "    print(f'  {entity}: {count} records across {set(datasets)}')\n"
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": null,
-   "metadata": {},
-   "outputs": [],
-   "source": [
+    "    print(f'  {entity}: {count} records across {set(datasets)}')\n",
+]))
+
+# ---------------------------------------------------------------------------
+# 3. Bootstrap
+# ---------------------------------------------------------------------------
+cells.append(code([
     "import subprocess, textwrap\n",
     "\n",
     "DEMO_EMAIL    = 'demo@ninai-story.dev'\n",
@@ -259,28 +260,24 @@
     "for line in result.stdout.splitlines():\n",
     "    if line.startswith('ORG_ID:'):\n",
     "        ORG_ID = line.split(':', 1)[1].strip()\n",
-    "print('ORG_ID:', ORG_ID)\n"
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": null,
-   "metadata": {},
-   "outputs": [],
-   "source": [
+    "print('ORG_ID:', ORG_ID)\n",
+]))
+
+# ---------------------------------------------------------------------------
+# 4. Login
+# ---------------------------------------------------------------------------
+cells.append(code([
     "from ninai import NinaiClient\n",
     "\n",
     "ninai_client = NinaiClient(base_url=BASE_URL)\n",
     "ninai_client.login(email=DEMO_EMAIL, password=DEMO_PASSWORD, org_slug=DEMO_ORG_SLUG)\n",
-    "print('logged in')\n"
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": null,
-   "metadata": {},
-   "outputs": [],
-   "source": [
+    "print('logged in')\n",
+]))
+
+# ---------------------------------------------------------------------------
+# 5. Ingest
+# ---------------------------------------------------------------------------
+cells.append(code([
     "from tqdm.notebook import tqdm\n",
     "\n",
     "# Ingest story records\n",
@@ -302,26 +299,24 @@
     "HERO_ID = story_memory_ids['INC-AUTH-001']\n",
     "DEP_ID  = story_memory_ids['DEP-v240']\n",
     "print(f'Story ingested. Hero incident memory ID: {HERO_ID}')\n",
-    "print(f'Deployment memory ID: {DEP_ID}')\n"
-   ]
-  },
-  {
-   "cell_type": "markdown",
-   "metadata": {},
-   "source": [
+    "print(f'Deployment memory ID: {DEP_ID}')\n",
+]))
+
+# ---------------------------------------------------------------------------
+# Section 1 header
+# ---------------------------------------------------------------------------
+cells.append(md([
     "---\n",
     "## Section 1: The Naive Approach — Plain Keyword/Vector Search\n",
     "\n",
     "A standard search returns text snippets ranked by similarity. You get back words.\n",
-    "No causal context. No conflict signal. No credibility. No \"why\".\n"
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": null,
-   "metadata": {},
-   "outputs": [],
-   "source": [
+    "No causal context. No conflict signal. No credibility. No \"why\".\n",
+]))
+
+# ---------------------------------------------------------------------------
+# 6. Plain search
+# ---------------------------------------------------------------------------
+cells.append(code([
     "# Plain search — what any vector database or Elasticsearch would give you\n",
     "import httpx\n",
     "\n",
@@ -349,26 +344,24 @@
     "    print()\n",
     "\n",
     "print('What you have: text snippets.')\n",
-    "print('What you lack: cause, conflict, credibility, recommended action.')\n"
-   ]
-  },
-  {
-   "cell_type": "markdown",
-   "metadata": {},
-   "source": [
+    "print('What you lack: cause, conflict, credibility, recommended action.')\n",
+]))
+
+# ---------------------------------------------------------------------------
+# Section 2 header
+# ---------------------------------------------------------------------------
+cells.append(md([
     "---\n",
     "## Section 2: The Ninai Approach — Assembled Intelligence\n",
     "\n",
     "Now we run the enrichment pipeline on the hero incident and show what Ninai\n",
-    "assembles from the same raw text — starting from nothing.\n"
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": null,
-   "metadata": {},
-   "outputs": [],
-   "source": [
+    "assembles from the same raw text — starting from nothing.\n",
+]))
+
+# ---------------------------------------------------------------------------
+# 7. Run full enrichment pipeline (async, heuristic mode)
+# ---------------------------------------------------------------------------
+cells.append(code([
     "import asyncio, os, nest_asyncio\n",
     "nest_asyncio.apply()\n",
     "from datetime import datetime, timezone\n",
@@ -426,25 +419,23 @@
     "agent_names = ['SemanticNorm', 'EntityRes', 'Credibility', 'Conflict', 'Causal', 'Goals', 'Narrative']\n",
     "print('Pipeline complete. Agent outputs:\\n')\n",
     "for name, r in zip(agent_names, results):\n",
-    "    print(f'  {name:14s}  status={r.status}  confidence={r.confidence:.2f}')\n"
-   ]
-  },
-  {
-   "cell_type": "markdown",
-   "metadata": {},
-   "source": [
+    "    print(f'  {name:14s}  status={r.status}  confidence={r.confidence:.2f}')\n",
+]))
+
+# ---------------------------------------------------------------------------
+# Section 3 header
+# ---------------------------------------------------------------------------
+cells.append(md([
     "---\n",
     "## Section 3: The Enrichment Pipeline — Step by Step\n",
     "\n",
-    "Same record. Seven agents. Each adds a layer of understanding.\n"
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": null,
-   "metadata": {},
-   "outputs": [],
-   "source": [
+    "Same record. Seven agents. Each adds a layer of understanding.\n",
+]))
+
+# ---------------------------------------------------------------------------
+# 8. Semantic normalization
+# ---------------------------------------------------------------------------
+cells.append(code([
     "print('=== Semantic Normalization (Agent 1/7) ===')\n",
     "print(f'  Input  : raw text ({len(HERO[\"content\"])} chars)')\n",
     "print(f'  Intent : {enrichment.get(\"intent\")}')\n",
@@ -452,15 +443,13 @@
     "print(f'  Relationships detected:')\n",
     "for rel in enrichment.get('semantic_relationships', [])[:5]:\n",
     "    print(f'    {rel.get(\"type\"):25s} -> {rel.get(\"concept\")}')\n",
-    "print(f'  Mode   : {enrichment.get(\"rationale\")}')\n"
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": null,
-   "metadata": {},
-   "outputs": [],
-   "source": [
+    "print(f'  Mode   : {enrichment.get(\"rationale\")}')\n",
+]))
+
+# ---------------------------------------------------------------------------
+# 9. Entity resolution
+# ---------------------------------------------------------------------------
+cells.append(code([
     "print('=== Entity Resolution (Agent 2/7) ===')\n",
     "print(f'  Resolved entities:')\n",
     "for e in enrichment.get('resolved_entities', []):\n",
@@ -473,15 +462,13 @@
     "        print(f'    {link.get(\"canonical\"):20s}  silos={link.get(\"silo_count\")}  domains={link.get(\"domains\")}')\n",
     "else:\n",
     "    print('  No cross-silo links (expected for single-record run; links emerge after multi-record ingestion)')\n",
-    "print(f'  Mode: {enrichment.get(\"rationale\")}')\n"
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": null,
-   "metadata": {},
-   "outputs": [],
-   "source": [
+    "print(f'  Mode: {enrichment.get(\"rationale\")}')\n",
+]))
+
+# ---------------------------------------------------------------------------
+# 10. Credibility
+# ---------------------------------------------------------------------------
+cells.append(code([
     "print('=== Credibility Scoring (Agent 3/7) ===')\n",
     "score = enrichment.get('credibility_score', 0)\n",
     "tier  = enrichment.get('source_tier', '?')\n",
@@ -492,15 +479,13 @@
     "print(f'  Corroborated by {enrichment.get(\"corroboration_count\", 0)} other memories')\n",
     "print()\n",
     "print('  Why this matters: api-sourced engineer reports score high (primary tier).')\n",
-    "print('  A rumour or anonymous scrape would score 0.35 and surface a flag.')\n"
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": null,
-   "metadata": {},
-   "outputs": [],
-   "source": [
+    "print('  A rumour or anonymous scrape would score 0.35 and surface a flag.')\n",
+]))
+
+# ---------------------------------------------------------------------------
+# 11. Conflict detection
+# ---------------------------------------------------------------------------
+cells.append(code([
     "print('=== Conflict Detection (Agent 4/7) ===')\n",
     "conflicts = enrichment.get('conflicts', [])\n",
     "print(f'  Conflicts found: {enrichment.get(\"conflict_count\", 0)}')\n",
@@ -557,15 +542,13 @@
     "    print('  Incident record  (T-48h): AuthService DOWN    - \"500 errors on all /validate endpoints.\"')\n",
     "    print('  Same entity. Opposite states. Different silos (deployment vs servicenow).')\n",
     "    print('  Severity: HIGH (entity_type=service, 2+ silos)')\n",
-    "    print('  Resolution hint: Reconcile auth service state across deployment and operations silos.')\n"
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": null,
-   "metadata": {},
-   "outputs": [],
-   "source": [
+    "    print('  Resolution hint: Reconcile auth service state across deployment and operations silos.')\n",
+]))
+
+# ---------------------------------------------------------------------------
+# 12. Causal chain
+# ---------------------------------------------------------------------------
+cells.append(code([
     "print('=== Causal Reasoning (Agent 5/7) ===')\n",
     "chains = enrichment.get('causal_chains', [])\n",
     "roots  = enrichment.get('root_causes', [])\n",
@@ -593,15 +576,13 @@
     "if roots:\n",
     "    print(f'\\n  Root cause: {roots[0].get(\"entity\")} (score={roots[0].get(\"cause_score\", 0):.2f})')\n",
     "    if enrichment.get('counterfactual_hint'):\n",
-    "        print(f'  Counterfactual: {enrichment[\"counterfactual_hint\"]}')\n"
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": null,
-   "metadata": {},
-   "outputs": [],
-   "source": [
+    "        print(f'  Counterfactual: {enrichment[\"counterfactual_hint\"]}')\n",
+]))
+
+# ---------------------------------------------------------------------------
+# 13. Causal chain visualization
+# ---------------------------------------------------------------------------
+cells.append(code([
     "fig, ax = plt.subplots(figsize=(13, 4))\n",
     "ax.set_xlim(0, 13); ax.set_ylim(-1, 2); ax.axis('off')\n",
     "ax.set_title('Causal Chain: v2.4.0 Deployment -> Auth Outage -> Revenue Loss', fontsize=12, fontweight='bold')\n",
@@ -643,28 +624,26 @@
     "        ax.text(mx, my, f'{mechanism}\\n(str={strength})', ha='center', va='bottom', fontsize=6, color='#333')\n",
     "\n",
     "plt.tight_layout()\n",
-    "plt.show()\n"
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": null,
-   "metadata": {},
-   "outputs": [],
-   "source": [
+    "plt.show()\n",
+]))
+
+# ---------------------------------------------------------------------------
+# 14. Goal decomposition
+# ---------------------------------------------------------------------------
+cells.append(code([
     "print('=== Goal Decomposition (Agent 6/7) ===')\n",
     "print(f'  Goal detected   : {enrichment.get(\"goal_detected\")}')\n",
     "print(f'  Completion      : {enrichment.get(\"completion_fraction\", 0)*100:.0f}%')\n",
     "print(f'  Blocking subtask: {enrichment.get(\"blocking_subtask\")}')\n",
     "print(f'  Subtasks:')\n",
     "for i, task in enumerate(enrichment.get('subtasks', [])[:6], 1):\n",
-    "    print(f'    {i}. {task}')\n"
-   ]
-  },
-  {
-   "cell_type": "markdown",
-   "metadata": {},
-   "source": [
+    "    print(f'    {i}. {task}')\n",
+]))
+
+# ---------------------------------------------------------------------------
+# Section 4 header
+# ---------------------------------------------------------------------------
+cells.append(md([
     "---\n",
     "## Section 4: Heuristic vs LLM Mode\n",
     "\n",
@@ -672,15 +651,13 @@
     "- **Heuristic**: deterministic rules, instant, no dependencies, always available\n",
     "- **LLM**: Ollama (local), richer language, same schema, falls back to heuristic on failure\n",
     "\n",
-    "The schema is identical. The quality scales with the model.\n"
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": null,
-   "metadata": {},
-   "outputs": [],
-   "source": [
+    "The schema is identical. The quality scales with the model.\n",
+]))
+
+# ---------------------------------------------------------------------------
+# 15. Check Ollama
+# ---------------------------------------------------------------------------
+cells.append(code([
     "# Ollama was already detected in the imports cell.\n",
     "# Reset the circuit breaker so any earlier timeouts don't block LLM calls here.\n",
     "from app.core.circuit_breaker import circuit_breaker_registry\n",
@@ -691,15 +668,13 @@
     "    print(f'Using model      : {OLLAMA_MODEL_FOR_DEMO}  (timeout={_settings.OLLAMA_TIMEOUT_SECONDS}s)')\n",
     "    print('Circuit breaker  : reset')\n",
     "else:\n",
-    "    print('Ollama not running -- reference LLM outputs will be used for illustration.')\n"
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": null,
-   "metadata": {},
-   "outputs": [],
-   "source": [
+    "    print('Ollama not running -- reference LLM outputs will be used for illustration.')\n",
+]))
+
+# ---------------------------------------------------------------------------
+# 16. NarrativeSynthesisAgent heuristic
+# ---------------------------------------------------------------------------
+cells.append(code([
     "# Build a rich enrichment dict so both heuristic and LLM have meaningful signals.\n",
     "# This merges pipeline output with known story facts so the comparison is compelling.\n",
     "rich_enrichment = {\n",
@@ -742,15 +717,13 @@
     "print(f'Entities  : {h_out.get(\"key_entities\")}')\n",
     "print(f'Actions   : {h_out.get(\"action_items\")}')\n",
     "print(f'Confidence: {h_out.get(\"confidence\", 0):.2f}')\n",
-    "print(f'Rationale : {h_out.get(\"rationale\")}')\n"
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": null,
-   "metadata": {},
-   "outputs": [],
-   "source": [
+    "print(f'Rationale : {h_out.get(\"rationale\")}')\n",
+]))
+
+# ---------------------------------------------------------------------------
+# 17. NarrativeSynthesisAgent LLM
+# ---------------------------------------------------------------------------
+cells.append(code([
     "if OLLAMA_AVAILABLE:\n",
     "    _settings.AGENT_STRATEGY = 'llm'\n",
     "    l_result = asyncio.run(NarrativeSynthesisAgent().run(HERO_ID, narrative_ctx))\n",
@@ -788,15 +761,13 @@
     "for a in l_out.get('action_items', []):\n",
     "    print(f'  - {a}')\n",
     "print(f'Confidence: {l_out.get(\"confidence\", 0):.2f}')\n",
-    "print(f'Rationale : {l_out.get(\"rationale\")}')\n"
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": null,
-   "metadata": {},
-   "outputs": [],
-   "source": [
+    "print(f'Rationale : {l_out.get(\"rationale\")}')\n",
+]))
+
+# ---------------------------------------------------------------------------
+# 18. Side-by-side comparison chart
+# ---------------------------------------------------------------------------
+cells.append(code([
     "fig, axes = plt.subplots(1, 2, figsize=(14, 5))\n",
     "fig.suptitle('Heuristic vs LLM Mode - NarrativeSynthesisAgent', fontsize=13, fontweight='bold')\n",
     "\n",
@@ -822,15 +793,13 @@
     "\n",
     "plt.tight_layout()\n",
     "plt.show()\n",
-    "print('Same schema. Different depth. LLM mode adds nuance; heuristic is always available.')\n"
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": null,
-   "metadata": {},
-   "outputs": [],
-   "source": [
+    "print('Same schema. Different depth. LLM mode adds nuance; heuristic is always available.')\n",
+]))
+
+# ---------------------------------------------------------------------------
+# 19. GoalDecomposition heuristic vs LLM
+# ---------------------------------------------------------------------------
+cells.append(code([
     "# GoalDecompositionAgent: heuristic vs LLM\n",
     "_settings.AGENT_STRATEGY = 'heuristic'\n",
     "hg = asyncio.run(GoalDecompositionAgent().run(HERO_ID, narrative_ctx)).outputs\n",
@@ -864,26 +833,24 @@
     "\n",
     "print(tabulate(rows, headers=['#', 'HEURISTIC subtasks', 'LLM subtasks'], tablefmt='simple', maxcolwidths=[None, 40, 40]))\n",
     "print(f'\\nHeuristic blocking: {hg.get(\"blocking_subtask\")}')\n",
-    "print(f'LLM blocking      : {lg.get(\"blocking_subtask\")}')\n"
-   ]
-  },
-  {
-   "cell_type": "markdown",
-   "metadata": {},
-   "source": [
+    "print(f'LLM blocking      : {lg.get(\"blocking_subtask\")}')\n",
+]))
+
+# ---------------------------------------------------------------------------
+# Section 5 header
+# ---------------------------------------------------------------------------
+cells.append(md([
     "---\n",
     "## Section 5: What Ninai Discovered That Nobody Told It\n",
     "\n",
     "8 raw text records. No schema. No tags beyond what the author wrote.\n",
-    "Here is what Ninai assembled automatically.\n"
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": null,
-   "metadata": {},
-   "outputs": [],
-   "source": [
+    "Here is what Ninai assembled automatically.\n",
+]))
+
+# ---------------------------------------------------------------------------
+# 20. Discovery summary
+# ---------------------------------------------------------------------------
+cells.append(code([
     "fig, axes = plt.subplots(1, 3, figsize=(15, 5))\n",
     "fig.suptitle('What Ninai Discovered Autonomously from 8 Raw Records', fontsize=13, fontweight='bold')\n",
     "\n",
@@ -957,26 +924,24 @@
     "    ax.text(x + 0.22, y_pos, event, transform=ax.transAxes, fontsize=7.5, va='center', color='#333')\n",
     "\n",
     "plt.tight_layout()\n",
-    "plt.show()\n"
-   ]
-  },
-  {
-   "cell_type": "markdown",
-   "metadata": {},
-   "source": [
+    "plt.show()\n",
+]))
+
+# ---------------------------------------------------------------------------
+# Section 6 header
+# ---------------------------------------------------------------------------
+cells.append(md([
     "---\n",
     "## Section 6: The Intelligence Briefing\n",
     "\n",
     "Everything assembled into one actionable output.\n",
-    "This is what an on-call engineer receives instead of 8 separate search results.\n"
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": null,
-   "metadata": {},
-   "outputs": [],
-   "source": [
+    "This is what an on-call engineer receives instead of 8 separate search results.\n",
+]))
+
+# ---------------------------------------------------------------------------
+# 21. Final briefing
+# ---------------------------------------------------------------------------
+cells.append(code([
     "print('=' * 70)\n",
     "print('  NINAI INTELLIGENCE BRIEFING')\n",
     "print('  Auth Service Incident Chain | Generated:', __import__('datetime').datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC'))\n",
@@ -1008,15 +973,13 @@
     "print()\n",
     "print('=' * 70)\n",
     "print('  vs. PLAIN SEARCH: 5 text snippets. No cause. No conflict. No actions.')\n",
-    "print('=' * 70)\n"
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": null,
-   "metadata": {},
-   "outputs": [],
-   "source": [
+    "print('=' * 70)\n",
+]))
+
+# ---------------------------------------------------------------------------
+# 22. Trigger + retrieve digest
+# ---------------------------------------------------------------------------
+cells.append(code([
     "# Trigger daily digest and show the intelligence summary\n",
     "try:\n",
     "    result = ninai_client.digest.trigger()\n",
@@ -1034,8 +997,24 @@
     "    print()\n",
     "    print(digest.get('narrative', 'No narrative yet'))\n",
     "except Exception as ex:\n",
-    "    print(f'Digest: {ex}')\n"
-   ]
-  }
- ]
+    "    print(f'Digest: {ex}')\n",
+]))
+
+# ---------------------------------------------------------------------------
+# Write notebook
+# ---------------------------------------------------------------------------
+nb = {
+    "nbformat": 4,
+    "nbformat_minor": 5,
+    "metadata": {
+        "kernelspec": {"display_name": "Python 3", "language": "python", "name": "python3"},
+        "language_info": {"name": "python", "version": "3.12.0"},
+    },
+    "cells": cells,
 }
+
+import pathlib
+out = pathlib.Path(__file__).parent / "ninai_kaggle_demo.ipynb"
+with open(out, "w", encoding="utf-8") as f:
+    json.dump(nb, f, indent=1, ensure_ascii=False)
+print(f"Written {len(cells)} cells to {out}")

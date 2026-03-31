@@ -53,6 +53,7 @@ from app.agents.compositional_generalization_agent import CompositionalGeneraliz
 from app.agents.emotional_affective_memory_agent import EmotionalAffectiveMemoryAgent
 from app.agents.multimodal_deep_memory_agent import MultimodalDeepMemoryAgent
 from app.agents.federated_memory_agent import FederatedMemoryAgent
+from app.agents.autonomous_action_agent import AutonomousActionAgent
 
 
 def get_agent(agent_name: str) -> Optional[BaseAgent]:
@@ -212,5 +213,10 @@ def get_agent(agent_name: str) -> Optional[BaseAgent]:
                 "federatedmemoryagent", "collective_intelligence",
                 "collectiveintelligence"}:
         return FederatedMemoryAgent()
+
+    if name in {"autonomous_action", "autonomousaction",
+                "autonomousactionagent", "autonomous_action_agent",
+                "action_engine", "actionengine"}:
+        return AutonomousActionAgent()
 
     return None

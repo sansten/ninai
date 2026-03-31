@@ -125,9 +125,10 @@ async def get_memory_insights(
     inactive_memories = int(total_row.inactive or 0)
 
     # -- creation trend --------------------------------------------------
+    _day = func.date_trunc("day", MemoryMetadata.created_at)
     trend_stmt = (
         select(
-            func.date_trunc("day", MemoryMetadata.created_at).label("day"),
+            _day.label("day"),
             func.count(MemoryMetadata.id).label("cnt"),
         )
         .where(
@@ -136,8 +137,8 @@ async def get_memory_insights(
                 MemoryMetadata.created_at >= cutoff,
             )
         )
-        .group_by(func.date_trunc("day", MemoryMetadata.created_at))
-        .order_by(func.date_trunc("day", MemoryMetadata.created_at).asc())
+        .group_by(_day)
+        .order_by(_day.asc())
     )
     trend_rows = (await db.execute(trend_stmt)).all()
     creation_trend = [
