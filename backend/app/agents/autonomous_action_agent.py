@@ -343,6 +343,15 @@ class AutonomousActionAgent(BaseAgent):
         policy_override = runtime.get("action_policy_config")
         connector_registry = runtime.get("connector_registry")
         execution_logger = runtime.get("action_execution_logger")
+        runtime_control = runtime.get("action_runtime_control") or {}
+
+        controls_enabled = bool(runtime_control.get("enabled", True))
+        dry_run = bool(runtime_control.get("dry_run", False))
+        disabled_action_types = {
+            str(t).strip().lower()
+            for t in (runtime_control.get("disabled_action_types") or [])
+            if t
+        }
 
         strategy = getattr(settings, "AGENT_STRATEGY", "llm")
 
@@ -388,6 +397,23 @@ class AutonomousActionAgent(BaseAgent):
                 outputs["action_dispatched"] = False
                 outputs["action_target"] = None
                 dispatch_error = policy_decision.reason
+            elif (not controls_enabled) or (str(action_type).strip().lower() in disabled_action_types):
+                outputs["action_status"] = "denied"
+                outputs["action_dispatched"] = False
+                outputs["policy_decision"] = "denied"
+                outputs["action_target"] = None
+                dispatch_error = (
+                    "runtime action control disabled all actions"
+                    if not controls_enabled
+                    else f"runtime action control disabled type={action_type}"
+                )
+                outputs["_runtime_control_reason"] = dispatch_error
+            elif dry_run:
+                outputs["action_status"] = "success"
+                outputs["action_dispatched"] = False
+                outputs["_dry_run"] = True
+                dispatch_target = outputs.get("action_target") or _DEFAULT_TARGETS.get(action_type, "")
+                dispatch_payload = _build_payload(enrichment, content)
             else:
                 target = outputs.get("action_target") or _DEFAULT_TARGETS.get(action_type, "")
                 headers = None
