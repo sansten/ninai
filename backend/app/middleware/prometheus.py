@@ -287,9 +287,12 @@ class StructuredLoggingMiddleware(BaseHTTPMiddleware):
             
             self.logger.info(json.dumps(response_log))
             
-            # Add correlation ID to response headers
-            response.headers["X-Correlation-ID"] = correlation_id
-            
+            # Add correlation ID to response headers (best-effort; headers may already be sent)
+            try:
+                response.headers["X-Correlation-ID"] = correlation_id
+            except Exception:
+                pass
+
             return response
             
         except Exception as exc:

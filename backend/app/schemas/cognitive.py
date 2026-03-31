@@ -35,7 +35,7 @@ class PlannerOutput(BaseSchema):
     confidence: float = Field(ge=0.0, le=1.0)
 
 
-ExecutorStepStatus = Literal["success", "denied", "failed", "skipped"]
+ExecutorStepStatus = Literal["success", "denied", "failed", "skipped", "rolled_back"]
 
 
 class ExecutorStepResult(BaseSchema):

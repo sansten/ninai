@@ -21,6 +21,7 @@ from app.models.user import (
     Role,
     UserRole,
 )
+from app.models.admin import AdminRole, AdminSession, AdminIPWhitelist
 from app.models.team import (
     Team,
     TeamMember,
@@ -139,6 +140,7 @@ from app.models.federated_knowledge import (
 )
 from app.models.strategy_library import StrategyLibraryEntry
 from app.models.feature_readiness import FeatureReadinessConfig
+from app.models.action_execution_record import ActionExecutionRecord
 
 __all__ = [
     # Base
@@ -153,6 +155,10 @@ __all__ = [
     "User",
     "Role",
     "UserRole",
+    # Admin
+    "AdminRole",
+    "AdminSession",
+    "AdminIPWhitelist",
     # Team
     "Team",
     "TeamMember",
@@ -328,4 +334,6 @@ __all__ = [
     "StrategyLibraryEntry",
     # Phase 28: Feature Readiness Engine
     "FeatureReadinessConfig",
+    # Phase 47: Autonomous Action Engine
+    "ActionExecutionRecord",
 ]
