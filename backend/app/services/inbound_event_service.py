@@ -188,6 +188,49 @@ _PARSERS = {
 }
 
 
+def validate_inbound_payload_contract(connector_type: str, payload: dict[str, Any]) -> None:
+    """Validate minimal inbound payload contracts for known connector types.
+
+    Raises ValueError when a required shape is missing.
+    """
+    ctype = str(connector_type).lower().strip()
+
+    if ctype == "pagerduty":
+        event = payload.get("event")
+        if not isinstance(event, dict):
+            raise ValueError("pagerduty payload requires object field 'event'")
+        data = event.get("data")
+        incident = payload.get("incident")
+        if not isinstance(data, dict) and not isinstance(incident, dict):
+            raise ValueError("pagerduty payload requires event.data or incident object")
+        return
+
+    if ctype == "jira":
+        issue = payload.get("issue")
+        if not isinstance(issue, dict):
+            raise ValueError("jira payload requires object field 'issue'")
+        fields = issue.get("fields")
+        if not isinstance(fields, dict):
+            raise ValueError("jira payload requires issue.fields object")
+        return
+
+    if ctype == "slack":
+        event = payload.get("event", payload)
+        if not isinstance(event, dict):
+            raise ValueError("slack payload requires object field 'event' or object root")
+        if not event.get("type"):
+            raise ValueError("slack payload requires event.type")
+        return
+
+    # Generic/webhook-like payloads must at least carry one identity signal.
+    has_identity = any(
+        payload.get(k)
+        for k in ("id", "event_id", "title", "summary", "name", "message")
+    )
+    if not has_identity:
+        raise ValueError("generic payload requires one of id/event_id/title/summary/name/message")
+
+
 def parse_inbound_event(
     connector_type: str,
     payload: dict[str, Any],
