@@ -21,6 +21,9 @@ from typing import Any, Callable
 from app.services.inbound_event_service import NormalizedEvent, parse_inbound_event
 
 
+_GLOBAL_ENV_SYNC_SERVICE: "EnvironmentSyncService | None" = None
+
+
 @dataclass
 class NormalizedInboundEvent:
     """Normalized inbound envelope used by sync state processing."""
@@ -78,6 +81,19 @@ class SyncSummary:
     applied_events: int
     duplicate_events: int
     out_of_order_events: int
+
+
+@dataclass
+class ConnectorSyncSummary:
+    """Per-connector summary for lag/divergence dashboard metrics."""
+
+    org_id: str
+    connector_type: str
+    object_count: int
+    diverged_objects: int
+    divergence_rate: float
+    avg_lag_seconds: float
+    max_lag_seconds: float
 
 
 class EnvironmentSyncService:
@@ -247,6 +263,41 @@ class EnvironmentSyncService:
             out_of_order_events=self._out_of_order.get(org_id, 0),
         )
 
+    def connector_summaries(self, org_id: str) -> list[ConnectorSyncSummary]:
+        """Return per-connector lag/divergence summaries for one org."""
+        now = self._now()
+        grouped: dict[str, list[CanonicalConnectorState]] = {}
+        for state in self._states.values():
+            if state.org_id != org_id:
+                continue
+            grouped.setdefault(state.connector_type, []).append(state)
+
+        summaries: list[ConnectorSyncSummary] = []
+        for connector_type, items in grouped.items():
+            object_count = len(items)
+            diverged = sum(1 for s in items if s.diverged)
+            lags = [max(0.0, (now - s.last_seen_at).total_seconds()) for s in items]
+            avg_lag = (sum(lags) / len(lags)) if lags else 0.0
+            max_lag = max(lags) if lags else 0.0
+
+            summaries.append(
+                ConnectorSyncSummary(
+                    org_id=org_id,
+                    connector_type=connector_type,
+                    object_count=object_count,
+                    diverged_objects=diverged,
+                    divergence_rate=(diverged / object_count) if object_count else 0.0,
+                    avg_lag_seconds=round(avg_lag, 2),
+                    max_lag_seconds=round(max_lag, 2),
+                )
+            )
+
+        return summaries
+
+    def org_ids(self) -> list[str]:
+        """Return all org IDs currently represented in canonical state."""
+        return sorted({org_id for (org_id, _, _) in self._states.keys()})
+
     def get_state(
         self,
         *,
@@ -363,3 +414,11 @@ class EnvironmentSyncService:
     @staticmethod
     def _inc(counter: dict[str, int], org_id: str) -> None:
         counter[org_id] = counter.get(org_id, 0) + 1
+
+
+def get_environment_sync_service() -> EnvironmentSyncService:
+    """Return a process-local singleton sync service instance."""
+    global _GLOBAL_ENV_SYNC_SERVICE
+    if _GLOBAL_ENV_SYNC_SERVICE is None:
+        _GLOBAL_ENV_SYNC_SERVICE = EnvironmentSyncService()
+    return _GLOBAL_ENV_SYNC_SERVICE

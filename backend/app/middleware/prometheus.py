@@ -135,6 +135,42 @@ celery_task_duration_seconds = Histogram(
     registry=metrics_registry
 )
 
+# Environment sync metrics
+env_sync_lag_seconds = Gauge(
+    'env_sync_lag_seconds',
+    'Observed max sync lag seconds per org and connector',
+    ['org_id', 'connector_type'],
+    registry=metrics_registry,
+)
+
+env_sync_diverged_objects = Gauge(
+    'env_sync_diverged_objects',
+    'Count of diverged canonical sync objects per org and connector',
+    ['org_id', 'connector_type'],
+    registry=metrics_registry,
+)
+
+env_sync_reconcile_runs_total = Counter(
+    'env_sync_reconcile_runs_total',
+    'Total outbound environment reconciliation worker runs',
+    ['status'],
+    registry=metrics_registry,
+)
+
+env_sync_reconcile_candidates_total = Counter(
+    'env_sync_reconcile_candidates_total',
+    'Total reconciliation candidate outcomes',
+    ['status'],
+    registry=metrics_registry,
+)
+
+env_sync_reconcile_dlq_handoffs_total = Counter(
+    'env_sync_reconcile_dlq_handoffs_total',
+    'Total reconciliation failures handed off to DLQ',
+    ['reason'],
+    registry=metrics_registry,
+)
+
 
 class PrometheusMiddleware(BaseHTTPMiddleware):
     """
@@ -370,3 +406,31 @@ def update_db_connections(count: int) -> None:
 def record_db_query(query_type: str, duration: float) -> None:
     """Record a database query"""
     db_query_duration_seconds.labels(query_type=query_type).observe(duration)
+
+
+def update_environment_sync_connector_metrics(org_id: str, connector_summaries: list) -> None:
+    """Update lag/divergence gauges from connector summary objects."""
+    for summary in connector_summaries:
+        connector_type = str(getattr(summary, "connector_type", "unknown"))
+        max_lag = float(getattr(summary, "max_lag_seconds", 0.0) or 0.0)
+        diverged = int(getattr(summary, "diverged_objects", 0) or 0)
+
+        env_sync_lag_seconds.labels(org_id=org_id, connector_type=connector_type).set(max_lag)
+        env_sync_diverged_objects.labels(org_id=org_id, connector_type=connector_type).set(diverged)
+
+
+def record_environment_reconcile_run(
+    *,
+    run_status: str,
+    succeeded: int,
+    failed: int,
+    dlq_handoffs: int,
+) -> None:
+    """Record counters for one reconciliation worker run."""
+    env_sync_reconcile_runs_total.labels(status=run_status).inc()
+    if succeeded > 0:
+        env_sync_reconcile_candidates_total.labels(status="succeeded").inc(succeeded)
+    if failed > 0:
+        env_sync_reconcile_candidates_total.labels(status="failed").inc(failed)
+    if dlq_handoffs > 0:
+        env_sync_reconcile_dlq_handoffs_total.labels(reason="dispatch_failure").inc(dlq_handoffs)
