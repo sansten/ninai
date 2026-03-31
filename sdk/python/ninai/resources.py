@@ -23,6 +23,8 @@ from ninai.models import (
     LLMCompleteJsonResponse,
     TopicReassignmentRatio,
     TopicRestructureResult,
+        ProofScorecard,
+        MonthlyImpactReport,
 )
 
 
@@ -1170,3 +1172,48 @@ class ComplianceResource:
     def list_consents(self) -> Dict[str, Any]:
         """List recorded consent entries for the current user."""
         return self._client._get("/compliance/consent")
+
+
+class ProofResource:
+    """Proof layer endpoints for scorecard and ROI reporting."""
+
+    def __init__(self, client: "NinaiClient"):
+        self._client = client
+
+    def scorecard(
+        self,
+        *,
+        records: list[dict[str, Any]],
+        baseline: dict[str, float],
+    ) -> ProofScorecard:
+        response = self._client._post(
+            "/proof/scorecard",
+            json={
+                "records": records,
+                "baseline": baseline,
+            },
+        )
+        return ProofScorecard(**response)
+
+    def monthly_impact(
+        self,
+        *,
+        month: str,
+        records: list[dict[str, Any]],
+        baseline: dict[str, float],
+        labor_cost_per_hour: float = 120.0,
+        false_escalation_cost: float = 250.0,
+        monthly_operating_cost: float = 3000.0,
+    ) -> MonthlyImpactReport:
+        response = self._client._post(
+            "/proof/monthly-impact",
+            json={
+                "month": month,
+                "records": records,
+                "baseline": baseline,
+                "labor_cost_per_hour": labor_cost_per_hour,
+                "false_escalation_cost": false_escalation_cost,
+                "monthly_operating_cost": monthly_operating_cost,
+            },
+        )
+        return MonthlyImpactReport(**response)
