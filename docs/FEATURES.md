@@ -214,6 +214,7 @@ Platform engineer checks observability dashboard:
 - **Python SDK**: `ninai` package with client library
 - **Webhooks**: Event streaming for integrations
 - **API Keys**: Long-lived credentials for automation
+- **Proof Productization Playbook**: See `docs/PHASE54_PROOF_PRODUCTIZATION_PLAYBOOK.md` for tiering, rollout checklist, and Python/Node/Java reference integrations
 
 ### Observability (Basic)
 - **Request logging**: HTTP method, path, status, duration
