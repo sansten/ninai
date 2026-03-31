@@ -112,6 +112,7 @@ case $TEST_TYPE in
     run_test "queue-operations" || true
     run_test "alert-operations" || true
     run_test "snapshot-operations" || true
+    run_test "env-sync-soak" || true
     ;;
   queue)
     echo "Running queue operations tests..."
@@ -128,9 +129,14 @@ case $TEST_TYPE in
     echo ""
     run_test "snapshot-operations"
     ;;
+  sync)
+    echo "Running environment sync soak/burst tests..."
+    echo ""
+    run_test "env-sync-soak"
+    ;;
   *)
     echo "❌ Unknown test type: $TEST_TYPE"
-    echo "Valid options: all, queue, alert, snapshot"
+    echo "Valid options: all, queue, alert, snapshot, sync"
     exit 1
     ;;
 esac
