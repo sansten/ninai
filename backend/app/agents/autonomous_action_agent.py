@@ -26,6 +26,8 @@ Outputs:
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import json
 from datetime import datetime, timezone
 from typing import Any
 
@@ -63,6 +65,20 @@ def _safe_payload_summary(payload: dict[str, Any]) -> dict[str, Any]:
         "keys_count": len(payload.keys()),
         "has_nested": any(isinstance(v, (dict, list)) for v in payload.values()),
     }
+
+
+def _compute_idempotency_key(org_id: str, memory_id: str, action_type: str) -> str:
+    """Return a 32-char hex idempotency key for (org_id, memory_id, action_type).
+
+    Deterministic — same inputs always produce the same key, enabling
+    duplicate-dispatch suppression across retries and re-deliveries.
+    """
+    raw = json.dumps(
+        {"org_id": org_id, "memory_id": memory_id, "action_type": action_type},
+        sort_keys=True,
+    )
+    return hashlib.sha256(raw.encode()).hexdigest()[:32]
+
 
 # Default connector targets when no ConnectorRegistry is present (dev/demo mode)
 _DEFAULT_TARGETS: dict[str, str] = {
@@ -369,6 +385,7 @@ class AutonomousActionAgent(BaseAgent):
         dispatch_http_status: int | None = None
         dispatch_attempts: int = 0
         dispatch_error: str | None = None
+        idem_key: str | None = None
 
         # If auto_approved and we have a real connector, actually dispatch
         if (
@@ -415,42 +432,62 @@ class AutonomousActionAgent(BaseAgent):
                 dispatch_target = outputs.get("action_target") or _DEFAULT_TARGETS.get(action_type, "")
                 dispatch_payload = _build_payload(enrichment, content)
             else:
-                target = outputs.get("action_target") or _DEFAULT_TARGETS.get(action_type, "")
-                headers = None
+                idem_key = _compute_idempotency_key(org_id, memory_id, action_type)
 
-                # Use tenant connector registry when provided.
-                if connector_registry is not None and org_id:
+                # Idempotency: skip dispatch if identical action was already sent.
+                _prior_result = None
+                if callable(getattr(execution_logger, "find_by_idempotency_key", None)):
                     try:
-                        spec = connector_registry.get_for_action(org_id=org_id, connector_type=action_type)
+                        _prior_result = await execution_logger.find_by_idempotency_key(idem_key)
                     except Exception:
-                        spec = None
-                    if spec is not None:
-                        dispatch_connector_id = str(getattr(spec, "id", "") or "") or None
-                        target = str(getattr(spec, "target_url", "") or target)
+                        pass
+
+                if _prior_result is not None:
+                    outputs["action_status"] = str(getattr(_prior_result, "status", "success"))
+                    outputs["action_dispatched"] = True
+                    outputs["action_target"] = (
+                        getattr(_prior_result, "target_url", None) or outputs.get("action_target")
+                    )
+                    outputs["_idempotent"] = True
+                    outputs["_idempotency_key"] = idem_key
+                    dispatch_target = outputs["action_target"]
+                else:
+                    target = outputs.get("action_target") or _DEFAULT_TARGETS.get(action_type, "")
+                    headers = None
+
+                    # Use tenant connector registry when provided.
+                    if connector_registry is not None and org_id:
                         try:
-                            headers = connector_registry.build_dispatch_headers(spec)
+                            spec = connector_registry.get_for_action(org_id=org_id, connector_type=action_type)
                         except Exception:
-                            headers = None
+                            spec = None
+                        if spec is not None:
+                            dispatch_connector_id = str(getattr(spec, "id", "") or "") or None
+                            target = str(getattr(spec, "target_url", "") or target)
+                            try:
+                                headers = connector_registry.build_dispatch_headers(spec)
+                            except Exception:
+                                headers = None
 
-                payload = _build_payload(enrichment, content)
-                dispatch_payload = payload
-                dispatch_target = target
+                    payload = _build_payload(enrichment, content)
+                    dispatch_payload = payload
+                    dispatch_target = target
 
-                dispatch_result = await self._connector.dispatch(
-                    action_type=action_type,
-                    target_url=target,
-                    payload=payload,
-                    headers=headers,
-                )
-                outputs["action_status"] = dispatch_result.status
-                outputs["action_dispatched"] = dispatch_result.status == "success"
-                outputs["action_target"] = target
-                outputs["_attempt_count"] = dispatch_result.attempt_count
-                dispatch_attempts = int(dispatch_result.attempt_count or 0)
-                dispatch_http_status = dispatch_result.http_status_code
-                if dispatch_result.error:
-                    outputs["_dispatch_error"] = dispatch_result.error
-                    dispatch_error = dispatch_result.error
+                    dispatch_result = await self._connector.dispatch(
+                        action_type=action_type,
+                        target_url=target,
+                        payload=payload,
+                        headers=headers,
+                    )
+                    outputs["action_status"] = dispatch_result.status
+                    outputs["action_dispatched"] = dispatch_result.status == "success"
+                    outputs["action_target"] = target
+                    outputs["_attempt_count"] = dispatch_result.attempt_count
+                    dispatch_attempts = int(dispatch_result.attempt_count or 0)
+                    dispatch_http_status = dispatch_result.http_status_code
+                    if dispatch_result.error:
+                        outputs["_dispatch_error"] = dispatch_result.error
+                        dispatch_error = dispatch_result.error
 
         # Persist action execution audit when a logger is provided.
         if callable(getattr(execution_logger, "create", None)):
@@ -468,6 +505,7 @@ class AutonomousActionAgent(BaseAgent):
                     error_message=dispatch_error,
                     policy_decision=str(outputs.get("policy_decision") or "pending"),
                     confidence_at_dispatch=float(outputs.get("dispatch_confidence") or 0.0),
+                    idempotency_key=idem_key,
                 )
             except Exception:
                 # Logging must never break action execution.
