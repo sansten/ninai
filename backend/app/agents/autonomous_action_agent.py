@@ -36,7 +36,7 @@ from app.agents.types import AgentContext, AgentResult
 from app.agents.llm.ollama_breaker import create_ollama_client
 from app.core.config import settings
 from app.services.action_policy_service import ActionPolicyService, evaluate_policy
-from app.services.external_connector_service import ExternalConnectorService
+from app.services.external_connector_service import ExternalConnectorService, RetryClass
 
 
 # ---------------------------------------------------------------------------
@@ -54,6 +54,23 @@ _VALID_ACTION_STATUSES = frozenset({
 _VALID_POLICY_DECISIONS = frozenset({
     "auto_approved", "human_review_required", "denied", None
 })
+
+# Rollback strategy per action type.
+# "none"       — no rollback needed (fire-and-forget signals).
+# "notify"     — record terminal failure for operator escalation.
+# "compensate" — attempt a compensating POST to acknowledge the failed dispatch.
+_ROLLBACK_POLICIES: dict[str, str] = {
+    "webhook":      "compensate",
+    "pagerduty":    "notify",
+    "jira":         "notify",
+    "slack":        "none",
+    "generic_rest": "compensate",
+}
+
+
+def _select_rollback_policy(action_type: str) -> str:
+    """Return the rollback strategy name for the given action type."""
+    return _ROLLBACK_POLICIES.get(str(action_type).strip().lower(), "none")
 
 
 def _safe_payload_summary(payload: dict[str, Any]) -> dict[str, Any]:
@@ -489,6 +506,31 @@ class AutonomousActionAgent(BaseAgent):
                         outputs["_dispatch_error"] = dispatch_result.error
                         dispatch_error = dispatch_result.error
 
+                    # Apply rollback policy on terminal dispatch failure.
+                    if dispatch_result.status == "failed":
+                        rollback_policy = _select_rollback_policy(action_type)
+                        outputs["_rollback_policy"] = rollback_policy
+                        outputs["_rollback_class"] = dispatch_result.retry_class or RetryClass.TRANSIENT.value
+                        if rollback_policy == "notify":
+                            outputs["_rollback_triggered"] = True
+                            outputs["_rollback_status"] = "notify_pending"
+                        elif rollback_policy == "compensate":
+                            outputs["_rollback_triggered"] = True
+                            try:
+                                await self._connector.dispatch(
+                                    action_type=action_type,
+                                    target_url=target,
+                                    payload={
+                                        "_ninai_compensating_action": True,
+                                        "original_action_type": action_type,
+                                        "original_target": target,
+                                    },
+                                    headers=headers,
+                                )
+                                outputs["_rollback_status"] = "compensated"
+                            except Exception:
+                                outputs["_rollback_status"] = "compensation_failed"
+
         # Persist action execution audit when a logger is provided.
         if callable(getattr(execution_logger, "create", None)):
             try:
@@ -506,6 +548,7 @@ class AutonomousActionAgent(BaseAgent):
                     policy_decision=str(outputs.get("policy_decision") or "pending"),
                     confidence_at_dispatch=float(outputs.get("dispatch_confidence") or 0.0),
                     idempotency_key=idem_key,
+                    rollback_policy=outputs.get("_rollback_policy"),
                 )
             except Exception:
                 # Logging must never break action execution.
