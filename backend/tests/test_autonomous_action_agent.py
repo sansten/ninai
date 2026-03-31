@@ -13,6 +13,7 @@ from app.agents.autonomous_action_agent import (
     _choose_action_type,
     _build_payload,
     _compute_dispatch_confidence,
+    _compute_idempotency_key,
     _validate_llm_outputs,
     run_heuristic,
 )
@@ -886,6 +887,208 @@ class TestAutonomousActionAgentRegistry:
         deps = agent.dependencies()
         assert "anomaly_detection_agent" in deps
         assert "narrative_synthesis_agent" in deps
+
+
+# ===========================================================================
+# ExecutorAgent retry/rollback tests (Phase 47 additions)
+# ===========================================================================
+
+class TestIdempotencyKeys:
+    """Phase 51 Slice 2 — action idempotency keys and duplicate suppression."""
+
+    # ------------------------------------------------------------------
+    # Unit tests for _compute_idempotency_key helper
+    # ------------------------------------------------------------------
+
+    def test_compute_key_is_deterministic(self):
+        k1 = _compute_idempotency_key("org-1", "mem-1", "pagerduty")
+        k2 = _compute_idempotency_key("org-1", "mem-1", "pagerduty")
+        assert k1 == k2
+
+    def test_compute_key_is_32_chars(self):
+        k = _compute_idempotency_key("org-1", "mem-1", "webhook")
+        assert len(k) == 32
+        assert k.isalnum()
+
+    def test_different_action_type_yields_different_key(self):
+        k1 = _compute_idempotency_key("org-1", "mem-1", "webhook")
+        k2 = _compute_idempotency_key("org-1", "mem-1", "pagerduty")
+        assert k1 != k2
+
+    def test_different_org_yields_different_key(self):
+        k1 = _compute_idempotency_key("org-A", "mem-1", "webhook")
+        k2 = _compute_idempotency_key("org-B", "mem-1", "webhook")
+        assert k1 != k2
+
+    def test_different_memory_id_yields_different_key(self):
+        k1 = _compute_idempotency_key("org-1", "mem-A", "slack")
+        k2 = _compute_idempotency_key("org-1", "mem-B", "slack")
+        assert k1 != k2
+
+    # ------------------------------------------------------------------
+    # Integration tests via AutonomousActionAgent.run()
+    # ------------------------------------------------------------------
+
+    @pytest.mark.asyncio
+    async def test_duplicate_dispatch_suppressed_when_prior_found(self):
+        """When find_by_idempotency_key returns a prior record, no HTTP call is made."""
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.text = "ok"
+        client = MagicMock()
+        client.post = AsyncMock(return_value=resp)
+
+        svc = ExternalConnectorService(
+            backoff_base=0.001,
+            _http_client_factory=lambda: client,
+        )
+        agent = AutonomousActionAgent(connector_service=svc)
+
+        prior = MagicMock()
+        prior.status = "success"
+        prior.target_url = "https://events.pagerduty.com/v2/enqueue"
+
+        logger = MagicMock()
+        logger.create = AsyncMock(return_value=MagicMock(id="ae-dup"))
+        logger.find_by_idempotency_key = AsyncMock(return_value=prior)
+
+        runtime = {"action_execution_logger": logger}
+
+        with patch("app.agents.autonomous_action_agent.settings") as mock_settings:
+            mock_settings.AGENT_STRATEGY = "heuristic"
+            result = await agent.run(
+                "mem-idem-1", _ctx(_urgent_enrichment(), runtime=runtime)
+            )
+
+        assert result.outputs["action_status"] == "success"
+        assert result.outputs["action_dispatched"] is True
+        assert result.outputs.get("_idempotent") is True
+        assert result.outputs.get("_idempotency_key") is not None
+        client.post.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_normal_dispatch_proceeds_when_no_prior(self):
+        """When find_by_idempotency_key returns None, full dispatch proceeds."""
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.text = "ok"
+        client = MagicMock()
+        client.post = AsyncMock(return_value=resp)
+
+        svc = ExternalConnectorService(
+            backoff_base=0.001,
+            _http_client_factory=lambda: client,
+        )
+        agent = AutonomousActionAgent(connector_service=svc)
+
+        logger = MagicMock()
+        logger.create = AsyncMock(return_value=MagicMock(id="ae-new"))
+        logger.find_by_idempotency_key = AsyncMock(return_value=None)
+
+        runtime = {"action_execution_logger": logger}
+
+        with patch("app.agents.autonomous_action_agent.settings") as mock_settings:
+            mock_settings.AGENT_STRATEGY = "heuristic"
+            result = await agent.run(
+                "mem-idem-2", _ctx(_urgent_enrichment(), runtime=runtime)
+            )
+
+        assert result.outputs["action_status"] == "success"
+        assert result.outputs["action_dispatched"] is True
+        assert result.outputs.get("_idempotent") is None
+        client.post.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_idempotency_key_passed_to_logger_create(self):
+        """idempotency_key kwarg is forwarded to execution_logger.create()."""
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.text = "ok"
+        client = MagicMock()
+        client.post = AsyncMock(return_value=resp)
+
+        svc = ExternalConnectorService(
+            backoff_base=0.001,
+            _http_client_factory=lambda: client,
+        )
+        agent = AutonomousActionAgent(connector_service=svc)
+
+        logger = MagicMock()
+        logger.create = AsyncMock(return_value=MagicMock(id="ae-key"))
+        logger.find_by_idempotency_key = AsyncMock(return_value=None)
+
+        runtime = {"action_execution_logger": logger}
+
+        with patch("app.agents.autonomous_action_agent.settings") as mock_settings:
+            mock_settings.AGENT_STRATEGY = "heuristic"
+            await agent.run("mem-idem-3", _ctx(_urgent_enrichment(), runtime=runtime))
+
+        create_kwargs = logger.create.await_args.kwargs
+        assert "idempotency_key" in create_kwargs
+        assert create_kwargs["idempotency_key"] is not None
+        assert len(create_kwargs["idempotency_key"]) == 32
+
+    @pytest.mark.asyncio
+    async def test_logger_without_find_method_degrades_gracefully(self):
+        """When logger has no find_by_idempotency_key, dispatch continues normally."""
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.text = "ok"
+        client = MagicMock()
+        client.post = AsyncMock(return_value=resp)
+
+        svc = ExternalConnectorService(
+            backoff_base=0.001,
+            _http_client_factory=lambda: client,
+        )
+        agent = AutonomousActionAgent(connector_service=svc)
+
+        # Logger has create but no find_by_idempotency_key
+        logger = MagicMock(spec=["create"])
+        logger.create = AsyncMock(return_value=MagicMock(id="ae-nomethod"))
+
+        runtime = {"action_execution_logger": logger}
+
+        with patch("app.agents.autonomous_action_agent.settings") as mock_settings:
+            mock_settings.AGENT_STRATEGY = "heuristic"
+            result = await agent.run(
+                "mem-idem-4", _ctx(_urgent_enrichment(), runtime=runtime)
+            )
+
+        assert result.outputs["action_status"] == "success"
+        assert result.outputs["action_dispatched"] is True
+        client.post.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_find_by_idempotency_key_exception_treated_as_miss(self):
+        """If find_by_idempotency_key raises, dispatch proceeds as if no prior found."""
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.text = "ok"
+        client = MagicMock()
+        client.post = AsyncMock(return_value=resp)
+
+        svc = ExternalConnectorService(
+            backoff_base=0.001,
+            _http_client_factory=lambda: client,
+        )
+        agent = AutonomousActionAgent(connector_service=svc)
+
+        logger = MagicMock()
+        logger.create = AsyncMock(return_value=MagicMock(id="ae-ex"))
+        logger.find_by_idempotency_key = AsyncMock(side_effect=RuntimeError("db timeout"))
+
+        runtime = {"action_execution_logger": logger}
+
+        with patch("app.agents.autonomous_action_agent.settings") as mock_settings:
+            mock_settings.AGENT_STRATEGY = "heuristic"
+            result = await agent.run(
+                "mem-idem-5", _ctx(_urgent_enrichment(), runtime=runtime)
+            )
+
+        assert result.outputs["action_status"] == "success"
+        assert result.outputs["action_dispatched"] is True
+        client.post.assert_awaited_once()
 
 
 # ===========================================================================
