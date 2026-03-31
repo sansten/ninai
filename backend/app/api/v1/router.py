@@ -72,6 +72,7 @@ from app.api.v1.endpoints import (
     digests,
     ws_stream as ws_stream_endpoint,
     connectors,
+    cognitive_gateway,
 )
 from app.api.v1.admin import routes as admin_routes
 from app.api.v1.endpoints import event_publishing_batch
@@ -473,4 +474,10 @@ api_router.include_router(
     connectors.router,
     prefix="/integrations",
     tags=["Connector Hub"],
+)
+
+api_router.include_router(
+    cognitive_gateway.router,
+    prefix="/cognitive/gateway",
+    tags=["Cognitive Gateway"],
 )
