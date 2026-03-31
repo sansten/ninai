@@ -71,6 +71,7 @@ from app.api.v1.endpoints import (
     compliance,
     digests,
     ws_stream as ws_stream_endpoint,
+    connectors,
 )
 from app.api.v1.admin import routes as admin_routes
 from app.api.v1.endpoints import event_publishing_batch
@@ -466,4 +467,10 @@ api_router.include_router(
 api_router.include_router(
     ws_stream_endpoint.router,
     tags=["Real-Time Event Stream"],
+)
+
+api_router.include_router(
+    connectors.router,
+    prefix="/integrations",
+    tags=["Connector Hub"],
 )
