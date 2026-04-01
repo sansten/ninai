@@ -60,6 +60,7 @@ from app.agents.prospective_memory_agent import ProspectiveMemoryAgent
 from app.agents.analogical_reasoning_agent import AnalogicalReasoningAgent
 from app.agents.narrative_compression_agent import NarrativeCompressionAgent
 from app.agents.semantic_change_detection_agent import SemanticChangeDetectionAgent
+from app.agents.concept_learning_agent import ConceptLearningAgent
 
 
 def get_agent(agent_name: str) -> Optional[BaseAgent]:
@@ -247,6 +248,10 @@ def get_agent(agent_name: str) -> Optional[BaseAgent]:
     if name in {"semantic_change_detection", "semanticchangedetection", "semanticchangedetectionagent",
                 "change_detection", "semantic_change"}:
         return SemanticChangeDetectionAgent()
+
+    if name in {"concept_learning", "conceptlearning", "conceptlearningagent",
+                "concepts", "concept_registry", "conceptregistry"}:
+        return ConceptLearningAgent()
 
     return None
 
