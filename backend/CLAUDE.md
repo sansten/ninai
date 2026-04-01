@@ -195,6 +195,7 @@ tests/
 | 55 | Cognitive Load Balancer | Done (CognitiveLoadBalancer service, LoadSnapshot model, 37 tests, 4716 total passing) |
 | 56 | Narrative Memory Compression | Done (NarrativeCompressionAgent, NarrativeCompressionService, 36 tests, 4752 total passing) |
 | 57 | Semantic Change Detection | Done (SemanticChangeDetectionAgent, 33 tests, 4785 total passing) |
+| 58 | Attention-Weighted Memory Retrieval | Done (AttentionRetrievalService, 25 tests, 4810 total passing) |
 
 ## Cognitive OS Vision
 
