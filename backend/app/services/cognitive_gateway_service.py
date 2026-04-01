@@ -153,8 +153,27 @@ def _enrich_write_heuristic(
     return enrichment
 
 
+def _credibility_weight(mem: dict) -> float:
+    """Extract credibility weight from a memory dict (0.1–1.0).
+
+    Falls back to 1.0 if no credibility signal is present so that memories
+    without an explicit score are not penalised.
+    """
+    raw = mem.get("credibility_score")
+    if raw is None:
+        raw = mem.get("enrichment", {}).get("credibility_score")
+    try:
+        val = float(raw) if raw is not None else 1.0
+    except (TypeError, ValueError):
+        val = 1.0
+    return max(0.1, min(1.0, val))
+
+
 def _assemble_read_context(memories: list[dict], query: str) -> list[dict]:
-    """Sort memories by keyword-overlap relevance score.
+    """Sort memories by credibility-weighted keyword-overlap relevance score.
+
+    Score = token_overlap * credibility_weight so low-credibility sources
+    rank below equally-relevant high-credibility ones.
 
     In production this is replaced by a Qdrant vector similarity query via
     the vector_fn callback accepted by CognitiveGatewayService.read().
@@ -164,7 +183,8 @@ def _assemble_read_context(memories: list[dict], query: str) -> list[dict]:
     for mem in memories:
         content = str(mem.get("content") or "").lower()
         overlap = len(query_tokens & set(content.split()))
-        scored.append((overlap, mem))
+        weighted = overlap * _credibility_weight(mem)
+        scored.append((weighted, mem))
     scored.sort(key=lambda x: x[0], reverse=True)
     return [m for _, m in scored]
 
