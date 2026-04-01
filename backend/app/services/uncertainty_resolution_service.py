@@ -138,28 +138,45 @@ def _build_queries(
     return queries[:8]  # cap at 8 queries per memory
 
 
+def _credibility_weight(mem: dict) -> float:
+    """Extract credibility weight from memory dict (0.1–1.0), default 1.0."""
+    raw = mem.get("credibility_score")
+    if raw is None:
+        raw = mem.get("enrichment", {}).get("credibility_score")
+    try:
+        val = float(raw) if raw is not None else 1.0
+    except (TypeError, ValueError):
+        val = 1.0
+    return max(0.1, min(1.0, val))
+
+
 def _score_evidence(memories: list[dict], query_text: str) -> list[ResolutionEvidence]:
-    """Score candidate memories by token overlap with the query."""
+    """Score candidate memories by credibility-weighted token overlap.
+
+    raw_score = token_overlap * credibility_weight
+    Normalised relevance is relative to the highest raw score seen.
+    """
     query_tokens = set(query_text.lower().split())
     scored: list[tuple[float, dict]] = []
     for mem in memories:
         content = str(mem.get("content") or "").lower()
         overlap = len(query_tokens & set(content.split()))
         if overlap >= _MIN_RELEVANCE_OVERLAP:
-            scored.append((overlap, mem))
+            weighted = overlap * _credibility_weight(mem)
+            scored.append((weighted, mem))
 
     if not scored:
         return []
 
-    max_overlap = max(s for s, _ in scored)
+    max_score = max(s for s, _ in scored)
     results: list[ResolutionEvidence] = []
-    for overlap, mem in sorted(scored, key=lambda x: -x[0]):
+    for score, mem in sorted(scored, key=lambda x: -x[0]):
         mem_id = str(mem.get("id") or mem.get("memory_id") or "")
         content = str(mem.get("content") or "")
         results.append(ResolutionEvidence(
             memory_id=mem_id,
             content_preview=content[:200],
-            relevance=round(overlap / max_overlap, 3) if max_overlap else 0.0,
+            relevance=round(score / max_score, 3) if max_score else 0.0,
         ))
     return results[:3]  # top 3 per query
 
