@@ -198,6 +198,7 @@ tests/
 | 58 | Attention-Weighted Memory Retrieval | Done (AttentionRetrievalService, 25 tests, 4810 total passing) |
 | 59 | Self-Supervised Concept Learning | Done (ConceptLearningAgent, LearnedConcept model, ConceptRegistryService, 36 tests, 4846 total passing) |
 | 60 | Recursive Self-Improvement Planner | Done (SelfImprovementPlannerAgent, ImprovementProposal model, 30 tests, 4876 total passing) |
+| 61 | Working Memory Manager | Done (WorkingMemoryService, WorkingMemoryItem model, 32 tests, 4908 total passing) |
 
 ## Cognitive OS Vision
 
