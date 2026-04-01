@@ -77,6 +77,7 @@ celery_app = Celery(
         "app.tasks.gdpr_pipeline",
         "app.tasks.environment_sync",
         "app.tasks.strategy_evolution",
+        "app.tasks.retention_enforcement",
         *_enterprise_includes,
     ],
 )
@@ -161,6 +162,9 @@ celery_app.conf.update(
         # Continuous learning — strategy evolution (Phase 50)
         "app.tasks.strategy_evolution.strategy_evolution_pipeline_task": {"queue": "q.maintenance"},
 
+        # Retention policy enforcement — Gap D
+        "app.tasks.retention_enforcement.retention_enforcement_task": {"queue": "q.maintenance"},
+
         # Memory activation scoring (lightweight async updates)
         "app.services.memory_activation.tasks.memory_access_update_task": {"queue": "q.agent_enrich"},
         "app.services.memory_activation.tasks.coactivation_update_task": {"queue": "q.agent_graph"},
@@ -214,6 +218,11 @@ celery_app.conf.update(
             "task": "app.tasks.strategy_evolution.strategy_evolution_pipeline_task",
             "schedule": crontab(minute=30, hour=3),
             "kwargs": {"window_days": 30},
+        },
+        "nightly-retention-enforcement": {
+            "task": "app.tasks.retention_enforcement.retention_enforcement_task",
+            "schedule": crontab(minute=30, hour=1),
+            "args": (),
         },
         **_enterprise_beat,
     },
