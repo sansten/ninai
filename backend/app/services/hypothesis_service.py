@@ -48,11 +48,20 @@ _MIN_ANOMALY_SCORE = 0.30
 # Confidence boost per corroborating evidence item
 _EVIDENCE_BOOST = 0.10
 
+# Confidence penalty per contradicting evidence item
+_CONTRADICTION_PENALTY = 0.08
+
 # Threshold above which a hypothesis is considered confirmed
 _CONFIRMATION_THRESHOLD = 0.70
 
 # Max hypotheses to surface
 _MAX_HYPOTHESES = 5
+
+# Tokens that indicate a memory contradicts (negates) the hypothesis
+_NEGATION_TOKENS = frozenset({
+    "not", "no", "never", "resolved", "fixed", "closed", "false",
+    "incorrect", "wrong", "disproved", "denied", "absent", "unrelated",
+})
 
 
 # ---------------------------------------------------------------------------
@@ -66,8 +75,9 @@ class Hypothesis:
     entity_type: str
     domains: list[str]
     initial_confidence: float    # from causal chain strength
-    confirmed_confidence: float  # after evidence pass
+    confirmed_confidence: float  # after evidence + contradiction pass
     supporting_evidence: list[str]   # memory IDs that corroborate
+    contradicting_evidence: list[str]  # memory IDs that negate
     causal_path: list[str]           # [effect, ..., root_cause]
     counterfactual_hint: str | None
 
@@ -169,6 +179,18 @@ def _build_hypotheses_from_graph(
     return results
 
 
+def _credibility_weight(mem: dict[str, Any]) -> float:
+    """Extract credibility weight from memory dict (0.1–1.0), default 1.0."""
+    raw = mem.get("credibility_score")
+    if raw is None:
+        raw = mem.get("enrichment", {}).get("credibility_score")
+    try:
+        val = float(raw) if raw is not None else 1.0
+    except (TypeError, ValueError):
+        val = 1.0
+    return max(0.1, min(1.0, val))
+
+
 def _find_corroborating_evidence(
     *,
     hypothesis_entity: str,
@@ -176,7 +198,11 @@ def _find_corroborating_evidence(
     candidate_memories: list[dict[str, Any]],
     gateway: CognitiveGatewayService,
 ) -> list[str]:
-    """Return memory IDs that mention the hypothesis entity or its domains."""
+    """Return memory IDs that mention the hypothesis entity or its domains.
+
+    Only memories with credibility_weight * token_overlap >= 0.1 qualify,
+    so low-credibility sources contribute less to hypothesis confirmation.
+    """
     query_terms = [hypothesis_entity] + (domains[:2] if domains else [])
     query = " ".join(query_terms)
     if not query.strip():
@@ -191,11 +217,45 @@ def _find_corroborating_evidence(
     for mem in read_result.memories:
         content = str(mem.get("content") or "").lower()
         overlap = len(query_tokens & set(content.split()))
-        if overlap >= 1:
+        weighted = overlap * _credibility_weight(mem)
+        if weighted >= 0.1:
             mem_id = str(mem.get("id") or mem.get("memory_id") or "")
             if mem_id:
                 evidence.append(mem_id)
     return evidence[:3]
+
+
+def _find_contradicting_evidence(
+    *,
+    hypothesis_entity: str,
+    candidate_memories: list[dict[str, Any]],
+) -> list[str]:
+    """Return memory IDs that mention the entity but negate it.
+
+    A memory contradicts a hypothesis when its content contains the entity
+    and at least one strong negation token in close proximity (within 5 words).
+    Only memories with credibility_weight >= 0.3 are trusted as contradictions
+    — an unreliable source claiming something is resolved should not suppress
+    a well-supported hypothesis.
+    """
+    entity_lower = hypothesis_entity.lower()
+    contradicting: list[str] = []
+    for mem in candidate_memories:
+        if _credibility_weight(mem) < 0.3:
+            continue
+        content = str(mem.get("content") or "").lower()
+        if entity_lower not in content:
+            continue
+        words = content.split()
+        entity_positions = [i for i, w in enumerate(words) if entity_lower in w]
+        for pos in entity_positions:
+            window = set(words[max(0, pos - 5): pos + 6])
+            if window & _NEGATION_TOKENS:
+                mem_id = str(mem.get("id") or mem.get("memory_id") or "")
+                if mem_id:
+                    contradicting.append(mem_id)
+                break
+    return contradicting[:3]
 
 
 def _determine_action(
@@ -209,6 +269,58 @@ def _determine_action(
     if anomaly_score >= _MIN_ANOMALY_SCORE:
         return "monitor"
     return "no_action"
+
+
+# EMA alpha for edge weight reinforcement / suppression
+_EDGE_REINFORCE_ALPHA = 0.25   # confirmed path: blend toward 1.0
+_EDGE_SUPPRESS_ALPHA = 0.25    # contradicted path: blend toward 0.0
+
+
+def reinforce_causal_edges(
+    *,
+    entity_edges: list[dict[str, Any]],
+    causal_path: list[str],
+    confirmed: bool,
+) -> list[dict[str, Any]]:
+    """Update edge weights along a causal path using EMA reinforcement.
+
+    For each consecutive pair in causal_path, find the matching edge in
+    entity_edges and adjust its weight:
+      - confirmed=True  → weight = (1-α)*weight + α*1.0  (strengthen)
+      - confirmed=False → weight = (1-α)*weight + α*0.0  (weaken)
+
+    Edges are matched by (from_entity, to_entity) or (to_entity, from_entity)
+    since build_adjacency treats the graph as undirected.
+
+    Returns the updated entity_edges list (mutated in place; also returned for
+    convenience so callers can chain the call).  Edges not found in the list
+    are ignored — the caller is responsible for persisting the updated edges.
+    """
+    if len(causal_path) < 2:
+        return entity_edges
+
+    target = 1.0 if confirmed else 0.0
+    alpha = _EDGE_REINFORCE_ALPHA if confirmed else _EDGE_SUPPRESS_ALPHA
+
+    # Build an index for fast lookup: (a, b) → edge dict
+    edge_index: dict[tuple[str, str], dict[str, Any]] = {}
+    for edge in entity_edges:
+        a = str(edge.get("from_entity") or "")
+        b = str(edge.get("to_entity") or "")
+        if a and b:
+            edge_index[(a, b)] = edge
+            edge_index[(b, a)] = edge  # undirected
+
+    for i in range(len(causal_path) - 1):
+        src = causal_path[i]
+        dst = causal_path[i + 1]
+        edge = edge_index.get((src, dst))
+        if edge is not None:
+            old_w = float(edge.get("weight", 0.5))
+            new_w = round((1.0 - alpha) * old_w + alpha * target, 4)
+            edge["weight"] = max(0.05, min(1.0, new_w))
+
+    return entity_edges
 
 
 # ---------------------------------------------------------------------------
@@ -297,16 +409,24 @@ class HypothesisService:
             initial_conf = float(rc.get("cause_score") or 0.4)
             domains = list(rc.get("domains") or [])
 
-            # Evidence pass
+            # Evidence pass — boost for corroboration, penalise for contradictions
             evidence_ids = _find_corroborating_evidence(
                 hypothesis_entity=entity,
                 domains=domains,
                 candidate_memories=_mems,
                 gateway=self._gateway,
             )
+            contra_ids = _find_contradicting_evidence(
+                hypothesis_entity=entity,
+                candidate_memories=_mems,
+            )
 
             confirmed_conf = round(
-                min(0.95, initial_conf + _EVIDENCE_BOOST * len(evidence_ids)), 3
+                max(0.0, min(0.95,
+                    initial_conf
+                    + _EVIDENCE_BOOST * len(evidence_ids)
+                    - _CONTRADICTION_PENALTY * len(contra_ids)
+                )), 3
             )
 
             # Counterfactual for top effect
@@ -320,6 +440,7 @@ class HypothesisService:
                 initial_confidence=round(initial_conf, 3),
                 confirmed_confidence=confirmed_conf,
                 supporting_evidence=evidence_ids,
+                contradicting_evidence=contra_ids,
                 causal_path=path,
                 counterfactual_hint=c_hint,
             ))
@@ -335,6 +456,26 @@ class HypothesisService:
         top_hint = hypotheses[0].counterfactual_hint if hypotheses else None
         action = _determine_action(confirmed=confirmed, anomaly_score=anomaly_score)
 
+        # Auto-reinforce causal edges when entity_edges were supplied
+        _edges = list(entity_edges or [])
+        if _edges:
+            for h in hypotheses:
+                is_confirmed = h.confirmed_confidence >= _CONFIRMATION_THRESHOLD
+                has_contradictions = bool(h.contradicting_evidence)
+                # Reinforce confirmed paths; suppress paths with net contradictions
+                if is_confirmed:
+                    reinforce_causal_edges(
+                        entity_edges=_edges,
+                        causal_path=h.causal_path,
+                        confirmed=True,
+                    )
+                elif has_contradictions and not h.supporting_evidence:
+                    reinforce_causal_edges(
+                        entity_edges=_edges,
+                        causal_path=h.causal_path,
+                        confirmed=False,
+                    )
+
         return HypothesisReport(
             memory_id=memory_id,
             anomaly_detected=anomaly_detected,
@@ -346,6 +487,34 @@ class HypothesisService:
             counterfactual_hint=top_hint,
             evidence_count=sum(len(h.supporting_evidence) for h in hypotheses),
         )
+
+    def reinforce_from_report(
+        self,
+        *,
+        report: HypothesisReport,
+        entity_edges: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """Apply causal reinforcement from a completed report to entity_edges.
+
+        Useful when the caller persists entity_edges separately and wants to
+        update them after analyse() has run.  Returns the mutated edge list.
+        """
+        for h in report.hypotheses:
+            is_confirmed = h.confirmed_confidence >= _CONFIRMATION_THRESHOLD
+            has_contradictions = bool(h.contradicting_evidence)
+            if is_confirmed:
+                reinforce_causal_edges(
+                    entity_edges=entity_edges,
+                    causal_path=h.causal_path,
+                    confirmed=True,
+                )
+            elif has_contradictions and not h.supporting_evidence:
+                reinforce_causal_edges(
+                    entity_edges=entity_edges,
+                    causal_path=h.causal_path,
+                    confirmed=False,
+                )
+        return entity_edges
 
     def is_anomalous(self, enrichment: dict[str, Any]) -> bool:
         """Quick check: does this enrichment have an actionable anomaly?"""
