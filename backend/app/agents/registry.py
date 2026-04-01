@@ -57,6 +57,7 @@ from app.agents.autonomous_action_agent import AutonomousActionAgent
 from app.agents.counterfactual_memory_agent import CounterfactualMemoryAgent
 from app.agents.adaptive_persona_agent import AdaptivePersonaAgent
 from app.agents.prospective_memory_agent import ProspectiveMemoryAgent
+from app.agents.analogical_reasoning_agent import AnalogicalReasoningAgent
 
 
 def get_agent(agent_name: str) -> Optional[BaseAgent]:
@@ -233,4 +234,9 @@ def get_agent(agent_name: str) -> Optional[BaseAgent]:
                 "deadline_tracker", "deadlinetracker"}:
         return ProspectiveMemoryAgent()
 
+    if name in {"analogical_reasoning", "analogicalreasoning", "analogicalreasoningagent",
+                "analogy", "skill_transfer", "skilltransfer"}:
+        return AnalogicalReasoningAgent()
+
     return None
+
