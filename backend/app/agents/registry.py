@@ -58,6 +58,7 @@ from app.agents.counterfactual_memory_agent import CounterfactualMemoryAgent
 from app.agents.adaptive_persona_agent import AdaptivePersonaAgent
 from app.agents.prospective_memory_agent import ProspectiveMemoryAgent
 from app.agents.analogical_reasoning_agent import AnalogicalReasoningAgent
+from app.agents.narrative_compression_agent import NarrativeCompressionAgent
 
 
 def get_agent(agent_name: str) -> Optional[BaseAgent]:
@@ -237,6 +238,10 @@ def get_agent(agent_name: str) -> Optional[BaseAgent]:
     if name in {"analogical_reasoning", "analogicalreasoning", "analogicalreasoningagent",
                 "analogy", "skill_transfer", "skilltransfer"}:
         return AnalogicalReasoningAgent()
+
+    if name in {"narrative_compression", "narrativecompression", "narrativecompressionagent",
+                "compression", "retrospective_compression", "retrospectivecompression"}:
+        return NarrativeCompressionAgent()
 
     return None
 
