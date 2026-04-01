@@ -189,6 +189,7 @@ tests/
 | 45 | Real-Time WebSocket Event Stream | Done (ws_stream.py, /ws/stream endpoint) |
 | 46 | Intelligence Digest, GDPR Compliance & Memory Insights | Done (DigestService, DigestReport, /digest endpoints, ComplianceService, /export endpoints) |
 | 51 | Counterfactual Memory Simulation | Done (CounterfactualMemoryAgent, 37 tests, 4554 total passing) |
+| 52 | Adaptive Persona Engine | Done (AdaptivePersonaAgent, PersonaProfile model, PersonaProfileService, 38 tests, 4592 total passing) |
 
 ## Cognitive OS Vision
 
