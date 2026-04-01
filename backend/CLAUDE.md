@@ -193,6 +193,7 @@ tests/
 | 53 | Prospective Memory & Deadline Tracking | Done (ProspectiveMemoryAgent, ProspectiveReminder model, prospective_memory_pipeline Celery task, 47 tests, 4639 total passing) |
 | 54 | Skill Transfer & Analogical Reasoning | Done (AnalogicalReasoningAgent, registry wiring, 40 tests, 4679 total passing) |
 | 55 | Cognitive Load Balancer | Done (CognitiveLoadBalancer service, LoadSnapshot model, 37 tests, 4716 total passing) |
+| 56 | Narrative Memory Compression | Done (NarrativeCompressionAgent, NarrativeCompressionService, 36 tests, 4752 total passing) |
 
 ## Cognitive OS Vision
 
