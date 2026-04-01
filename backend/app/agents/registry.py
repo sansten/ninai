@@ -56,6 +56,7 @@ from app.agents.federated_memory_agent import FederatedMemoryAgent
 from app.agents.autonomous_action_agent import AutonomousActionAgent
 from app.agents.counterfactual_memory_agent import CounterfactualMemoryAgent
 from app.agents.adaptive_persona_agent import AdaptivePersonaAgent
+from app.agents.prospective_memory_agent import ProspectiveMemoryAgent
 
 
 def get_agent(agent_name: str) -> Optional[BaseAgent]:
@@ -227,5 +228,9 @@ def get_agent(agent_name: str) -> Optional[BaseAgent]:
 
     if name in {"adaptive_persona", "adaptivepersona", "adaptivepersonaagent", "persona"}:
         return AdaptivePersonaAgent()
+
+    if name in {"prospective_memory", "prospectivememory", "prospectivememoryagent",
+                "deadline_tracker", "deadlinetracker"}:
+        return ProspectiveMemoryAgent()
 
     return None

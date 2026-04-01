@@ -143,6 +143,7 @@ from app.models.feature_readiness import FeatureReadinessConfig
 from app.models.action_execution_record import ActionExecutionRecord
 from app.models.connector_registration import ConnectorRegistration
 from app.models.persona_profile import PersonaProfile
+from app.models.prospective_reminder import ProspectiveReminder
 
 __all__ = [
     # Base
@@ -199,6 +200,7 @@ __all__ = [
     # Feedback learning config
     "OrgFeedbackLearningConfig",
     "PersonaProfile",
+    "ProspectiveReminder",
 
     # HITL knowledge review
     "KnowledgeItem",
