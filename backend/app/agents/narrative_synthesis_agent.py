@@ -374,8 +374,15 @@ class NarrativeSynthesisAgent(BaseAgent):
             if isinstance(resp, dict) and isinstance(resp.get("tone"), str):
                 resp["tone"] = resp["tone"].lower()
                 if resp["tone"] not in _VALID_TONES:
-                    _tone_map = {"caution": "cautionary", "warning": "cautionary", "info": "informational", "critical": "urgent"}
-                    resp["tone"] = _tone_map.get(resp["tone"], "informational")
+                    _tone_map = {
+                        "caution": "cautionary",
+                        "warning": "cautionary",
+                        "info": "informational",
+                        "critical": "urgent",
+                    }
+                    mapped = _tone_map.get(resp["tone"])
+                    if mapped:
+                        resp["tone"] = mapped
             if (
                 isinstance(resp, dict)
                 and isinstance(resp.get("narrative_text"), str)

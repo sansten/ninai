@@ -54,6 +54,7 @@ from app.agents.emotional_affective_memory_agent import EmotionalAffectiveMemory
 from app.agents.multimodal_deep_memory_agent import MultimodalDeepMemoryAgent
 from app.agents.federated_memory_agent import FederatedMemoryAgent
 from app.agents.autonomous_action_agent import AutonomousActionAgent
+from app.agents.counterfactual_memory_agent import CounterfactualMemoryAgent
 
 
 def get_agent(agent_name: str) -> Optional[BaseAgent]:
@@ -218,5 +219,9 @@ def get_agent(agent_name: str) -> Optional[BaseAgent]:
                 "autonomousactionagent", "autonomous_action_agent",
                 "action_engine", "actionengine"}:
         return AutonomousActionAgent()
+
+    if name in {"counterfactual_memory", "counterfactualmemory",
+                "counterfactualmemoryagent", "counterfactual"}:
+        return CounterfactualMemoryAgent()
 
     return None
