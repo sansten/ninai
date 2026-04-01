@@ -59,6 +59,7 @@ from app.agents.adaptive_persona_agent import AdaptivePersonaAgent
 from app.agents.prospective_memory_agent import ProspectiveMemoryAgent
 from app.agents.analogical_reasoning_agent import AnalogicalReasoningAgent
 from app.agents.narrative_compression_agent import NarrativeCompressionAgent
+from app.agents.semantic_change_detection_agent import SemanticChangeDetectionAgent
 
 
 def get_agent(agent_name: str) -> Optional[BaseAgent]:
@@ -243,5 +244,10 @@ def get_agent(agent_name: str) -> Optional[BaseAgent]:
                 "compression", "retrospective_compression", "retrospectivecompression"}:
         return NarrativeCompressionAgent()
 
+    if name in {"semantic_change_detection", "semanticchangedetection", "semanticchangedetectionagent",
+                "change_detection", "semantic_change"}:
+        return SemanticChangeDetectionAgent()
+
     return None
+
 
