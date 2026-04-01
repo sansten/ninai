@@ -1,16 +1,23 @@
-"""Cognitive Gateway Service — Phase 49.
+"""Cognitive Gateway Service — Phase 49 (revised).
 
 Exposes Ninai's full intelligence stack as five simple verbs for downstream
 consumers (Tier-3 developers, AI agent platforms, enterprise integrations):
 
-  write(content, ...)  → store + enrich a memory record
-  read(query, ...)     → retrieve + assemble context
-  decide(context, ...) → run enrichment pipeline, return decision + confidence
-  plan(goal, ...)      → decompose goal, return ordered steps
-  explain(memory_id)   → return audit trail for last decision on a memory
+  write(content, ...)      → store + enrich a memory record
+  read(query, ...)         → retrieve + rank context
+  decide(context, ...)     → run anomaly detection, return decision + confidence
+  plan(goal, ...)          → decompose goal into real subtasks, return ordered steps
+  explain(memory_id)       → return audit trail for last decision on a memory
 
-Internally, each verb fans out to the right combination of agents.
-Externally the caller sees a consistent, simple interface.
+decide() delegates to AnomalyDetectionAgent's heuristic for real signal
+detection rather than plain keyword scanning.
+
+plan() uses GoalDecompositionAgent's extraction helpers (extract_subtasks,
+detect_blocking_subtask) to pull real subtasks from goal text before falling
+back to keyword-matched templates when the text has no extractable structure.
+
+read() accepts an optional vector_fn callback for semantic ranking (production
+path via Qdrant); falls back to token-overlap sort when absent.
 
 Per-tenant capability gating:
   CognitiveGatewayCapabilities controls which verbs are available to each org.
@@ -21,7 +28,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Callable
+
+from app.agents.anomaly_detection_agent import run_heuristic as _anomaly_detect
+from app.agents.goal_decomposition_agent import (
+    extract_subtasks,
+    detect_blocking_subtask,
+    detect_goal,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -118,7 +132,6 @@ def _enrich_write_heuristic(
     lower = content.lower()
     enrichment: dict[str, Any] = {}
 
-    # Quick tone signal
     if any(w in lower for w in ("critical", "urgent", "outage", "down", "breach")):
         enrichment["tone"] = "urgent"
     elif any(w in lower for w in ("warning", "caution", "slow", "latency")):
@@ -126,7 +139,6 @@ def _enrich_write_heuristic(
     else:
         enrichment["tone"] = "informational"
 
-    # Domain guess
     if any(w in lower for w in ("auth", "login", "sso", "password", "token")):
         enrichment["domain"] = "security"
     elif any(w in lower for w in ("deploy", "pipeline", "ci", "build")):
@@ -142,7 +154,11 @@ def _enrich_write_heuristic(
 
 
 def _assemble_read_context(memories: list[dict], query: str) -> list[dict]:
-    """Sort memories by a simple relevance score (keyword overlap)."""
+    """Sort memories by keyword-overlap relevance score.
+
+    In production this is replaced by a Qdrant vector similarity query via
+    the vector_fn callback accepted by CognitiveGatewayService.read().
+    """
     query_tokens = set(query.lower().split())
     scored = []
     for mem in memories:
@@ -154,18 +170,29 @@ def _assemble_read_context(memories: list[dict], query: str) -> list[dict]:
 
 
 def _heuristic_decide(content: str, enrichment: dict) -> GatewayDecideResult:
-    """Heuristic decision from content + optional enrichment signals."""
-    lower = content.lower()
-    agents_run = ["entity_resolution", "anomaly_detection", "narrative_synthesis"]
+    """Decision from content and enrichment signals.
 
-    anomaly = bool(enrichment.get("anomaly_detected"))
-    score = float(enrichment.get("anomaly_score") or 0.0)
-    tone = str(enrichment.get("tone") or "informational")
+    Delegates to AnomalyDetectionAgent.run_heuristic() for real anomaly
+    signal extraction.  Caller-supplied anomaly_detected / anomaly_score
+    values take precedence and override agent outputs (allows pre-computed
+    pipeline enrichment to flow through unchanged).
+    """
+    agents_run = ["anomaly_detection", "entity_resolution", "narrative_synthesis"]
+
+    # Run real anomaly detection; caller overrides take precedence
+    agent_signals = _anomaly_detect(enrichment)
+    merged: dict[str, Any] = {**agent_signals, **enrichment}
+
+    anomaly = bool(merged.get("anomaly_detected"))
+    score = float(merged.get("anomaly_score") or 0.0)
+    tone = str(merged.get("tone") or "informational")
+
+    lower = content.lower()
 
     if anomaly and score >= 0.9:
         decision = "escalate"
         confidence = min(0.95, 0.70 + score * 0.25)
-        action = "Declare P1 and page on-call engineer."
+        action: str | None = "Declare P1 and page on-call engineer."
     elif anomaly and score >= 0.7:
         decision = "investigate"
         confidence = 0.70 + score * 0.10
@@ -188,22 +215,47 @@ def _heuristic_decide(content: str, enrichment: dict) -> GatewayDecideResult:
         confidence=round(confidence, 4),
         tone=tone,
         action_recommended=action,
-        enrichment=enrichment,
+        enrichment=merged,
         agents_run=agents_run,
     )
 
 
 def _heuristic_plan(goal: str, context: dict) -> GatewayPlanResult:
-    """Heuristic goal decomposition."""
-    lower = goal.lower()
-    steps: list[dict] = []
-    step_num = 1
+    """Goal decomposition using real subtask extraction.
+
+    First attempts structural extraction via GoalDecompositionAgent helpers
+    (numbered lists, bullet points, action-verb sentences).  Falls back to
+    keyword-matched templates when extraction yields no subtasks — which is
+    the common case for short, unstructured goal strings.
+    """
+    step_num = 0
 
     def _step(action: str, tool: str | None = None) -> dict:
         nonlocal step_num
-        s = {"step_id": f"s{step_num}", "action": action, "tool": tool}
         step_num += 1
-        return s
+        return {"step_id": f"s{step_num}", "action": action, "tool": tool}
+
+    # --- Try real extraction first (require ≥ 2 subtasks; single-sentence
+    #     extraction is just the goal itself and doesn't add value over templates) ---
+    raw_subtasks = extract_subtasks(goal)
+    if len(raw_subtasks) >= 2:
+        steps = [_step(t) for t in raw_subtasks]
+        blocking = (
+            detect_blocking_subtask(raw_subtasks, goal)
+            or context.get("blocking_subtask")
+            or None
+        )
+        confidence = 0.85 if len(steps) >= 3 else 0.70
+        return GatewayPlanResult(
+            goal=goal,
+            steps=steps,
+            step_count=len(steps),
+            blocking_step=blocking,
+            confidence=confidence,
+        )
+
+    # --- Keyword-template fallback (unstructured goal strings) ---
+    lower = goal.lower()
 
     if "report" in lower or "summarise" in lower or "summarize" in lower:
         steps = [
@@ -297,12 +349,12 @@ class CognitiveGatewayService:
 
     Each verb is:
     1. Capability-gated per org/tenant
-    2. Handled heuristically (or can be extended to call real agents)
+    2. Backed by real agent logic (anomaly detection, goal decomposition)
+       with token-overlap / template fallbacks for offline/test paths
     3. Returns a typed result object
 
-    In production, this service is wired to the real agent pipeline, memory
-    service, and audit trail.  In tests and demos, the heuristic path runs
-    standalone without DB or LLM access.
+    read() accepts an optional vector_fn(query, memories) → list[dict]
+    callback for Qdrant-backed semantic ranking in production.
     """
 
     def __init__(
@@ -356,11 +408,21 @@ class CognitiveGatewayService:
         query: str,
         memories: list[dict] | None = None,
         limit: int = 10,
+        vector_fn: Callable[[str, list[dict]], list[dict]] | None = None,
     ) -> GatewayReadResult:
-        """Retrieve + assemble context for a query."""
+        """Retrieve and rank context for a query.
+
+        vector_fn(query, memories) → sorted list[dict]
+          When provided, used instead of token-overlap sort.
+          Production: pass a closure over the org's Qdrant collection.
+          Tests / offline: omit to use the token-overlap fallback.
+        """
         self._check("read")
         _mems = list(memories or [])
-        ranked = _assemble_read_context(_mems, query)[:limit]
+        if vector_fn is not None:
+            ranked = vector_fn(query, _mems)[:limit]
+        else:
+            ranked = _assemble_read_context(_mems, query)[:limit]
         return GatewayReadResult(
             memories=ranked,
             total=len(ranked),
@@ -378,7 +440,7 @@ class CognitiveGatewayService:
         content: str,
         enrichment: dict | None = None,
     ) -> GatewayDecideResult:
-        """Run enrichment pipeline and return a decision with confidence."""
+        """Run anomaly detection pipeline and return a decision with confidence."""
         self._check("decide")
         return _heuristic_decide(content, enrichment or {})
 

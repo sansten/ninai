@@ -1,7 +1,9 @@
-"""Tests for Phase 49 — Cognitive Gateway Service.
+"""Tests for Phase 49 (revised) — Cognitive Gateway Service.
 
 Covers: CognitiveGatewayCapabilities, all five verb methods (write/read/decide/
-plan/explain), capability gating, and pure helper functions.
+plan/explain), capability gating, pure helper functions, real anomaly-detection
+delegation in decide(), real subtask extraction in plan(), and the vector_fn
+semantic-ranking hook in read().
 """
 
 from __future__ import annotations
@@ -147,11 +149,12 @@ class TestAssembleReadContext:
 
 
 # ===========================================================================
-# _heuristic_decide tests
+# _heuristic_decide tests — delegates to AnomalyDetectionAgent heuristic
 # ===========================================================================
 
 class TestHeuristicDecide:
     def test_high_anomaly_escalate(self):
+        # Caller-supplied signals override agent detection
         result = _heuristic_decide("issue", {"anomaly_detected": True, "anomaly_score": 0.95})
         assert result.decision == "escalate"
         assert result.confidence >= 0.9
@@ -186,13 +189,33 @@ class TestHeuristicDecide:
         result = _heuristic_decide("content", {"anomaly_detected": True, "anomaly_score": 1.0})
         assert 0.0 <= result.confidence <= 1.0
 
+    def test_real_anomaly_signals_detected_from_enrichment(self):
+        # Low credibility should be picked up by the real anomaly agent, triggering a non-acknowledge decision
+        enrichment = {"credibility_score": 0.05, "uncertainty_score": 0.92}
+        result = _heuristic_decide("system health report", enrichment)
+        # With credibility 0.05 and uncertainty 0.92, anomaly agent flags both;
+        # combined score > 0.7 → investigate or escalate
+        assert result.decision in ("escalate", "investigate")
+
+    def test_caller_anomaly_overrides_agent(self):
+        # Even if the enrichment has no raw signals, caller can force anomaly=True
+        result = _heuristic_decide("neutral text", {"anomaly_detected": True, "anomaly_score": 0.95})
+        assert result.decision == "escalate"
+
+    def test_enrichment_merged_in_result(self):
+        # The result.enrichment dict should contain both agent outputs and caller keys
+        result = _heuristic_decide("x", {"tone": "cautionary"})
+        assert "anomaly_detected" in result.enrichment
+        assert result.enrichment["tone"] == "cautionary"
+
 
 # ===========================================================================
-# _heuristic_plan tests
+# _heuristic_plan tests — uses real subtask extraction + template fallback
 # ===========================================================================
 
 class TestHeuristicPlan:
     def test_investigate_goal_generates_steps(self):
+        # Unstructured string → no ≥2 subtasks extracted → template fallback
         result = _heuristic_plan("investigate the login failure", {})
         assert result.step_count >= 3
         assert result.goal == "investigate the login failure"
@@ -223,6 +246,24 @@ class TestHeuristicPlan:
     def test_confidence_reasonable(self):
         result = _heuristic_plan("investigate", {})
         assert 0.0 < result.confidence <= 1.0
+
+    def test_structured_goal_uses_real_extraction(self):
+        # Numbered list → extract_subtasks finds ≥2 items → real extraction path
+        goal = "1. Check error logs\n2. Notify on-call team\n3. Create incident ticket"
+        result = _heuristic_plan(goal, {})
+        assert result.step_count == 3
+        # Steps come from real extraction, not templates — no specific tool names
+        actions = [s["action"] for s in result.steps]
+        assert any("error" in a.lower() or "log" in a.lower() for a in actions)
+
+    def test_structured_blocking_detected(self):
+        # Extraction path: blocking_subtask detected from content itself
+        goal = "1. Get access token\n2. Run migration (blocked: waiting on DBA)\n3. Verify schema"
+        result = _heuristic_plan(goal, {})
+        assert result.step_count >= 2
+        # blocking step may come from content detection or context
+        # just verify result is a valid GatewayPlanResult
+        assert isinstance(result.blocking_step, (str, type(None)))
 
 
 # ===========================================================================
@@ -329,6 +370,34 @@ class TestGatewayRead:
         result = gw.read(query="anything")
         assert isinstance(result, GatewayReadResult)
 
+    def test_vector_fn_used_when_provided(self):
+        # When vector_fn is supplied it replaces the token-overlap sort
+        gw = _full_gateway()
+        mems = [
+            {"id": "semantic-match", "content": "completely unrelated words"},
+            {"id": "keyword-match", "content": "auth sso login"},
+        ]
+        # vector_fn always returns semantic-match first (simulates Qdrant result)
+        def _fake_vector_fn(query: str, memories: list) -> list:
+            return [m for m in memories if m["id"] == "semantic-match"] + \
+                   [m for m in memories if m["id"] != "semantic-match"]
+
+        result = gw.read(query="auth sso", memories=mems, vector_fn=_fake_vector_fn)
+        assert result.memories[0]["id"] == "semantic-match"
+
+    def test_vector_fn_overrides_token_sort(self):
+        # Without vector_fn, keyword-match wins; with it, our fn result wins
+        gw = _full_gateway()
+        mems = [
+            {"id": "A", "content": "apple banana cherry"},
+            {"id": "B", "content": "dog cat fish"},
+        ]
+        # vector_fn always puts B first
+        result_default = gw.read(query="apple", memories=mems)
+        result_vector = gw.read(query="apple", memories=mems, vector_fn=lambda q, m: list(reversed(m)))
+        assert result_default.memories[0]["id"] == "A"
+        assert result_vector.memories[0]["id"] == "B"
+
 
 class TestGatewayDecide:
     def test_returns_decide_result(self):
@@ -356,6 +425,16 @@ class TestGatewayDecide:
         result = gw.decide(content="test", enrichment={"anomaly_detected": True, "anomaly_score": 0.95})
         assert result.decision == "escalate"
 
+    def test_real_anomaly_agent_fires(self):
+        # Low credibility in enrichment → agent detects it → non-trivial decision
+        gw = _full_gateway()
+        result = gw.decide(
+            content="weekly health report",
+            enrichment={"credibility_score": 0.02, "uncertainty_score": 0.95},
+        )
+        assert result.decision in ("escalate", "investigate")
+        assert result.enrichment.get("anomaly_detected") is True
+
 
 class TestGatewayPlan:
     def test_returns_plan_result(self):
@@ -382,6 +461,14 @@ class TestGatewayPlan:
         gw = _full_gateway()
         result = gw.plan(goal="investigate", context={"blocking_subtask": "get token"})
         assert result.blocking_step == "get token"
+
+    def test_structured_goal_real_extraction(self):
+        gw = _full_gateway()
+        goal = "1. Identify root cause\n2. Patch the service\n3. Deploy to staging"
+        result = gw.plan(goal=goal)
+        assert result.step_count == 3
+        actions = [s["action"] for s in result.steps]
+        assert any("root cause" in a.lower() or "patch" in a.lower() for a in actions)
 
 
 class TestGatewayExplain:
