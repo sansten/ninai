@@ -1,4 +1,4 @@
-"""Connector Registry Service — Phase 48.
+"""Connector Registry Service — Phase 48 (revised).
 
 Manages registered external-system connectors per tenant.  This is the
 in-process registry used at dispatch time; the persistent store is
@@ -7,6 +7,8 @@ ConnectorRegistration (DB model).
 Responsibilities:
 - CRUD for connector registrations (in-memory dict for test/demo; DB-backed at runtime)
 - Lookup: find active connector for (org_id, connector_type)
+- Outbound dispatch via registered connector with outcome tracking
+- Circuit-breaker: auto-disable connectors after _AUTO_DISABLE_THRESHOLD consecutive failures
 - Ping/test a connector's target URL
 - Resolve credential_ref → actual credential string (env / secret manager)
 
@@ -62,6 +64,9 @@ _VALID_TYPES = frozenset({
 })
 _VALID_TEST_STATUSES = frozenset({"ok", "failed", "untested"})
 
+# Consecutive dispatch failures before a connector is auto-disabled
+_AUTO_DISABLE_THRESHOLD = 5
+
 
 # ---------------------------------------------------------------------------
 # Registry
@@ -73,6 +78,14 @@ class ConnectorRegistryService:
     In production, callers seed the registry from DB rows on startup and
     register/deregister as rows change.  In tests, connectors are registered
     directly without a DB.
+
+    Circuit-breaker behaviour
+    -------------------------
+    record_dispatch_outcome() tracks consecutive failures per connector.
+    After _AUTO_DISABLE_THRESHOLD consecutive failures the connector is
+    automatically set to is_active=False.  A single success resets the
+    counter.  This prevents a bad connector from burning retries on every
+    dispatch cycle.
     """
 
     def __init__(
@@ -83,6 +96,8 @@ class ConnectorRegistryService:
         # org_id -> connector_id -> ConnectorSpec
         self._store: dict[str, dict[str, ConnectorSpec]] = {}
         self._dispatcher = dispatcher or ExternalConnectorService()
+        # consecutive failure counters: "org_id:connector_id" -> count
+        self._failure_counts: dict[str, int] = {}
 
     # ------------------------------------------------------------------
     # Registration
@@ -106,6 +121,7 @@ class ConnectorRegistryService:
         org_store = self._store.get(org_id, {})
         if connector_id in org_store:
             del org_store[connector_id]
+            self._failure_counts.pop(f"{org_id}:{connector_id}", None)
             return True
         return False
 
@@ -114,7 +130,6 @@ class ConnectorRegistryService:
         spec = self._get(org_id, connector_id)
         if spec is None:
             return False
-        # dataclasses are mutable here
         spec.is_active = active
         return True
 
@@ -133,10 +148,7 @@ class ConnectorRegistryService:
     ) -> ConnectorSpec | None:
         """Return the first active connector matching org_id + connector_type."""
         for spec in self._store.get(org_id, {}).values():
-            if (
-                spec.is_active
-                and spec.connector_type == connector_type
-            ):
+            if spec.is_active and spec.connector_type == connector_type:
                 return spec
         return None
 
@@ -169,7 +181,6 @@ class ConnectorRegistryService:
         val = os.environ.get(env_key)
         if val:
             return val
-        # If credential_ref itself is short enough to be a literal (test tokens etc.)
         if len(spec.credential_ref) <= 128:
             return spec.credential_ref
         return None
@@ -190,6 +201,74 @@ class ConnectorRegistryService:
                 headers.setdefault("Authorization", f"Bearer {credential}")
 
         return headers
+
+    # ------------------------------------------------------------------
+    # Circuit-breaker outcome tracking
+    # ------------------------------------------------------------------
+
+    def record_dispatch_outcome(
+        self, *, org_id: str, connector_id: str, success: bool
+    ) -> bool:
+        """Record the outcome of a dispatch attempt for circuit-breaker logic.
+
+        A successful dispatch resets the failure counter.
+        A failed dispatch increments it; once it reaches _AUTO_DISABLE_THRESHOLD
+        the connector is automatically deactivated.
+
+        Returns True if the connector was auto-disabled on this call.
+        """
+        key = f"{org_id}:{connector_id}"
+        if success:
+            self._failure_counts.pop(key, None)
+            return False
+
+        count = self._failure_counts.get(key, 0) + 1
+        self._failure_counts[key] = count
+        if count >= _AUTO_DISABLE_THRESHOLD:
+            self.set_active(org_id=org_id, connector_id=connector_id, active=False)
+            self._failure_counts.pop(key, None)
+            return True
+        return False
+
+    def consecutive_failure_count(self, *, org_id: str, connector_id: str) -> int:
+        """Return current consecutive failure count (for monitoring / tests)."""
+        return self._failure_counts.get(f"{org_id}:{connector_id}", 0)
+
+    # ------------------------------------------------------------------
+    # Outbound dispatch via registered connector
+    # ------------------------------------------------------------------
+
+    async def dispatch_via_connector(
+        self,
+        *,
+        org_id: str,
+        connector_id: str,
+        payload: dict[str, Any],
+    ) -> DispatchResult:
+        """Dispatch payload through a registered connector with circuit-breaker tracking.
+
+        Raises ValueError if the connector is not found or inactive.
+        Records the outcome and auto-disables on repeated failures.
+        """
+        spec = self._get(org_id, connector_id)
+        if spec is None:
+            raise ValueError(f"Connector {connector_id!r} not found for org {org_id!r}")
+        if not spec.is_active:
+            raise ValueError(f"Connector {connector_id!r} is inactive")
+
+        headers = self.build_dispatch_headers(spec)
+        result = await self._dispatcher.dispatch(
+            action_type=spec.connector_type,
+            target_url=spec.target_url,
+            payload=payload,
+            headers=headers,
+        )
+        self.record_dispatch_outcome(
+            org_id=org_id,
+            connector_id=connector_id,
+            success=(result.status == "success"),
+        )
+        return result
 
     # ------------------------------------------------------------------
     # Test / ping
@@ -216,9 +295,14 @@ class ConnectorRegistryService:
             headers=headers,
         )
 
+        success = result.status == "success"
+        self.record_dispatch_outcome(
+            org_id=org_id, connector_id=connector_id, success=success
+        )
+
         test_result = ConnectorTestResult(
             connector_id=connector_id,
-            status="ok" if result.status == "success" else "failed",
+            status="ok" if success else "failed",
             http_status_code=result.http_status_code,
             error=result.error,
         )
