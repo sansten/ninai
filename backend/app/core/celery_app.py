@@ -76,6 +76,7 @@ celery_app = Celery(
         "app.tasks.digest_pipeline",
         "app.tasks.gdpr_pipeline",
         "app.tasks.environment_sync",
+        "app.tasks.strategy_evolution",
         *_enterprise_includes,
     ],
 )
@@ -157,6 +158,9 @@ celery_app.conf.update(
         "app.tasks.environment_sync.reconcile_environment_sync_org_task": {"queue": "q.maintenance"},
         "app.tasks.environment_sync.reconcile_environment_sync_all_task": {"queue": "q.maintenance"},
 
+        # Continuous learning — strategy evolution (Phase 50)
+        "app.tasks.strategy_evolution.strategy_evolution_pipeline_task": {"queue": "q.maintenance"},
+
         # Memory activation scoring (lightweight async updates)
         "app.services.memory_activation.tasks.memory_access_update_task": {"queue": "q.agent_enrich"},
         "app.services.memory_activation.tasks.coactivation_update_task": {"queue": "q.agent_graph"},
@@ -205,6 +209,11 @@ celery_app.conf.update(
             "task": "app.tasks.environment_sync.reconcile_environment_sync_all_task",
             "schedule": 60.0,
             "kwargs": {"max_lag_seconds": 30, "per_org_limit": 100},
+        },
+        "nightly-strategy-evolution": {
+            "task": "app.tasks.strategy_evolution.strategy_evolution_pipeline_task",
+            "schedule": crontab(minute=30, hour=3),
+            "kwargs": {"window_days": 30},
         },
         **_enterprise_beat,
     },
