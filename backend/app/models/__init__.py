@@ -146,6 +146,7 @@ from app.models.persona_profile import PersonaProfile
 from app.models.prospective_reminder import ProspectiveReminder
 from app.models.load_snapshot import LoadSnapshot
 from app.models.learned_concept import LearnedConcept
+from app.models.improvement_proposal import ImprovementProposal
 
 __all__ = [
     # Base
@@ -205,6 +206,7 @@ __all__ = [
     "ProspectiveReminder",
     "LoadSnapshot",
     "LearnedConcept",
+    "ImprovementProposal",
 
     # HITL knowledge review
     "KnowledgeItem",
