@@ -144,6 +144,7 @@ from app.models.action_execution_record import ActionExecutionRecord
 from app.models.connector_registration import ConnectorRegistration
 from app.models.persona_profile import PersonaProfile
 from app.models.prospective_reminder import ProspectiveReminder
+from app.models.load_snapshot import LoadSnapshot
 
 __all__ = [
     # Base
@@ -201,6 +202,7 @@ __all__ = [
     "OrgFeedbackLearningConfig",
     "PersonaProfile",
     "ProspectiveReminder",
+    "LoadSnapshot",
 
     # HITL knowledge review
     "KnowledgeItem",
