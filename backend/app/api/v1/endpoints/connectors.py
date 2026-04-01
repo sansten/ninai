@@ -3,9 +3,12 @@
 Exposes CRUD for registered external connectors and an inbound webhook
 receiver that converts external system events into Ninai memory records.
 
-Inbound flow (gap 1 + 3 fix):
-  parse event → normalize → write memory (force_long_term) →
-  if severity high/critical: fire meta_review_memory_task
+Inbound flow (fully closed loop):
+  parse event → normalize → write memory →
+  if severity high/critical:
+    create Goal (investigate_<connector>_<event_type>) →
+    fire cognitive_loop_task to run the planner on that goal →
+    fire meta_review_memory_task for audit trail
 
 Endpoints:
   POST   /connectors                  — register a connector
@@ -36,14 +39,18 @@ from app.services.connector_registry_service import (
 )
 from app.services.inbound_event_service import parse_inbound_event, event_to_memory_fields
 from app.services.memory_service import MemoryService
+from app.services.goal_service import GoalService
 
 router = APIRouter()
 
 # Module-level registry (singleton per process; seeded from DB at startup in production)
 _registry = ConnectorRegistryService()
 
-# Severity levels that warrant autonomous cognitive review
+# Severity levels that warrant autonomous cognitive review + goal creation
 _HIGH_SEVERITY_VALUES = frozenset({"high", "critical"})
+
+# Goal type for inbound-event-driven investigation goals
+_INBOUND_GOAL_TYPE = "analysis"
 
 
 def _get_registry() -> ConnectorRegistryService:
@@ -249,23 +256,87 @@ async def receive_inbound_event(
     except Exception as exc:
         write_error = f"{type(exc).__name__}: {exc}"
 
-    # --- Trigger cognitive review for high-severity events ---
+    # --- Create Goal + fire cognitive loop for high-severity events ---
+    goal_id: str | None = None
+    session_id: str | None = None
     cognitive_loop_triggered = False
-    if memory_id and event.severity in _HIGH_SEVERITY_VALUES and _broker_available():
+
+    if memory_id and event.severity in _HIGH_SEVERITY_VALUES:
+        # 1. Create an investigation goal so the cognitive planner has a target
+        goal_title = (
+            f"Investigate {connector_type} {event.event_type}: "
+            f"{str(event.title or event.external_id or 'unknown')[:120]}"
+        )
         try:
-            from app.tasks.meta_agent import meta_review_memory_task
-            meta_review_memory_task.apply_async(
-                kwargs={
-                    "org_id": tenant.org_id,
-                    "memory_id": memory_id,
-                    "initiator_user_id": tenant.user_id,
-                    "justification": f"inbound_{connector_type}_high_severity",
-                },
-                queue="q.meta_agent",
-            )
-            cognitive_loop_triggered = True
+            async with db.begin():
+                await set_tenant_context(
+                    db,
+                    tenant.user_id,
+                    tenant.org_id,
+                    roles=getattr(tenant, "roles", ""),
+                    clearance_level=getattr(tenant, "clearance_level", 0),
+                    justification="inbound_goal_creation",
+                )
+                goal_svc = GoalService(db)
+                goal = await goal_svc.create_goal(
+                    org_id=tenant.org_id,
+                    actor_user_id=tenant.user_id,
+                    title=goal_title,
+                    description=(
+                        f"Auto-created from {connector_type} inbound event. "
+                        f"Severity: {event.severity}. Memory: {memory_id}."
+                    ),
+                    goal_type=_INBOUND_GOAL_TYPE,
+                    visibility_scope="organization",
+                    scope_id=tenant.org_id,
+                    priority=2 if event.severity == "critical" else 1,
+                    tags=[connector_type, event.event_type or "event", f"severity:{event.severity}"],
+                    extra_metadata={
+                        "memory_id": memory_id,
+                        "external_id": event.external_id,
+                        "connector_type": connector_type,
+                        "severity": event.severity,
+                    },
+                )
+                goal_id = str(goal.id)
         except Exception:
-            pass  # broker unavailable or task not registered — non-fatal
+            pass  # goal creation is best-effort
+
+        # 2. Fire cognitive loop task so the planner acts on the goal
+        if goal_id and _broker_available():
+            try:
+                import uuid as _uuid
+                from app.tasks.cognitive_loop import cognitive_loop_task
+                _session_id = str(_uuid.uuid4())
+                cognitive_loop_task.apply_async(
+                    kwargs={
+                        "org_id": tenant.org_id,
+                        "session_id": _session_id,
+                        "initiator_user_id": tenant.user_id,
+                        "justification": f"inbound_{connector_type}_{event.severity}",
+                    },
+                    queue="q.cognitive_loop",
+                )
+                session_id = _session_id
+                cognitive_loop_triggered = True
+            except Exception:
+                pass
+
+        # 3. Meta-supervisor audit pass on the written memory
+        if _broker_available():
+            try:
+                from app.tasks.meta_agent import meta_review_memory_task
+                meta_review_memory_task.apply_async(
+                    kwargs={
+                        "org_id": tenant.org_id,
+                        "memory_id": memory_id,
+                        "initiator_user_id": tenant.user_id,
+                        "justification": f"inbound_{connector_type}_high_severity",
+                    },
+                    queue="q.meta_agent",
+                )
+            except Exception:
+                pass
 
     return {
         "accepted": True,
@@ -274,6 +345,8 @@ async def receive_inbound_event(
         "external_id": event.external_id,
         "memory_id": memory_id,
         "memory_write_error": write_error,
+        "goal_id": goal_id,
+        "cognitive_session_id": session_id,
         "cognitive_loop_triggered": cognitive_loop_triggered,
         "severity": event.severity,
     }
