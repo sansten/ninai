@@ -61,6 +61,7 @@ from app.agents.analogical_reasoning_agent import AnalogicalReasoningAgent
 from app.agents.narrative_compression_agent import NarrativeCompressionAgent
 from app.agents.semantic_change_detection_agent import SemanticChangeDetectionAgent
 from app.agents.concept_learning_agent import ConceptLearningAgent
+from app.agents.self_improvement_planner_agent import SelfImprovementPlannerAgent
 
 
 def get_agent(agent_name: str) -> Optional[BaseAgent]:
@@ -252,6 +253,10 @@ def get_agent(agent_name: str) -> Optional[BaseAgent]:
     if name in {"concept_learning", "conceptlearning", "conceptlearningagent",
                 "concepts", "concept_registry", "conceptregistry"}:
         return ConceptLearningAgent()
+
+    if name in {"self_improvement_planner", "selfimprovementplanner", "selfimprovementplanneragent",
+                "self_improvement", "improvement_planner", "improvementplanner"}:
+        return SelfImprovementPlannerAgent()
 
     return None
 
