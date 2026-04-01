@@ -191,6 +191,7 @@ tests/
 | 51 | Counterfactual Memory Simulation | Done (CounterfactualMemoryAgent, 37 tests, 4554 total passing) |
 | 52 | Adaptive Persona Engine | Done (AdaptivePersonaAgent, PersonaProfile model, PersonaProfileService, 38 tests, 4592 total passing) |
 | 53 | Prospective Memory & Deadline Tracking | Done (ProspectiveMemoryAgent, ProspectiveReminder model, prospective_memory_pipeline Celery task, 47 tests, 4639 total passing) |
+| 54 | Skill Transfer & Analogical Reasoning | Done (AnalogicalReasoningAgent, registry wiring, 40 tests, 4679 total passing) |
 
 ## Cognitive OS Vision
 
