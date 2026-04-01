@@ -142,6 +142,7 @@ from app.models.strategy_library import StrategyLibraryEntry
 from app.models.feature_readiness import FeatureReadinessConfig
 from app.models.action_execution_record import ActionExecutionRecord
 from app.models.connector_registration import ConnectorRegistration
+from app.models.persona_profile import PersonaProfile
 
 __all__ = [
     # Base
@@ -197,6 +198,7 @@ __all__ = [
     "OrgLogseqExportConfig",
     # Feedback learning config
     "OrgFeedbackLearningConfig",
+    "PersonaProfile",
 
     # HITL knowledge review
     "KnowledgeItem",
