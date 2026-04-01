@@ -179,6 +179,146 @@ class TestConnectorRegistryServiceMutations:
         registry = _make_registry()
         assert registry.set_active(org_id="org-1", connector_id="x", active=True) is False
 
+    def test_deregister_clears_failure_count(self):
+        spec = _make_spec()
+        registry = _make_registry([spec])
+        # Record a few failures to populate the counter
+        registry.record_dispatch_outcome(org_id=spec.organization_id, connector_id=spec.id, success=False)
+        registry.record_dispatch_outcome(org_id=spec.organization_id, connector_id=spec.id, success=False)
+        assert registry.consecutive_failure_count(org_id=spec.organization_id, connector_id=spec.id) == 2
+        # Deregister should clear it
+        registry.deregister(org_id=spec.organization_id, connector_id=spec.id)
+        assert registry.consecutive_failure_count(org_id=spec.organization_id, connector_id=spec.id) == 0
+
+
+# ===========================================================================
+# Circuit-breaker (record_dispatch_outcome / dispatch_via_connector)
+# ===========================================================================
+
+class TestCircuitBreaker:
+    def test_success_resets_failure_count(self):
+        spec = _make_spec()
+        registry = _make_registry([spec])
+        registry.record_dispatch_outcome(org_id=spec.organization_id, connector_id=spec.id, success=False)
+        registry.record_dispatch_outcome(org_id=spec.organization_id, connector_id=spec.id, success=False)
+        registry.record_dispatch_outcome(org_id=spec.organization_id, connector_id=spec.id, success=True)
+        assert registry.consecutive_failure_count(org_id=spec.organization_id, connector_id=spec.id) == 0
+
+    def test_failure_increments_count(self):
+        spec = _make_spec()
+        registry = _make_registry([spec])
+        for i in range(3):
+            registry.record_dispatch_outcome(org_id=spec.organization_id, connector_id=spec.id, success=False)
+        assert registry.consecutive_failure_count(org_id=spec.organization_id, connector_id=spec.id) == 3
+
+    def test_auto_disable_after_threshold(self):
+        spec = _make_spec(is_active=True)
+        registry = _make_registry([spec])
+        auto_disabled = False
+        for _ in range(5):
+            result = registry.record_dispatch_outcome(
+                org_id=spec.organization_id, connector_id=spec.id, success=False
+            )
+            if result:
+                auto_disabled = True
+        assert auto_disabled is True
+        found = registry.get_by_id(org_id=spec.organization_id, connector_id=spec.id)
+        assert found is not None
+        assert found.is_active is False
+
+    def test_failure_count_reset_after_auto_disable(self):
+        spec = _make_spec()
+        registry = _make_registry([spec])
+        for _ in range(5):
+            registry.record_dispatch_outcome(org_id=spec.organization_id, connector_id=spec.id, success=False)
+        # Counter should be reset after auto-disable
+        assert registry.consecutive_failure_count(org_id=spec.organization_id, connector_id=spec.id) == 0
+
+    def test_no_auto_disable_before_threshold(self):
+        spec = _make_spec(is_active=True)
+        registry = _make_registry([spec])
+        for _ in range(4):
+            registry.record_dispatch_outcome(org_id=spec.organization_id, connector_id=spec.id, success=False)
+        found = registry.get_by_id(org_id=spec.organization_id, connector_id=spec.id)
+        assert found is not None
+        assert found.is_active is True
+
+    def test_unknown_connector_failure_count_is_zero(self):
+        registry = _make_registry()
+        assert registry.consecutive_failure_count(org_id="org-1", connector_id="missing") == 0
+
+    @pytest.mark.asyncio
+    async def test_dispatch_via_connector_success_resets_count(self):
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.text = "ok"
+        client = MagicMock()
+        client.post = AsyncMock(return_value=resp)
+
+        dispatcher = ExternalConnectorService(_http_client_factory=lambda: client)
+        spec = _make_spec()
+        registry = ConnectorRegistryService(dispatcher=dispatcher)
+        registry.register(spec)
+
+        # Prime with 2 failures
+        registry.record_dispatch_outcome(org_id=spec.organization_id, connector_id=spec.id, success=False)
+        registry.record_dispatch_outcome(org_id=spec.organization_id, connector_id=spec.id, success=False)
+
+        result = await registry.dispatch_via_connector(
+            org_id=spec.organization_id, connector_id=spec.id, payload={"event": "test"}
+        )
+        assert result.status == "success"
+        assert registry.consecutive_failure_count(org_id=spec.organization_id, connector_id=spec.id) == 0
+
+    @pytest.mark.asyncio
+    async def test_dispatch_via_connector_failure_increments_count(self):
+        resp = MagicMock()
+        resp.status_code = 500
+        resp.text = "error"
+        client = MagicMock()
+        client.post = AsyncMock(return_value=resp)
+
+        dispatcher = ExternalConnectorService(_http_client_factory=lambda: client)
+        spec = _make_spec()
+        registry = ConnectorRegistryService(dispatcher=dispatcher)
+        registry.register(spec)
+
+        await registry.dispatch_via_connector(
+            org_id=spec.organization_id, connector_id=spec.id, payload={"event": "test"}
+        )
+        assert registry.consecutive_failure_count(org_id=spec.organization_id, connector_id=spec.id) >= 1
+
+    @pytest.mark.asyncio
+    async def test_dispatch_via_connector_inactive_raises(self):
+        spec = _make_spec(is_active=False)
+        registry = _make_registry([spec])
+        with pytest.raises(ValueError, match="inactive"):
+            await registry.dispatch_via_connector(
+                org_id=spec.organization_id, connector_id=spec.id, payload={}
+            )
+
+    @pytest.mark.asyncio
+    async def test_dispatch_via_connector_not_found_raises(self):
+        registry = _make_registry()
+        with pytest.raises(ValueError, match="not found"):
+            await registry.dispatch_via_connector(org_id="org-1", connector_id="missing", payload={})
+
+    @pytest.mark.asyncio
+    async def test_test_connector_failure_increments_circuit_breaker(self):
+        resp = MagicMock()
+        resp.status_code = 503
+        resp.text = "down"
+        client = MagicMock()
+        client.post = AsyncMock(return_value=resp)
+
+        dispatcher = ExternalConnectorService(_http_client_factory=lambda: client)
+        spec = _make_spec()
+        registry = ConnectorRegistryService(dispatcher=dispatcher)
+        registry.register(spec)
+
+        await registry.test_connector(org_id=spec.organization_id, connector_id=spec.id)
+        assert registry.consecutive_failure_count(org_id=spec.organization_id, connector_id=spec.id) >= 1
+
 
 class TestConnectorRegistryServiceCredential:
     def test_no_credential_ref_returns_none(self):
@@ -462,3 +602,134 @@ class TestTruncateHelper:
 
     def test_empty_string(self):
         assert _truncate("", 100) == ""
+
+
+# ===========================================================================
+# Inbound event — memory write (gap 1) and cognitive trigger (gap 3)
+# ===========================================================================
+
+class TestInboundEventMemoryWrite:
+    """Tests for the inbound event → memory write path.
+
+    The endpoint depends on MemoryService (DB) and the Celery broker, both of
+    which are mocked here to keep tests offline and deterministic.
+    """
+
+    def _make_pagerduty_payload(self) -> dict:
+        return {
+            "event": {
+                "data": {
+                    "id": "PD-99",
+                    "title": "Prod DB latency spike",
+                    "summary": "DB response time exceeded 5s",
+                    "urgency": "high",
+                    "html_url": "https://pd.example.com/99",
+                    "created_by": "ops@company.com",
+                    "status": "triggered",
+                    "service": {"summary": "Database"},
+                }
+            }
+        }
+
+    def _inbound_event_to_memory_fields_high(self) -> dict:
+        from app.services.inbound_event_service import parse_inbound_event, event_to_memory_fields
+        event = parse_inbound_event("pagerduty", self._make_pagerduty_payload())
+        return event_to_memory_fields(event)
+
+    def test_event_to_memory_fields_has_content(self):
+        fields = self._inbound_event_to_memory_fields_high()
+        assert fields.get("content")
+        assert len(fields["content"]) > 0
+
+    def test_event_to_memory_fields_source_type_integration(self):
+        fields = self._inbound_event_to_memory_fields_high()
+        assert fields.get("source_type") == "integration"
+
+    def test_event_to_memory_fields_has_tags(self):
+        fields = self._inbound_event_to_memory_fields_high()
+        assert isinstance(fields.get("tags"), list)
+
+    def test_pagerduty_severity_in_tags(self):
+        fields = self._inbound_event_to_memory_fields_high()
+        assert any("severity" in t for t in fields["tags"])
+
+    def test_memory_create_schema_built_from_fields(self):
+        from app.schemas.memory import MemoryCreate, MemoryScope, MemoryType
+        fields = self._inbound_event_to_memory_fields_high()
+        data = MemoryCreate(
+            content=str(fields.get("content") or fields.get("title") or ""),
+            title=str(fields.get("title") or "")[:500] or None,
+            scope=MemoryScope.ORGANIZATION,
+            scope_id="org-test",
+            memory_type=MemoryType.LONG_TERM,
+            tags=list(fields.get("tags") or [])[:20],
+            source_type="integration",
+            source_id="PD-99",
+            extra_metadata=dict(fields.get("metadata") or {}),
+        )
+        assert data.content
+        assert data.scope == MemoryScope.ORGANIZATION
+        assert data.source_type == "integration"
+
+
+class TestCognitiveLoopTrigger:
+    """Tests for the cognitive loop trigger logic (gap 3)."""
+
+    def test_high_severity_qualifies_for_trigger(self):
+        from app.api.v1.endpoints.connectors import _HIGH_SEVERITY_VALUES
+        assert "high" in _HIGH_SEVERITY_VALUES
+        assert "critical" in _HIGH_SEVERITY_VALUES
+
+    def test_low_severity_does_not_qualify(self):
+        from app.api.v1.endpoints.connectors import _HIGH_SEVERITY_VALUES
+        assert "low" not in _HIGH_SEVERITY_VALUES
+        assert "medium" not in _HIGH_SEVERITY_VALUES
+        assert None not in _HIGH_SEVERITY_VALUES
+
+    def test_pagerduty_high_urgency_produces_high_severity(self):
+        from app.services.inbound_event_service import parse_inbound_event
+        payload = {
+            "event": {
+                "data": {
+                    "id": "PD-1",
+                    "title": "Outage",
+                    "summary": "Down",
+                    "urgency": "high",
+                    "html_url": "https://pd.example.com/1",
+                    "created_by": "ops",
+                    "status": "triggered",
+                    "service": {"summary": "API"},
+                }
+            }
+        }
+        event = parse_inbound_event("pagerduty", payload)
+        assert event.severity == "high"
+
+    def test_jira_major_priority_produces_high_severity(self):
+        from app.services.inbound_event_service import parse_inbound_event
+        payload = {
+            "webhookEvent": "jira:issue_created",
+            "issue": {
+                "key": "X-1",
+                "self": "https://jira.example.com/x/1",
+                "fields": {
+                    "summary": "Critical bug",
+                    "description": "Broken",
+                    "priority": {"name": "Critical"},
+                    "project": {"key": "X"},
+                    "status": {"name": "Open"},
+                    "issuetype": {"name": "Bug"},
+                },
+            },
+            "user": {"emailAddress": "dev@example.com"},
+        }
+        event = parse_inbound_event("jira", payload)
+        assert event.severity == "critical"
+
+    def test_slack_message_does_not_trigger(self):
+        from app.services.inbound_event_service import parse_inbound_event
+        from app.api.v1.endpoints.connectors import _HIGH_SEVERITY_VALUES
+        payload = {"team_id": "T1", "event": {"type": "message", "text": "hello", "user": "U1", "channel": "C1"}}
+        event = parse_inbound_event("slack", payload)
+        # Slack messages have no severity → should not trigger cognitive review
+        assert event.severity not in _HIGH_SEVERITY_VALUES

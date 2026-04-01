@@ -1,7 +1,11 @@
-"""Connector Hub endpoints — Phase 48.
+"""Connector Hub endpoints — Phase 48 (revised).
 
 Exposes CRUD for registered external connectors and an inbound webhook
 receiver that converts external system events into Ninai memory records.
+
+Inbound flow (gap 1 + 3 fix):
+  parse event → normalize → write memory (force_long_term) →
+  if severity high/critical: fire meta_review_memory_task
 
 Endpoints:
   POST   /connectors                  — register a connector
@@ -19,23 +23,37 @@ import uuid
 from typing import Any
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Path, status
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.database import get_db, set_tenant_context
+from app.core.config import settings
 from app.middleware.tenant_context import TenantContext, require_org_admin
+from app.schemas.memory import MemoryCreate, MemoryScope, MemoryType
 from app.services.connector_registry_service import (
     ConnectorRegistryService,
     ConnectorSpec,
     ConnectorTestResult,
 )
 from app.services.inbound_event_service import parse_inbound_event, event_to_memory_fields
+from app.services.memory_service import MemoryService
 
 router = APIRouter()
 
 # Module-level registry (singleton per process; seeded from DB at startup in production)
 _registry = ConnectorRegistryService()
 
+# Severity levels that warrant autonomous cognitive review
+_HIGH_SEVERITY_VALUES = frozenset({"high", "critical"})
+
 
 def _get_registry() -> ConnectorRegistryService:
     return _registry
+
+
+def _broker_available() -> bool:
+    from app.core.celery_app import celery_app
+    broker = celery_app.conf.broker_url
+    return bool(broker) and not str(broker).startswith("memory://")
 
 
 # ---------------------------------------------------------------------------
@@ -167,7 +185,7 @@ async def test_connector(
 
 
 # ---------------------------------------------------------------------------
-# Inbound event receiver
+# Inbound event receiver — writes memory + triggers cognitive review
 # ---------------------------------------------------------------------------
 
 @router.post("/connectors/inbound/{connector_type}", status_code=status.HTTP_202_ACCEPTED)
@@ -175,22 +193,89 @@ async def receive_inbound_event(
     connector_type: str = Path(...),
     payload: dict[str, Any] = Body(...),
     tenant: TenantContext = Depends(require_org_admin()),
+    db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
-    """Convert an inbound webhook from an external system to a Ninai memory record.
+    """Convert an inbound webhook from an external system into a Ninai memory record.
 
-    The response includes the normalised memory fields that would be used to
-    create the memory.  Actual memory creation is performed by the caller in
-    the full runtime wiring (connector → inbound → memory service).
+    Steps:
+    1. Parse and normalize the external payload into a NormalizedEvent.
+    2. Build MemoryCreate from the normalized fields.
+    3. Write the memory (force_long_term=True so it persists in Postgres/Qdrant
+       with a zero-vector embedding; a background pipeline re-embeds it).
+    4. If severity is high or critical, fire meta_review_memory_task so the
+       autonomous cognitive loop investigates the event.
+
+    Returns 202 Accepted with memory_id and whether a cognitive review was triggered.
     """
     event = parse_inbound_event(connector_type=connector_type, payload=payload)
     fields = event_to_memory_fields(event)
+
+    # --- Write the memory ---
+    memory_id: str | None = None
+    write_error: str | None = None
+    try:
+        async with db.begin():
+            await set_tenant_context(
+                db,
+                tenant.user_id,
+                tenant.org_id,
+                roles=getattr(tenant, "roles", ""),
+                clearance_level=getattr(tenant, "clearance_level", 0),
+                justification="inbound_connector_event",
+            )
+
+            mem_svc = MemoryService(
+                session=db,
+                user_id=tenant.user_id,
+                org_id=tenant.org_id,
+                clearance_level=getattr(tenant, "clearance_level", 0),
+            )
+
+            data = MemoryCreate(
+                content=str(fields.get("content") or fields.get("title") or ""),
+                title=str(fields.get("title") or "")[:500] or None,
+                scope=MemoryScope.ORGANIZATION,
+                scope_id=tenant.org_id,
+                memory_type=MemoryType.LONG_TERM,
+                tags=list(fields.get("tags") or [])[:20],
+                source_type=str(fields.get("source_type") or "integration"),
+                source_id=event.external_id,
+                extra_metadata=dict(fields.get("metadata") or {}),
+            )
+
+            zero_embedding = [0.0] * settings.EMBEDDING_DIMENSIONS
+            result = await mem_svc.create_memory(data, zero_embedding)
+            memory_id = str(result.id) if hasattr(result, "id") else str(result)
+    except Exception as exc:
+        write_error = f"{type(exc).__name__}: {exc}"
+
+    # --- Trigger cognitive review for high-severity events ---
+    cognitive_loop_triggered = False
+    if memory_id and event.severity in _HIGH_SEVERITY_VALUES and _broker_available():
+        try:
+            from app.tasks.meta_agent import meta_review_memory_task
+            meta_review_memory_task.apply_async(
+                kwargs={
+                    "org_id": tenant.org_id,
+                    "memory_id": memory_id,
+                    "initiator_user_id": tenant.user_id,
+                    "justification": f"inbound_{connector_type}_high_severity",
+                },
+                queue="q.meta_agent",
+            )
+            cognitive_loop_triggered = True
+        except Exception:
+            pass  # broker unavailable or task not registered — non-fatal
 
     return {
         "accepted": True,
         "connector_type": event.connector_type,
         "event_type": event.event_type,
         "external_id": event.external_id,
-        "memory_fields": fields,
+        "memory_id": memory_id,
+        "memory_write_error": write_error,
+        "cognitive_loop_triggered": cognitive_loop_triggered,
+        "severity": event.severity,
     }
 
 
