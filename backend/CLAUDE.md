@@ -196,6 +196,7 @@ tests/
 | 56 | Narrative Memory Compression | Done (NarrativeCompressionAgent, NarrativeCompressionService, 36 tests, 4752 total passing) |
 | 57 | Semantic Change Detection | Done (SemanticChangeDetectionAgent, 33 tests, 4785 total passing) |
 | 58 | Attention-Weighted Memory Retrieval | Done (AttentionRetrievalService, 25 tests, 4810 total passing) |
+| 59 | Self-Supervised Concept Learning | Done (ConceptLearningAgent, LearnedConcept model, ConceptRegistryService, 36 tests, 4846 total passing) |
 
 ## Cognitive OS Vision
 
