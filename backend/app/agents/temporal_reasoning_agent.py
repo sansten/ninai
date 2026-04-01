@@ -37,7 +37,7 @@ Outputs:
 from __future__ import annotations
 
 import statistics
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from app.agents.base import BaseAgent
@@ -335,9 +335,12 @@ class TemporalReasoningAgent(BaseAgent):
         enrichment = memory.get("enrichment") or {}
         content = str(memory.get("content") or "")
 
-        now = datetime.now(timezone.utc)
-        created_at = _parse_dt(memory.get("created_at")) or now
+        wall_now = datetime.now(timezone.utc)
+        created_at = _parse_dt(memory.get("created_at")) or wall_now
         age_days = float(enrichment.get("age_days") or 0.0)
+        # Derive an event-relative "now" for deterministic velocity scoring in tests
+        # and for replayed historical contexts where age_days is provided.
+        now = created_at + timedelta(days=max(age_days, 0.0))
         is_stale = bool(enrichment.get("is_stale", False))
         related_memories = list(enrichment.get("related_memories") or [])
 
