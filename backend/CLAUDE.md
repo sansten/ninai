@@ -137,6 +137,7 @@ tests/
   test_social_memory_agent.py                    # Phase 66 — 40 tests
   test_episodic_future_simulation_agent.py       # Phase 67 — 39 tests
   test_error_recovery_agent.py                   # Phase 68 — 41 tests
+  test_semantic_role_inference_agent.py          # Phase 69 — 34 tests
   e2e/
     data.py                                      # Kaggle helpdesk fixture loader
     test_realworld_decay_credibility.py          # E2E — 15 tests
@@ -213,6 +214,7 @@ tests/
 | 66 | Social Memory & Team Dynamics Agent | Done (SocialMemoryAgent, SocialGraphEdge model, 40 tests, 5088 total passing) |
 | 67 | Episodic Future Simulation | Done (EpisodicFutureSimulationAgent, 39 tests, 5127 total passing) |
 | 68 | Error Recovery & Replan Agent | Done (ErrorRecoveryAgent, 41 tests, 5168 total passing) |
+| 69 | Semantic Role Inference Agent | Done (SemanticRoleInferenceAgent, InferredRole model, 34 tests, 5202 total passing) |
 
 ## Cognitive OS Vision
 
