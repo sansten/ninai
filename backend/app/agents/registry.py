@@ -62,6 +62,7 @@ from app.agents.narrative_compression_agent import NarrativeCompressionAgent
 from app.agents.semantic_change_detection_agent import SemanticChangeDetectionAgent
 from app.agents.concept_learning_agent import ConceptLearningAgent
 from app.agents.self_improvement_planner_agent import SelfImprovementPlannerAgent
+from app.agents.temporal_pattern_miner_agent import TemporalPatternMinerAgent
 
 
 def get_agent(agent_name: str) -> Optional[BaseAgent]:
@@ -257,6 +258,10 @@ def get_agent(agent_name: str) -> Optional[BaseAgent]:
     if name in {"self_improvement_planner", "selfimprovementplanner", "selfimprovementplanneragent",
                 "self_improvement", "improvement_planner", "improvementplanner"}:
         return SelfImprovementPlannerAgent()
+
+    if name in {"temporal_pattern_miner", "temporalpatternminer", "temporalpatternmineragent",
+                "temporal_patterns", "pattern_miner", "patternminer"}:
+        return TemporalPatternMinerAgent()
 
     return None
 
