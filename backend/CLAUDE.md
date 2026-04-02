@@ -144,6 +144,7 @@ tests/
   test_cognitive_offload_scheduler.py            # Phase 73 — 28 tests
   test_meta_learning_service.py                  # Phase 74 — 29 tests
   test_multi_agent_voting_engine.py             # Phase 75 — 27 tests
+  test_cross_modal_reasoning_agent.py           # Phase 76 — 37 tests
   e2e/
     data.py                                      # Kaggle helpdesk fixture loader
     test_realworld_decay_credibility.py          # E2E — 15 tests
@@ -227,6 +228,7 @@ tests/
 | 73 | Cognitive Offload Scheduler | Done (CognitiveOffloadScheduler, 28 tests, 5306 total passing) |
 | 74 | Meta-Learning Service | Done (MetaLearningService, MetaLearningConfig model, 29 tests, 5335 total passing) |
 | 75 | Multi-Agent Voting Engine | Done (MultiAgentVotingEngine, 27 tests, 5362 total passing) |
+| 76 | Cross-Modal Reasoning Agent | Done (CrossModalReasoningAgent, 37 tests, 5399 total passing) |
 
 ## Cognitive OS Vision
 
