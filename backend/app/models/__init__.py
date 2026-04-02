@@ -150,6 +150,7 @@ from app.models.improvement_proposal import ImprovementProposal
 from app.models.working_memory_item import WorkingMemoryItem
 from app.models.temporal_pattern import TemporalPattern
 from app.models.goal_hierarchy_node import GoalHierarchyNode
+from app.models.social_graph_edge import SocialGraphEdge
 
 __all__ = [
     # Base
@@ -213,6 +214,7 @@ __all__ = [
     "WorkingMemoryItem",
     "TemporalPattern",
     "GoalHierarchyNode",
+    "SocialGraphEdge",
 
     # HITL knowledge review
     "KnowledgeItem",
