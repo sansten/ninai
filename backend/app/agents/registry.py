@@ -64,6 +64,7 @@ from app.agents.concept_learning_agent import ConceptLearningAgent
 from app.agents.self_improvement_planner_agent import SelfImprovementPlannerAgent
 from app.agents.temporal_pattern_miner_agent import TemporalPatternMinerAgent
 from app.agents.active_knowledge_seeker_agent import ActiveKnowledgeSeekerAgent
+from app.agents.hierarchical_goal_planner_agent import HierarchicalGoalPlannerAgent
 
 
 def get_agent(agent_name: str) -> Optional[BaseAgent]:
@@ -267,6 +268,10 @@ def get_agent(agent_name: str) -> Optional[BaseAgent]:
     if name in {"active_knowledge_seeker", "activeknowledgeseeker", "activeknowledgeseekeragent",
                 "knowledge_seeker", "knowledgeseeker", "knowledge_gap_seeker"}:
         return ActiveKnowledgeSeekerAgent()
+
+    if name in {"hierarchical_goal_planner", "hierarchicalgoalplanner", "hierarchicalgoalplanneragent",
+                "goal_hierarchy", "goalhierarchy", "hierarchical_planner"}:
+        return HierarchicalGoalPlannerAgent()
 
     return None
 

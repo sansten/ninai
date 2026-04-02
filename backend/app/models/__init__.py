@@ -149,6 +149,7 @@ from app.models.learned_concept import LearnedConcept
 from app.models.improvement_proposal import ImprovementProposal
 from app.models.working_memory_item import WorkingMemoryItem
 from app.models.temporal_pattern import TemporalPattern
+from app.models.goal_hierarchy_node import GoalHierarchyNode
 
 __all__ = [
     # Base
@@ -211,6 +212,7 @@ __all__ = [
     "ImprovementProposal",
     "WorkingMemoryItem",
     "TemporalPattern",
+    "GoalHierarchyNode",
 
     # HITL knowledge review
     "KnowledgeItem",
