@@ -133,6 +133,7 @@ tests/
   test_temporal_pattern_miner_agent.py           # Phase 62 — 29 tests
   test_active_knowledge_seeker_agent.py          # Phase 63 — 38 tests
   test_uncertainty_propagation_service.py        # Phase 64 — 34 tests
+  test_hierarchical_goal_planner_agent.py        # Phase 65 — 39 tests
   e2e/
     data.py                                      # Kaggle helpdesk fixture loader
     test_realworld_decay_credibility.py          # E2E — 15 tests
@@ -205,6 +206,7 @@ tests/
 | 62 | Temporal Pattern Miner | Done (TemporalPatternMinerAgent, TemporalPattern model, 29 tests, 4937 total passing) |
 | 63 | Active Knowledge Seeker | Done (ActiveKnowledgeSeekerAgent, KnowledgeGap model updates, 38 tests, 4975 total passing) |
 | 64 | Uncertainty Propagation Engine | Done (UncertaintyPropagationService, 34 tests, 5009 total passing) |
+| 65 | Hierarchical Goal Planner | Done (HierarchicalGoalPlannerAgent, GoalHierarchyNode model, 39 tests, 5048 total passing) |
 
 ## Cognitive OS Vision
 
