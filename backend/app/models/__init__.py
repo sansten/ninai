@@ -153,6 +153,7 @@ from app.models.goal_hierarchy_node import GoalHierarchyNode
 from app.models.social_graph_edge import SocialGraphEdge
 from app.models.inferred_role import InferredRole
 from app.models.meta_learning_config import MetaLearningConfig
+from app.models.provenance_edge import ProvenanceEdge
 
 __all__ = [
     # Base
@@ -219,6 +220,7 @@ __all__ = [
     "SocialGraphEdge",
     "InferredRole",
     "MetaLearningConfig",
+    "ProvenanceEdge",
 
     # HITL knowledge review
     "KnowledgeItem",
