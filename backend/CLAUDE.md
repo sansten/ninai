@@ -88,6 +88,7 @@ app/
     memory_activation/scoring.py      # 8-component sigmoid scorer
     reward_propagation_service.py     # Phase 78: discounted reward credit propagation
     adversarial_robustness_monitor.py # Phase 79: adversarial input signature checks
+    cognitive_checkpoint_service.py   # Phase 80: loop checkpoint save/restore service
   models/
     strategy_library.py     # StrategyLibraryEntry (Phase 2 model)
   prompts/cognitive_loop/
@@ -150,6 +151,7 @@ tests/
   test_memory_provenance_service.py             # Phase 77 — 26 tests
   test_reward_propagation_service.py            # Phase 78 — 29 tests
   test_adversarial_robustness_monitor.py        # Phase 79 — 34 tests
+  test_cognitive_checkpoint_service.py          # Phase 80 — 33 tests
   e2e/
     data.py                                      # Kaggle helpdesk fixture loader
     test_realworld_decay_credibility.py          # E2E — 15 tests
@@ -237,6 +239,7 @@ tests/
 | 77 | Memory Provenance Graph | Done (MemoryProvenanceService, ProvenanceEdge model, 26 tests, 5425 total passing) |
 | 78 | Reward Signal Propagation | Done (RewardPropagationService, 29 tests, 5454 total passing) |
 | 79 | Adversarial Robustness Monitor | Done (AdversarialRobustnessMonitor, 34 tests, 5488 total passing) |
+| 80 | Cognitive State Checkpoint & Restore | Done (CognitiveCheckpointService, CognitiveStateCheckpoint model, 33 tests, 5521 total passing) |
 
 ## Cognitive OS Vision
 
