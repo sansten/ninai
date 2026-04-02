@@ -131,6 +131,7 @@ tests/
   test_ws_stream.py                              # Phase 45 — 20 tests
   test_digest_pipeline.py                        # Phase 46 — 41 tests
   test_temporal_pattern_miner_agent.py           # Phase 62 — 29 tests
+  test_active_knowledge_seeker_agent.py          # Phase 63 — 38 tests
   e2e/
     data.py                                      # Kaggle helpdesk fixture loader
     test_realworld_decay_credibility.py          # E2E — 15 tests
@@ -201,6 +202,7 @@ tests/
 | 60 | Recursive Self-Improvement Planner | Done (SelfImprovementPlannerAgent, ImprovementProposal model, 30 tests, 4876 total passing) |
 | 61 | Working Memory Manager | Done (WorkingMemoryService, WorkingMemoryItem model, 32 tests, 4908 total passing) |
 | 62 | Temporal Pattern Miner | Done (TemporalPatternMinerAgent, TemporalPattern model, 29 tests, 4937 total passing) |
+| 63 | Active Knowledge Seeker | Done (ActiveKnowledgeSeekerAgent, KnowledgeGap model updates, 38 tests, 4975 total passing) |
 
 ## Cognitive OS Vision
 
