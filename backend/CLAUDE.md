@@ -140,6 +140,7 @@ tests/
   test_semantic_role_inference_agent.py          # Phase 69 — 34 tests
   test_confidence_ensemble_service.py            # Phase 70 — 25 tests
   test_memory_importance_ranker.py               # Phase 71 — 25 tests
+  test_knowledge_graph_embedding_service.py      # Phase 72 — 26 tests
   e2e/
     data.py                                      # Kaggle helpdesk fixture loader
     test_realworld_decay_credibility.py          # E2E — 15 tests
@@ -219,6 +220,7 @@ tests/
 | 69 | Semantic Role Inference Agent | Done (SemanticRoleInferenceAgent, InferredRole model, 34 tests, 5202 total passing) |
 | 70 | Confidence Ensemble Service | Done (ConfidenceEnsembleService, 25 tests, 5227 total passing) |
 | 71 | Memory Importance Ranker | Done (MemoryImportanceRanker, 25 tests, 5252 total passing) |
+| 72 | Knowledge Graph Embedding Service | Done (KnowledgeGraphEmbeddingService, 26 tests, 5278 total passing) |
 
 ## Cognitive OS Vision
 
