@@ -68,6 +68,7 @@ from app.agents.hierarchical_goal_planner_agent import HierarchicalGoalPlannerAg
 from app.agents.social_memory_agent import SocialMemoryAgent
 from app.agents.episodic_future_simulation_agent import EpisodicFutureSimulationAgent
 from app.agents.error_recovery_agent import ErrorRecoveryAgent
+from app.agents.semantic_role_inference_agent import SemanticRoleInferenceAgent
 
 
 def get_agent(agent_name: str) -> Optional[BaseAgent]:
@@ -286,6 +287,10 @@ def get_agent(agent_name: str) -> Optional[BaseAgent]:
     if name in {"error_recovery", "errorrecovery", "errorrecoveryagent",
                 "replan", "recovery", "recovery_agent"}:
         return ErrorRecoveryAgent()
+
+    if name in {"semantic_role_inference", "semanticroleinference", "semanticroleinferenceagent",
+                "role_inference", "roleinference", "inferred_roles"}:
+        return SemanticRoleInferenceAgent()
 
     return None
 
