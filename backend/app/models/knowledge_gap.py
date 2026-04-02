@@ -6,7 +6,6 @@ These gaps trigger autonomous goal generation in the IntrinsicMotivationService.
 """
 
 from datetime import datetime
-from typing import List, Optional
 
 from sqlalchemy import Column, String, Float, DateTime, ARRAY, JSON
 from sqlalchemy.dialects.postgresql import UUID
@@ -27,12 +26,25 @@ class KnowledgeGap(Base):
     __tablename__ = "knowledge_gaps"
     
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    organization_id = Column(UUID(as_uuid=True), nullable=False, index=True)
+
+    # Legacy + Phase 63 org references (both kept for compatibility).
+    organization_id = Column(UUID(as_uuid=True), nullable=True, index=True)
+    org_id = Column(UUID(as_uuid=False), nullable=True, index=True)
+
+    # Phase 63 references.
+    goal_id = Column(UUID(as_uuid=False), nullable=True, index=True)
     
     # Gap characterization
     gap_type = Column(String, nullable=False)  # "missing_fact" | "contradiction" | "outdated" | "low_confidence"
     domain = Column(String, nullable=False)  # e.g. "customer_preferences", "system_behavior"
     description = Column(String, nullable=False)
+
+    # Phase 63 fields.
+    gap_description = Column(String, nullable=True)
+    question_to_ask = Column(String, nullable=True)
+    required_for = Column(String, nullable=True)
+    priority = Column(String, nullable=False, default="high", index=True)  # critical|high|medium|low
+    status = Column(String, nullable=False, default="open", index=True)  # open|resolved|waived
     
     # Validation
     confidence_in_gap = Column(Float, nullable=False, default=0.7)  # How sure we have a gap?
@@ -42,6 +54,7 @@ class KnowledgeGap(Base):
     suggested_learning_approach = Column(String, nullable=True)  # "search" | "ask_user" | "experiment" | "observation"
     
     # Lifecycle
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
     discovered_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
     resolved_at = Column(DateTime, nullable=True, index=True)
     
