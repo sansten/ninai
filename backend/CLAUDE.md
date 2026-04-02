@@ -136,6 +136,7 @@ tests/
   test_hierarchical_goal_planner_agent.py        # Phase 65 — 39 tests
   test_social_memory_agent.py                    # Phase 66 — 40 tests
   test_episodic_future_simulation_agent.py       # Phase 67 — 39 tests
+  test_error_recovery_agent.py                   # Phase 68 — 41 tests
   e2e/
     data.py                                      # Kaggle helpdesk fixture loader
     test_realworld_decay_credibility.py          # E2E — 15 tests
@@ -211,6 +212,7 @@ tests/
 | 65 | Hierarchical Goal Planner | Done (HierarchicalGoalPlannerAgent, GoalHierarchyNode model, 39 tests, 5048 total passing) |
 | 66 | Social Memory & Team Dynamics Agent | Done (SocialMemoryAgent, SocialGraphEdge model, 40 tests, 5088 total passing) |
 | 67 | Episodic Future Simulation | Done (EpisodicFutureSimulationAgent, 39 tests, 5127 total passing) |
+| 68 | Error Recovery & Replan Agent | Done (ErrorRecoveryAgent, 41 tests, 5168 total passing) |
 
 ## Cognitive OS Vision
 
