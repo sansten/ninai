@@ -141,6 +141,7 @@ tests/
   test_confidence_ensemble_service.py            # Phase 70 — 25 tests
   test_memory_importance_ranker.py               # Phase 71 — 25 tests
   test_knowledge_graph_embedding_service.py      # Phase 72 — 26 tests
+  test_cognitive_offload_scheduler.py            # Phase 73 — 28 tests
   e2e/
     data.py                                      # Kaggle helpdesk fixture loader
     test_realworld_decay_credibility.py          # E2E — 15 tests
@@ -221,6 +222,7 @@ tests/
 | 70 | Confidence Ensemble Service | Done (ConfidenceEnsembleService, 25 tests, 5227 total passing) |
 | 71 | Memory Importance Ranker | Done (MemoryImportanceRanker, 25 tests, 5252 total passing) |
 | 72 | Knowledge Graph Embedding Service | Done (KnowledgeGraphEmbeddingService, 26 tests, 5278 total passing) |
+| 73 | Cognitive Offload Scheduler | Done (CognitiveOffloadScheduler, 28 tests, 5306 total passing) |
 
 ## Cognitive OS Vision
 
