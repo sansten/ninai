@@ -66,6 +66,7 @@ from app.agents.temporal_pattern_miner_agent import TemporalPatternMinerAgent
 from app.agents.active_knowledge_seeker_agent import ActiveKnowledgeSeekerAgent
 from app.agents.hierarchical_goal_planner_agent import HierarchicalGoalPlannerAgent
 from app.agents.social_memory_agent import SocialMemoryAgent
+from app.agents.episodic_future_simulation_agent import EpisodicFutureSimulationAgent
 
 
 def get_agent(agent_name: str) -> Optional[BaseAgent]:
@@ -276,6 +277,10 @@ def get_agent(agent_name: str) -> Optional[BaseAgent]:
 
     if name in {"social_memory", "socialmemory", "socialmemoryagent", "team_dynamics", "social_graph"}:
         return SocialMemoryAgent()
+
+    if name in {"episodic_future_simulation", "episodicfuturesimulation", "episodicfuturesimulationagent",
+                "future_simulation", "future_rehearsal", "episodic_simulation"}:
+        return EpisodicFutureSimulationAgent()
 
     return None
 
