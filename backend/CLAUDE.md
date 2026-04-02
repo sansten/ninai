@@ -130,6 +130,7 @@ tests/
   test_multimodal_deep_memory_agent.py           # Phase 43 — 74 tests
   test_ws_stream.py                              # Phase 45 — 20 tests
   test_digest_pipeline.py                        # Phase 46 — 41 tests
+  test_temporal_pattern_miner_agent.py           # Phase 62 — 29 tests
   e2e/
     data.py                                      # Kaggle helpdesk fixture loader
     test_realworld_decay_credibility.py          # E2E — 15 tests
@@ -199,6 +200,7 @@ tests/
 | 59 | Self-Supervised Concept Learning | Done (ConceptLearningAgent, LearnedConcept model, ConceptRegistryService, 36 tests, 4846 total passing) |
 | 60 | Recursive Self-Improvement Planner | Done (SelfImprovementPlannerAgent, ImprovementProposal model, 30 tests, 4876 total passing) |
 | 61 | Working Memory Manager | Done (WorkingMemoryService, WorkingMemoryItem model, 32 tests, 4908 total passing) |
+| 62 | Temporal Pattern Miner | Done (TemporalPatternMinerAgent, TemporalPattern model, 29 tests, 4937 total passing) |
 
 ## Cognitive OS Vision
 
