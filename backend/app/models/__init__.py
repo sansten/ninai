@@ -151,6 +151,7 @@ from app.models.working_memory_item import WorkingMemoryItem
 from app.models.temporal_pattern import TemporalPattern
 from app.models.goal_hierarchy_node import GoalHierarchyNode
 from app.models.social_graph_edge import SocialGraphEdge
+from app.models.inferred_role import InferredRole
 
 __all__ = [
     # Base
@@ -215,6 +216,7 @@ __all__ = [
     "TemporalPattern",
     "GoalHierarchyNode",
     "SocialGraphEdge",
+    "InferredRole",
 
     # HITL knowledge review
     "KnowledgeItem",
