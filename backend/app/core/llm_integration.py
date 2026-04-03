@@ -18,10 +18,11 @@ logger = logging.getLogger(__name__)
 class LLMCircuitBreakerConfig:
     """Standard circuit breaker configs for different LLM providers."""
     
-    # Ollama - local LLM, aggressive since service outage is critical
+    # Ollama - local LLM; retry logic in transport handles transient errors,
+    # so the breaker trips only on sustained outages.
     OLLAMA = CircuitBreakerConfig(
-        failure_threshold=3,  # Open after 3 failures
-        recovery_timeout_seconds=15,  # Try recovery every 15s
+        failure_threshold=5,  # Open after 5 failures
+        recovery_timeout_seconds=30,  # Try recovery every 30s
         success_threshold=1,  # One success to close
         error_rate_threshold=0.5,
     )

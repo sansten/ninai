@@ -236,12 +236,11 @@ class Settings(BaseSettings):
     OLLAMA_MODEL_BOUNDARY: str | None = None
     OLLAMA_MODEL_UNCERTAINTY: str | None = None
     OLLAMA_MODEL_AGENTS: str | None = None
-    # Keep this low so missing Ollama doesn't stall the pipeline; agents will
-    # fall back to heuristics automatically.
-    OLLAMA_TIMEOUT_SECONDS: float = 5.0
+    # Timeout per Ollama request; 30s accommodates 7b+ models without stalling.
+    OLLAMA_TIMEOUT_SECONDS: float = 30.0
 
     # Limit concurrent Ollama requests per worker process.
-    OLLAMA_MAX_CONCURRENCY: int = 2
+    OLLAMA_MAX_CONCURRENCY: int = 4
 
     # Global agent strategy (advanced): set to "heuristic" to disable LLM calls.
     AGENT_STRATEGY: str = "llm"  # llm | heuristic
