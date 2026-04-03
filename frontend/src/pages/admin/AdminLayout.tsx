@@ -17,6 +17,7 @@ import {
   Sliders,
   FileText,
   AlertTriangle,
+  FlaskConical,
 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { useAdmin } from '../../hooks/useAdmin';
@@ -72,6 +73,12 @@ const AdminLayout: React.FC = () => {
       label: 'Audit Logs',
       path: '/admin/audit-logs',
       permission: 'audit:read',
+    },
+    {
+      icon: <FlaskConical className="w-5 h-5" />,
+      label: 'Benchmarks',
+      path: '/admin/benchmarks',
+      permission: 'system:read',
     },
   ];
 

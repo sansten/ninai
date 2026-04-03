@@ -155,6 +155,7 @@ from app.models.inferred_role import InferredRole
 from app.models.meta_learning_config import MetaLearningConfig
 from app.models.provenance_edge import ProvenanceEdge
 from app.models.cognitive_state_checkpoint import CognitiveStateCheckpoint
+from app.models.benchmark_run import BenchmarkRun
 
 __all__ = [
     # Base

@@ -7,7 +7,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '../services/api';
 import {
   AdminRole, AdminSetting, AdminAuditLog, User as AdminUser,
-  DashboardData, AdminIPWhitelist, Permission
+  DashboardData, AdminIPWhitelist, Permission, BenchmarkRun
 } from '../types/admin';
 
 // ==================== DASHBOARD HOOKS ====================
@@ -298,5 +298,31 @@ export const useRemoveIPWhitelist = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'ip-whitelist'] });
     },
+  });
+};
+
+// ==================== BENCHMARK HOOKS ====================
+
+export const useBenchmarkRuns = (limit = 50, strategy?: string) => {
+  return useQuery({
+    queryKey: ['admin', 'benchmarks', limit, strategy],
+    queryFn: async () => {
+      const params: Record<string, string | number> = { limit };
+      if (strategy) params.strategy = strategy;
+      const response = await apiClient.get<BenchmarkRun[]>('/admin/benchmarks', { params });
+      return response.data;
+    },
+    refetchOnWindowFocus: false,
+  });
+};
+
+export const useLatestBenchmarkRun = () => {
+  return useQuery({
+    queryKey: ['admin', 'benchmarks', 'latest'],
+    queryFn: async () => {
+      const response = await apiClient.get<BenchmarkRun>('/admin/benchmarks/latest');
+      return response.data;
+    },
+    refetchOnWindowFocus: false,
   });
 };
