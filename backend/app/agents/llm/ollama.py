@@ -66,19 +66,30 @@ class OllamaClient(LLMClient):
             except Exception:
                 pass
 
-        try:
-            if sem is None:
-                async with httpx.AsyncClient(timeout=self._timeout) as client:
-                    r = await client.post(f"{self._base_url}/api/generate", json=payload)
-                    r.raise_for_status()
-                    data = r.json()
-            else:
-                async with sem:
+        max_retries = 3
+        last_exc: Exception | None = None
+        data: dict = {}
+        for attempt in range(max_retries):
+            try:
+                if sem is None:
                     async with httpx.AsyncClient(timeout=self._timeout) as client:
                         r = await client.post(f"{self._base_url}/api/generate", json=payload)
                         r.raise_for_status()
                         data = r.json()
-        except (httpx.HTTPError, OSError, ValueError):
+                else:
+                    async with sem:
+                        async with httpx.AsyncClient(timeout=self._timeout) as client:
+                            r = await client.post(f"{self._base_url}/api/generate", json=payload)
+                            r.raise_for_status()
+                            data = r.json()
+                last_exc = None
+                break  # success
+            except (httpx.HTTPError, OSError, ValueError) as exc:
+                last_exc = exc
+                if attempt < max_retries - 1:
+                    await asyncio.sleep(0.5 * (2 ** attempt))
+
+        if last_exc is not None:
             if tool_event_sink is not None:
                 try:
                     dt_ms = (time.perf_counter() - t0) * 1000.0

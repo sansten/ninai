@@ -88,12 +88,18 @@ class ClassificationAgent(BaseAgent):
 
         finished_at = datetime.now(timezone.utc)
 
+        # Normalize confidence to 0-1 range (handle LLMs that return percentages like 95.0)
+        raw_confidence = float(outputs.get("confidence", 0.5))
+        if raw_confidence > 1.0:
+            raw_confidence = raw_confidence / 100.0
+        confidence = max(0.0, min(1.0, raw_confidence))
+
         return AgentResult(
             agent_name=self.name,
             agent_version=self.version,
             memory_id=memory_id,
             status="success",
-            confidence=float(outputs.get("confidence", 0.5)),
+            confidence=confidence,
             outputs=outputs,
             warnings=[],
             errors=[],
