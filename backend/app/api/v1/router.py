@@ -74,6 +74,7 @@ from app.api.v1.endpoints import (
     ws_stream as ws_stream_endpoint,
     connectors,
     cognitive_gateway,
+    benchmarks,
 )
 from app.api.v1.admin import routes as admin_routes
 from app.api.v1.endpoints import event_publishing_batch
@@ -487,4 +488,9 @@ api_router.include_router(
     cognitive_gateway.router,
     prefix="/cognitive/gateway",
     tags=["Cognitive Gateway"],
+)
+
+api_router.include_router(
+    benchmarks.router,
+    tags=["Admin - Benchmarks"],
 )

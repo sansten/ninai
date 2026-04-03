@@ -106,3 +106,27 @@ export interface DashboardData {
   recent_activities: DashboardActivity[];
   alerts?: Array<Record<string, any>>;
 }
+
+// ---------------------------------------------------------------------------
+// Benchmark types
+// ---------------------------------------------------------------------------
+
+export interface BenchmarkResult {
+  benchmark: string;
+  mode: string;
+  strategy: string;
+  status: string;
+  [key: string]: string | number | undefined;
+}
+
+export interface BenchmarkRun {
+  id: string;
+  run_at: string;
+  mode: string;
+  strategy: string;
+  dataset: string;
+  ollama_model?: string | null;
+  duration_seconds: number;
+  composite_score: number;
+  results: BenchmarkResult[];
+}

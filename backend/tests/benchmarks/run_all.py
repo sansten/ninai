@@ -7,6 +7,7 @@ import math
 import os
 from datetime import datetime, timezone
 from typing import Any
+from urllib import request as _urllib_request, error as _urllib_error
 
 from app.core.config import settings
 from tests.benchmarks import (
@@ -142,6 +143,30 @@ async def _run(mode: str, strategy: str, dataset: str) -> list[dict[str, Any]]:
     return results
 
 
+def _post_to_api(summary: dict[str, Any], *, base_url: str, token: str | None) -> None:
+    """POST benchmark summary to /admin/benchmarks. Prints status; never raises."""
+    url = base_url.rstrip("/") + "/admin/benchmarks"
+    payload = json.dumps({
+        "run_at": summary["started_at"],
+        "mode": summary["mode"],
+        "strategy": summary["strategy"],
+        "dataset": summary["dataset"],
+        "ollama_model": os.environ.get("OLLAMA_MODEL_AGENTS"),
+        "duration_seconds": summary["duration_seconds"],
+        "composite_score": summary["composite_score"],
+        "results": summary["results"],
+    }).encode()
+    headers = {"Content-Type": "application/json"}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    try:
+        req = _urllib_request.Request(url, data=payload, headers=headers, method="POST")
+        with _urllib_request.urlopen(req, timeout=10) as resp:
+            print(f"\nBenchmark run saved to API — id: {json.loads(resp.read()).get('id')}")
+    except _urllib_error.URLError as exc:
+        print(f"\n[warn] Failed to save benchmark run to API ({url}): {exc}")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run Ninai benchmark suite")
     parser.add_argument("--mode", default="unit", choices=["unit", "integration", "full"])
@@ -150,6 +175,18 @@ def main() -> int:
     parser.add_argument("--ollama-model", default=None, help="Optional override for OLLAMA_MODEL_AGENTS")
     parser.add_argument("--runs", type=int, default=1, help="Number of repeated runs (≥2 adds mean±stddev)")
     parser.add_argument("--json", action="store_true", help="Print machine-readable JSON summary")
+    parser.add_argument(
+        "--save-to-api",
+        metavar="BASE_URL",
+        default=None,
+        help="POST results to admin API, e.g. http://localhost:8000/api/v1",
+    )
+    parser.add_argument(
+        "--api-token",
+        metavar="TOKEN",
+        default=None,
+        help="Bearer token for --save-to-api",
+    )
     args = parser.parse_args()
 
     if args.ollama_model:
@@ -187,6 +224,9 @@ def main() -> int:
     if args.json:
         print("\nJSON Summary")
         print(json.dumps(summary, indent=2))
+
+    if args.save_to_api:
+        _post_to_api(summary, base_url=args.save_to_api, token=args.api_token)
 
     has_error = any(row.get("status") == "error" for row in rows)
     return 1 if has_error else 0
