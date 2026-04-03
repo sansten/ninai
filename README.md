@@ -327,13 +327,13 @@ The table below compares available Ollama models on the same benchmark runner. T
 
 | Metric | llama3.2:latest | qwen2.5:7b | deepseek-coder-v2:16b |
 |---|---:|---:|---:|
-| Duration (seconds) | 163.000 | 239.516 | n/a (latest run failed) |
-| Conflict F1 | 0.7273 | 0.7273 | n/a (latest run failed) |
-| Goal accuracy | 0.7188 | 0.6875 | n/a (latest run failed) |
-| Goal scored accuracy | 0.7188 | 0.6825 | n/a (latest run failed) |
-| LLM success rate | 0.5000 | 0.4922 | n/a (latest run failed) |
-| Fallback rate | 0.5000 | 0.5078 | n/a (latest run failed) |
-| Recall@10 | 0.875 | 0.875 | n/a (latest run failed) |
+| Duration (seconds) | 163.000 | 239.516 | 185.158 |
+| Conflict F1 | 0.7273 | 0.7273 | 0.6667 |
+| Goal accuracy | 0.7188 | 0.6875 | 0.8125 |
+| Goal scored accuracy | 0.7188 | 0.6825 | 0.8125 |
+| LLM success rate | 0.5000 | 0.4922 | 0.5000 |
+| Fallback rate | 0.5000 | 0.5078 | 0.5000 |
+| Recall@10 | 0.875 | 0.875 | 0.875 |
 
 Re-run model comparison:
 
