@@ -297,6 +297,55 @@ All agents test both the heuristic path (no LLM) and the LLM path (with Ollama m
 
 ---
 
+## Benchmark Results and Industry Comparison
+
+Last measured on Kaggle-backed unit benchmark suite:
+
+```bash
+cd backend
+python -m tests.benchmarks.run_all --mode unit --strategy heuristic --dataset kaggle --json
+python -m tests.benchmarks.run_all --mode unit --strategy llm --dataset kaggle --ollama-model qwen2.5:7b --json
+python -m tests.benchmarks.run_all --mode unit --strategy heuristic --dataset kaggle --runs 3 --json
+```
+
+### Ninai Results (Current)
+
+| Metric | Heuristic | LLM (qwen2.5:7b) | Heuristic (3-run mean) |
+|---|---:|---:|---:|
+| Duration (seconds) | 1.188 | 239.516 | 0.837 |
+| Composite score (quality x reliability) | 0.7952 | n/a | 0.7952 |
+| Conflict F1 | 0.6667 | 0.7273 | 0.6667 |
+| Goal accuracy | 0.8438 | 0.6875 | 0.8438 |
+| Goal scored accuracy | 0.8438 | 0.6825 | 0.8438 |
+| LLM success rate | 0.0 | 0.4922 | 0.0 |
+| Fallback rate | 0.0 | 0.5078 | 0.0 |
+| Recall@10 | 0.875 | 0.875 | 0.875 |
+
+### How This Compares to Industry Benchmarks
+
+Ninai's benchmark is product-specific (enterprise memory + reliability pipeline), while industry AGI benchmarks are capability-specific and cross-model comparable.
+
+| Benchmark | URL | Primary capability measured | Directly comparable to Ninai score? |
+|---|---|---|---|
+| MMLU | https://github.com/hendrycks/test | Broad academic/professional knowledge QA | No (different task format and labels) |
+| BIG-bench Hard (BBH) | https://github.com/suzgunmirac/BIG-Bench-Hard | Hard reasoning tasks across diverse categories | No (reasoning set, not enterprise memory workflow) |
+| GSM8K | https://github.com/openai/grade-school-math | Multi-step math reasoning | No (math-focused benchmark) |
+| HumanEval | https://github.com/openai/human-eval | Code generation correctness | No (coding benchmark) |
+| SWE-bench | https://www.swebench.com/ | Real-world software issue resolution | No (software engineering agent benchmark) |
+| MMMU | https://mmmu-benchmark.github.io/ | Multimodal reasoning across university-level tasks | No (multimodal benchmark) |
+
+### Practical Interpretation
+
+- Ninai benchmark: strong for deployment readiness (fallback behavior, tool reliability, domain conflict detection, retrieval quality).
+- Industry benchmarks: strong for external model capability comparison.
+- Best practice: report both.
+
+Recommended reporting split:
+1. External panel (for comparability): MMLU/BBH + HumanEval/SWE-bench (+ MMMU if multimodal scope).
+2. Internal panel (for product readiness): Ninai Kaggle benchmark with composite score, LLM success rate, and domain confusion matrices.
+
+---
+
 ## Configuration
 
 **Backend** (`backend/.env`):
