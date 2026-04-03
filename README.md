@@ -321,6 +321,29 @@ python -m tests.benchmarks.run_all --mode unit --strategy heuristic --dataset ka
 | Fallback rate | 0.0 | 0.5078 | 0.0 |
 | Recall@10 | 0.875 | 0.875 | 0.875 |
 
+### LLM Model Comparison (Kaggle, unit mode)
+
+The table below compares available Ollama models on the same benchmark runner. This is the model-to-model view for Ninai's LLM path.
+
+| Metric | llama3.2:latest | qwen2.5:7b | deepseek-coder-v2:16b |
+|---|---:|---:|---:|
+| Duration (seconds) | 163.000 | 239.516 | n/a (latest run failed) |
+| Conflict F1 | 0.7273 | 0.7273 | n/a (latest run failed) |
+| Goal accuracy | 0.7188 | 0.6875 | n/a (latest run failed) |
+| Goal scored accuracy | 0.7188 | 0.6825 | n/a (latest run failed) |
+| LLM success rate | 0.5000 | 0.4922 | n/a (latest run failed) |
+| Fallback rate | 0.5000 | 0.5078 | n/a (latest run failed) |
+| Recall@10 | 0.875 | 0.875 | n/a (latest run failed) |
+
+Re-run model comparison:
+
+```bash
+cd backend
+python -m tests.benchmarks.run_all --mode unit --strategy llm --dataset kaggle --ollama-model llama3.2:latest --json
+python -m tests.benchmarks.run_all --mode unit --strategy llm --dataset kaggle --ollama-model qwen2.5:7b --json
+python -m tests.benchmarks.run_all --mode unit --strategy llm --dataset kaggle --ollama-model deepseek-coder-v2:16b --json
+```
+
 ### How This Compares to Industry Benchmarks
 
 Ninai's benchmark is product-specific (enterprise memory + reliability pipeline), while industry AGI benchmarks are capability-specific and cross-model comparable.
