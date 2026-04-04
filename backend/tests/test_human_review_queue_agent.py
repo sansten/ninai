@@ -118,6 +118,35 @@ def _mock_db_two_queries(first_runs: list[_FakeRun], second_runs: list[_FakeRun]
     return session
 
 
+def _mock_db_three_queries(
+    first_runs: list[_FakeRun],
+    second_runs: list[_FakeRun],
+    third_runs: list[_FakeRun],
+):
+    """Mock DB that returns different results for first/second/third agent_runs query."""
+    session = AsyncMock(spec=AsyncSession)
+    call_count = [0]
+
+    async def _execute(stmt, *args, **kwargs):
+        sql = str(stmt)
+        if "SET LOCAL" in sql:
+            return AsyncMock()
+        if "agent_runs" in sql.lower():
+            idx = call_count[0]
+            call_count[0] += 1
+            if idx == 0:
+                return _Result(first_runs)
+            if idx == 1:
+                return _Result(second_runs)
+            return _Result(third_runs)
+        return _Result([])
+
+    session.execute = AsyncMock(side_effect=_execute)
+    session.add = MagicMock()
+    session.commit = AsyncMock()
+    return session
+
+
 def _override(session):
     async def _get_db():
         yield session
@@ -508,7 +537,9 @@ class TestAgentRun:
         assert result.outputs["queue_eligible"] is False
 
     @pytest.mark.asyncio
-    async def test_run_urgent_for_critical(self):
+    async def test_run_urgent_for_critical(self, monkeypatch):
+        import app.agents.human_review_queue_agent as hrqa_mod
+        monkeypatch.setattr(hrqa_mod.settings, "AGENT_STRATEGY", "heuristic")
         agent = HumanReviewQueueAgent()
         ctx = _ctx(enrichment={
             "review_recommended": True,
@@ -710,6 +741,30 @@ class TestQueueEndpoint:
         assert items[0]["memory_id"] == "mem-2"
 
     @pytest.mark.asyncio
+    async def test_fallback_to_autonomous_action_runs(self):
+        auto_run = _FakeRun(
+            id="ar-3", organization_id="org-1", memory_id="mem-3",
+            agent_name="autonomous_action_agent",
+            outputs={
+                "policy_decision": "human_review_required",
+                "action_status": "pending_review",
+                "action_type": "pagerduty",
+                "dispatch_confidence": 0.82,
+                "_decision_reason": "confidence below auto threshold",
+            },
+        )
+        _override(_mock_db([auto_run]))
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as ac:
+            resp = await ac.get("/api/v1/review/queue", headers=_auth_headers())
+        _clear()
+        assert resp.status_code == 200
+        items = resp.json()["items"]
+        assert len(items) == 1
+        assert items[0]["memory_id"] == "mem-3"
+        assert items[0]["priority"] == "high"
+
+    @pytest.mark.asyncio
     async def test_priority_filter_query_param(self):
         runs = [
             _FakeRun(id="ar-1", organization_id="org-1", memory_id="mem-1",
@@ -868,6 +923,34 @@ class TestClaimEndpoint:
         _clear()
         assert resp.status_code == 200
         assert resp.json()["priority"] == "high"
+
+    @pytest.mark.asyncio
+    async def test_claim_fallback_to_autonomous_action_agent(self):
+        auto_run = _FakeRun(
+            id="ar-3", organization_id="org-1", memory_id="mem-3",
+            agent_name="autonomous_action_agent",
+            outputs={
+                "policy_decision": "denied",
+                "action_status": "denied",
+                "action_type": "pagerduty",
+                "dispatch_confidence": 0.74,
+                "_runtime_control_reason": "runtime action control disabled all actions",
+            },
+        )
+        _override(_mock_db_three_queries([], [], [auto_run]))
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as ac:
+            resp = await ac.post(
+                "/api/v1/review/claim",
+                headers=_auth_headers(),
+                json={"memory_id": "mem-3"},
+            )
+        _clear()
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["memory_id"] == "mem-3"
+        assert body["priority"] == "urgent"
+        assert "runtime action control" in " ".join(body["review_reasons"]).lower()
 
     @pytest.mark.asyncio
     async def test_claim_returns_review_context(self):

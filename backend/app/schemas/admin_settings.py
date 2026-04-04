@@ -63,3 +63,22 @@ class EnvSetting(BaseSchema):
 
 class EnvSettingsResponse(BaseSchema):
     items: list[EnvSetting]
+
+
+class CognitiveAutonomyConfig(BaseSchema):
+    enabled: bool = True
+    reason: Optional[str] = None
+
+
+class CognitiveAutonomyConfigUpdate(BaseSchema):
+    enabled: Optional[bool] = None
+    reason: Optional[str] = None
+    global_enabled: Optional[bool] = None
+    global_reason: Optional[str] = None
+
+
+class CognitiveAutonomyConfigResponse(BaseSchema):
+    org_id: str
+    global_config: CognitiveAutonomyConfig
+    org_config: Optional[CognitiveAutonomyConfig] = None
+    effective: CognitiveAutonomyConfig

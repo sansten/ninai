@@ -74,6 +74,7 @@ from app.api.v1.endpoints import (
     ws_stream as ws_stream_endpoint,
     connectors,
     cognitive_gateway,
+    cognitive_gateway_stream,
     benchmarks,
 )
 from app.api.v1.admin import routes as admin_routes
@@ -488,6 +489,12 @@ api_router.include_router(
     cognitive_gateway.router,
     prefix="/cognitive/gateway",
     tags=["Cognitive Gateway"],
+)
+
+api_router.include_router(
+    cognitive_gateway_stream.router,
+    prefix="/cognitive/gateway/stream",
+    tags=["Cognitive Gateway Stream"],
 )
 
 api_router.include_router(

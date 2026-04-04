@@ -99,6 +99,73 @@ def _compute_idempotency_key(org_id: str, memory_id: str, action_type: str) -> s
     return hashlib.sha256(raw.encode()).hexdigest()[:32]
 
 
+async def _emit_policy_decision_audit(
+    *,
+    audit_service: Any,
+    org_id: str,
+    memory_id: str,
+    session_id: str | None,
+    actor_id: str | None,
+    action_type: str | None,
+    policy_decision: str,
+    action_status: str,
+    reason: str | None,
+    dispatch_confidence: float,
+    runtime_control: dict[str, Any],
+) -> str | None:
+    """Best-effort audit emission for policy decision outcomes."""
+    if not callable(getattr(audit_service, "log_event", None)):
+        return None
+
+    if policy_decision == "auto_approved":
+        event_type = "policy.autonomous_action.approved"
+        severity = "info"
+        success = True
+        error_message = None
+    elif policy_decision == "denied":
+        event_type = "policy.autonomous_action.denied"
+        severity = "warning"
+        success = False
+        error_message = reason
+    elif policy_decision == "human_review_required":
+        event_type = "policy.autonomous_action.review_required"
+        severity = "info"
+        success = True
+        error_message = None
+    else:
+        return None
+
+    details = {
+        "memory_id": memory_id,
+        "session_id": session_id,
+        "action_type": action_type,
+        "policy_decision": policy_decision,
+        "action_status": action_status,
+        "reason": reason,
+        "dispatch_confidence": dispatch_confidence,
+        "runtime_control": {
+            "enabled": bool(runtime_control.get("enabled", True)),
+            "dry_run": bool(runtime_control.get("dry_run", False)),
+            "disabled_action_types": list(runtime_control.get("disabled_action_types") or []),
+        },
+    }
+
+    event = await audit_service.log_event(
+        event_type=event_type,
+        actor_id=actor_id,
+        organization_id=org_id or None,
+        resource_type="autonomous_action",
+        resource_id=memory_id,
+        success=success,
+        error_message=error_message,
+        details=details,
+        severity=severity,
+        actor_type="agent",
+    )
+    event_id = getattr(event, "id", None)
+    return str(event_id) if event_id else None
+
+
 # Default connector targets when no ConnectorRegistry is present (dev/demo mode)
 _DEFAULT_TARGETS: dict[str, str] = {
     "pagerduty":   "https://events.pagerduty.com/v2/enqueue",
@@ -378,8 +445,10 @@ class AutonomousActionAgent(BaseAgent):
         policy_override = runtime.get("action_policy_config")
         connector_registry = runtime.get("connector_registry")
         execution_logger = runtime.get("action_execution_logger")
+        audit_service = runtime.get("audit_service") or runtime.get("audit_logger")
         observability: ConnectorObservabilityService | None = runtime.get("action_observability")
         kill_switch: ActionKillSwitchService | None = runtime.get("action_kill_switch")
+        actor_id = str(((context.get("actor") or {}).get("user_id") or "")).strip() or None
 
         # Resolve kill-switch state: explicit action_runtime_control wins;
         # if absent but a kill-switch service is provided, derive from it.
@@ -582,6 +651,31 @@ class AutonomousActionAgent(BaseAgent):
             except Exception:
                 # Logging must never break action execution.
                 pass
+
+        # Persist explicit policy decision events for approved/denied/review transitions.
+        try:
+            policy_audit_event_id = await _emit_policy_decision_audit(
+                audit_service=audit_service,
+                org_id=org_id,
+                memory_id=memory_id,
+                session_id=session_id,
+                actor_id=actor_id,
+                action_type=str(outputs.get("action_type") or "") or None,
+                policy_decision=str(outputs.get("policy_decision") or "pending"),
+                action_status=str(outputs.get("action_status") or "no_action"),
+                reason=(
+                    dispatch_error
+                    or outputs.get("_runtime_control_reason")
+                    or outputs.get("_decision_reason")
+                ),
+                dispatch_confidence=float(outputs.get("dispatch_confidence") or 0.0),
+                runtime_control=runtime_control,
+            )
+            if policy_audit_event_id:
+                outputs["_policy_audit_event_id"] = policy_audit_event_id
+        except Exception:
+            # Audit emission must never break execution.
+            pass
 
         finished_at = datetime.now(timezone.utc)
         confidence = outputs.pop("dispatch_confidence", 0.0)

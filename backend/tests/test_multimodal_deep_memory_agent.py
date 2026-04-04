@@ -465,7 +465,9 @@ def test_validate_skipped_on_non_success():
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
-async def test_run_single_png_attachment():
+async def test_run_single_png_attachment(monkeypatch):
+    import app.agents.multimodal_deep_memory_agent as mdma_mod
+    monkeypatch.setattr(mdma_mod.settings, "AGENT_STRATEGY", "heuristic")
     result = await AGENT.run("m1", _ctx(attachments=[ATT_PNG]))
     assert result.status == "success"
     assert result.outputs["primary_modality"] == "screenshot"
@@ -599,13 +601,17 @@ async def test_run_confidence_in_range():
 
 
 @pytest.mark.asyncio
-async def test_run_embedding_confidence_zero_without_ve():
+async def test_run_embedding_confidence_zero_without_ve(monkeypatch):
+    import app.agents.multimodal_deep_memory_agent as mdma_mod
+    monkeypatch.setattr(mdma_mod.settings, "AGENT_STRATEGY", "heuristic")
     result = await AGENT.run("m18", _ctx(attachments=[ATT_PNG]))
     assert result.outputs["embedding_confidence"] == 0.0
 
 
 @pytest.mark.asyncio
-async def test_run_rationale_heuristic():
+async def test_run_rationale_heuristic(monkeypatch):
+    import app.agents.multimodal_deep_memory_agent as mdma_mod
+    monkeypatch.setattr(mdma_mod.settings, "AGENT_STRATEGY", "heuristic")
     result = await AGENT.run("m19", _ctx(attachments=[ATT_JPG]))
     assert result.outputs["rationale"] == "heuristic"
 
@@ -640,7 +646,9 @@ async def test_run_combined_ve_and_audio():
 
 
 @pytest.mark.asyncio
-async def test_run_tags_contain_screenshot_for_png():
+async def test_run_tags_contain_screenshot_for_png(monkeypatch):
+    import app.agents.multimodal_deep_memory_agent as mdma_mod
+    monkeypatch.setattr(mdma_mod.settings, "AGENT_STRATEGY", "heuristic")
     result = await AGENT.run("m23", _ctx(attachments=[ATT_PNG]))
     assert "screenshot" in result.outputs["searchable_tags"]
 

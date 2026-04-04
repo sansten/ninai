@@ -404,7 +404,9 @@ class TestMemoryConsolidationAgentHeuristic:
         assert len(result.outputs["merge_candidates"]) == 1
 
     @pytest.mark.asyncio
-    async def test_archive_action(self):
+    async def test_archive_action(self, monkeypatch):
+        import app.agents.memory_consolidation_agent as mca_mod
+        monkeypatch.setattr(mca_mod.settings, "AGENT_STRATEGY", "heuristic")
         agent = MemoryConsolidationAgent()
         similar = [
             {"id": "mem-2", "similarity_score": 0.40, "domain": "engineering"}
@@ -415,7 +417,9 @@ class TestMemoryConsolidationAgentHeuristic:
         assert result.outputs["consolidation_action"] == "archive"
 
     @pytest.mark.asyncio
-    async def test_compress_action(self):
+    async def test_compress_action(self, monkeypatch):
+        import app.agents.memory_consolidation_agent as mca_mod
+        monkeypatch.setattr(mca_mod.settings, "AGENT_STRATEGY", "heuristic")
         agent = MemoryConsolidationAgent()
         ctx = _make_context(is_stale=True, reference_count=1)
         result = await agent.run("mem-1", ctx)
@@ -450,7 +454,9 @@ class TestMemoryConsolidationAgentHeuristic:
         assert len(result.outputs["deduplication_key"]) > 0
 
     @pytest.mark.asyncio
-    async def test_merge_candidates_sorted_by_sim_desc(self):
+    async def test_merge_candidates_sorted_by_sim_desc(self, monkeypatch):
+        import app.agents.memory_consolidation_agent as mca_mod
+        monkeypatch.setattr(mca_mod.settings, "AGENT_STRATEGY", "heuristic")
         agent = MemoryConsolidationAgent()
         similar = [
             {"id": "m2", "similarity_score": 0.72, "domain": "engineering"},
@@ -470,14 +476,18 @@ class TestMemoryConsolidationAgentHeuristic:
         assert result.outputs["compression_summary"] is None
 
     @pytest.mark.asyncio
-    async def test_compression_summary_present_for_compress(self):
+    async def test_compression_summary_present_for_compress(self, monkeypatch):
+        import app.agents.memory_consolidation_agent as mca_mod
+        monkeypatch.setattr(mca_mod.settings, "AGENT_STRATEGY", "heuristic")
         agent = MemoryConsolidationAgent()
         ctx = _make_context(is_stale=True, reference_count=1)
         result = await agent.run("mem-1", ctx)
         assert result.outputs["compression_summary"] is not None
 
     @pytest.mark.asyncio
-    async def test_compression_summary_present_for_archive(self):
+    async def test_compression_summary_present_for_archive(self, monkeypatch):
+        import app.agents.memory_consolidation_agent as mca_mod
+        monkeypatch.setattr(mca_mod.settings, "AGENT_STRATEGY", "heuristic")
         agent = MemoryConsolidationAgent()
         similar = [{"id": "m2", "similarity_score": 0.40, "domain": "engineering"}]
         ctx = _make_context(is_stale=True, reference_count=10, similar_memories=similar)
@@ -502,7 +512,9 @@ class TestMemoryConsolidationAgentHeuristic:
         assert result.outputs["confidence"] == pytest.approx(0.85)
 
     @pytest.mark.asyncio
-    async def test_confidence_lower_for_keep(self):
+    async def test_confidence_lower_for_keep(self, monkeypatch):
+        import app.agents.memory_consolidation_agent as mca_mod
+        monkeypatch.setattr(mca_mod.settings, "AGENT_STRATEGY", "heuristic")
         agent = MemoryConsolidationAgent()
         ctx = _make_context(is_stale=False, reference_count=10)
         result = await agent.run("mem-1", ctx)
@@ -524,7 +536,9 @@ class TestMemoryConsolidationAgentHeuristic:
         assert result.trace_id == "job-1"
 
     @pytest.mark.asyncio
-    async def test_entities_affect_dedup_key(self):
+    async def test_entities_affect_dedup_key(self, monkeypatch):
+        import app.agents.memory_consolidation_agent as mca_mod
+        monkeypatch.setattr(mca_mod.settings, "AGENT_STRATEGY", "heuristic")
         agent = MemoryConsolidationAgent()
         ctx_no_ent = _make_context(entities={})
         ctx_with_ent = _make_context(entities={"customer": "Acme Corp"})
@@ -533,7 +547,9 @@ class TestMemoryConsolidationAgentHeuristic:
         assert r1.outputs["deduplication_key"] != r2.outputs["deduplication_key"]
 
     @pytest.mark.asyncio
-    async def test_cross_silo_near_duplicate_flagged(self):
+    async def test_cross_silo_near_duplicate_flagged(self, monkeypatch):
+        import app.agents.memory_consolidation_agent as mca_mod
+        monkeypatch.setattr(mca_mod.settings, "AGENT_STRATEGY", "heuristic")
         agent = MemoryConsolidationAgent()
         similar = [
             {"id": "m-other", "similarity_score": _HIGH_SIMILARITY, "domain": "finance"}

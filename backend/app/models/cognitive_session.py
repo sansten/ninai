@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from sqlalchemy import String, Text, Index, ForeignKey
+from sqlalchemy import String, Text, Index, ForeignKey, Boolean
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -34,6 +34,15 @@ class CognitiveSession(Base, UUIDMixin, TimestampMixin, TenantMixin):
 
     trace_id: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
 
+    is_autonomous: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        nullable=False,
+        index=True,
+        doc="True if spawned by heartbeat/system; False if manually created",
+    )
+
     __table_args__ = (
         Index("ix_cognitive_sessions_org_status", "organization_id", "status"),
+        Index("ix_cognitive_sessions_autonomy", "organization_id", "is_autonomous"),
     )
