@@ -482,6 +482,7 @@ class TestHypDetermineAction:
             initial_confidence=0.5,
             confirmed_confidence=0.75,
             supporting_evidence=["m1"],
+            contradicting_evidence=[],
             causal_path=["slow_query", "db_overload"],
             counterfactual_hint=None,
         )

@@ -156,6 +156,7 @@ from app.models.meta_learning_config import MetaLearningConfig
 from app.models.provenance_edge import ProvenanceEdge
 from app.models.cognitive_state_checkpoint import CognitiveStateCheckpoint
 from app.models.benchmark_run import BenchmarkRun
+from app.models.system_cognition_state import SystemCognitionState
 
 __all__ = [
     # Base

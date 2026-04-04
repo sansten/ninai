@@ -676,6 +676,75 @@ class TestAutonomousActionAgentHeuristic:
         client.post.assert_not_called()
 
     @pytest.mark.asyncio
+    async def test_runtime_kill_switch_denied_emits_policy_audit_event(self):
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.text = "ok"
+        client = MagicMock()
+        client.post = AsyncMock(return_value=resp)
+
+        svc = ExternalConnectorService(
+            backoff_base=0.001,
+            _http_client_factory=lambda: client,
+        )
+        agent = AutonomousActionAgent(connector_service=svc)
+
+        audit = MagicMock()
+        audit_event = MagicMock()
+        audit_event.id = "ae-denied-1"
+        audit.log_event = AsyncMock(return_value=audit_event)
+        runtime = {
+            "action_runtime_control": {
+                "enabled": False,
+            },
+            "audit_service": audit,
+        }
+
+        with patch("app.agents.autonomous_action_agent.settings") as mock_settings:
+            mock_settings.AGENT_STRATEGY = "heuristic"
+            result = await agent.run("mem-47-kill-audit", _ctx(_urgent_enrichment(), runtime=runtime))
+
+        assert result.outputs["action_status"] == "denied"
+        audit.log_event.assert_awaited_once()
+        kwargs = audit.log_event.await_args.kwargs
+        assert kwargs["event_type"] == "policy.autonomous_action.denied"
+        assert kwargs["success"] is False
+        assert kwargs["details"]["policy_decision"] == "denied"
+        assert result.outputs.get("_policy_audit_event_id") == "ae-denied-1"
+
+    @pytest.mark.asyncio
+    async def test_auto_approved_dispatch_emits_policy_audit_event(self):
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.text = "ok"
+        client = MagicMock()
+        client.post = AsyncMock(return_value=resp)
+
+        svc = ExternalConnectorService(
+            backoff_base=0.001,
+            _http_client_factory=lambda: client,
+        )
+        agent = AutonomousActionAgent(connector_service=svc)
+
+        audit = MagicMock()
+        audit_event = MagicMock()
+        audit_event.id = "ae-approved-1"
+        audit.log_event = AsyncMock(return_value=audit_event)
+        runtime = {"audit_service": audit}
+
+        with patch("app.agents.autonomous_action_agent.settings") as mock_settings:
+            mock_settings.AGENT_STRATEGY = "heuristic"
+            result = await agent.run("mem-47-approved-audit", _ctx(_urgent_enrichment(), runtime=runtime))
+
+        assert result.outputs["policy_decision"] == "auto_approved"
+        audit.log_event.assert_awaited_once()
+        kwargs = audit.log_event.await_args.kwargs
+        assert kwargs["event_type"] == "policy.autonomous_action.approved"
+        assert kwargs["success"] is True
+        assert kwargs["details"]["policy_decision"] == "auto_approved"
+        assert result.outputs.get("_policy_audit_event_id") == "ae-approved-1"
+
+    @pytest.mark.asyncio
     async def test_runtime_dry_run_skips_external_call(self):
         resp = MagicMock()
         resp.status_code = 200

@@ -78,6 +78,7 @@ celery_app = Celery(
         "app.tasks.environment_sync",
         "app.tasks.strategy_evolution",
         "app.tasks.retention_enforcement",
+        "app.tasks.cognitive_heartbeat",
         *_enterprise_includes,
     ],
 )
@@ -162,6 +163,9 @@ celery_app.conf.update(
         # Continuous learning — strategy evolution (Phase 50)
         "app.tasks.strategy_evolution.strategy_evolution_pipeline_task": {"queue": "q.maintenance"},
 
+        # Cognitive OS heartbeat
+        "app.tasks.cognitive_heartbeat.cognitive_heartbeat_task": {"queue": "q.cognitive_loop"},
+
         # Retention policy enforcement — Gap D
         "app.tasks.retention_enforcement.retention_enforcement_task": {"queue": "q.maintenance"},
 
@@ -222,6 +226,11 @@ celery_app.conf.update(
         "nightly-retention-enforcement": {
             "task": "app.tasks.retention_enforcement.retention_enforcement_task",
             "schedule": crontab(minute=30, hour=1),
+            "args": (),
+        },
+        "cognitive-os-heartbeat": {
+            "task": "app.tasks.cognitive_heartbeat.cognitive_heartbeat_task",
+            "schedule": 300.0,  # every 5 minutes
             "args": (),
         },
         **_enterprise_beat,

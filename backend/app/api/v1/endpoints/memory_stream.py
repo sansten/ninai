@@ -77,6 +77,11 @@ async def stream_memory_events(
 
             emitted_any = False
             for ev in rows:
+                # Defense in depth: never emit rows outside the caller's org,
+                # even if an upstream query/regression accidentally returns them.
+                if str(getattr(ev, "organization_id", "") or "") != str(tenant.org_id):
+                    continue
+
                 ev_id = str(ev.id)
                 if cursor_id and ev_id == cursor_id:
                     continue

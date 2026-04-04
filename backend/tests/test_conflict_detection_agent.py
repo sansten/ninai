@@ -388,7 +388,9 @@ class TestConflictDetectionAgentHeuristic:
         conflict_types = {c["conflict_type"] for c in result.outputs["conflicts"]}
         assert "state_mismatch" in conflict_types
 
-    async def test_silo_gap_detected(self):
+    async def test_silo_gap_detected(self, monkeypatch):
+        import app.agents.conflict_detection_agent as cda_mod
+        monkeypatch.setattr(cda_mod.settings, "AGENT_STRATEGY", "heuristic")
         agent = ConflictDetectionAgent()
         world_nodes = [_node("Alpha")]
         chains = [_chain("Alpha", ["Alpha", "Ghost"])]
@@ -440,7 +442,9 @@ class TestConflictDetectionAgentHeuristic:
         res_many = await agent.run("mem-1", ctx_many)
         assert res_many.outputs["confidence"] >= res_few.outputs["confidence"]
 
-    async def test_rationale_is_heuristic(self):
+    async def test_rationale_is_heuristic(self, monkeypatch):
+        import app.agents.conflict_detection_agent as cda_mod
+        monkeypatch.setattr(cda_mod.settings, "AGENT_STRATEGY", "heuristic")
         agent = ConflictDetectionAgent()
         ctx = _make_context()
         result = await agent.run("mem-1", ctx)

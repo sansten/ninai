@@ -36,6 +36,7 @@ router = APIRouter()
 
 _REVIEW_QUEUE_AGENT = "HumanReviewQueueAgent"
 _UNCERTAINTY_AGENT = "UncertaintyReportingAgent"
+_AUTONOMOUS_ACTION_AGENT = "autonomous_action_agent"
 
 # Lower number = higher urgency
 _PRIORITY_ORDER = {"urgent": 0, "high": 1, "normal": 2, "low": 3}
@@ -135,6 +136,25 @@ async def _load_uncertainty_runs(
     return list(result.scalars().all())
 
 
+async def _load_autonomous_action_runs(
+    db: AsyncSession,
+    org_id: str,
+    limit: int = 500,
+) -> list[AgentRun]:
+    stmt = (
+        select(AgentRun)
+        .where(
+            AgentRun.organization_id == org_id,
+            AgentRun.agent_name == _AUTONOMOUS_ACTION_AGENT,
+            AgentRun.status == "success",
+        )
+        .order_by(AgentRun.finished_at.desc())
+        .limit(limit)
+    )
+    result = await db.execute(stmt)
+    return list(result.scalars().all())
+
+
 def _run_to_queue_item(run: AgentRun) -> QueueItem | None:
     """Convert an AgentRun to a QueueItem if the run marks the memory as eligible."""
     if not isinstance(run.outputs, dict):
@@ -150,6 +170,34 @@ def _run_to_queue_item(run: AgentRun) -> QueueItem | None:
             review_reasons=list(outputs.get("review_reasons") or []),
             review_context=dict(outputs.get("review_context") or {}),
             queue_entry_id=outputs.get("queue_entry_id"),
+            queued_at=run.finished_at,
+        )
+
+    if run.agent_name == _AUTONOMOUS_ACTION_AGENT:
+        decision = str(outputs.get("policy_decision") or "").strip().lower()
+        action_status = str(outputs.get("action_status") or "").strip().lower()
+        if decision not in {"human_review_required", "denied"} and action_status != "pending_review":
+            return None
+
+        priority = "urgent" if decision == "denied" else "high"
+        review_reason = (
+            outputs.get("_runtime_control_reason")
+            or outputs.get("_dispatch_error")
+            or outputs.get("_decision_reason")
+            or f"autonomous action policy decision: {decision or action_status}"
+        )
+        return QueueItem(
+            memory_id=run.memory_id,
+            priority=priority,
+            review_reasons=[str(review_reason)],
+            review_context={
+                "source_agent": _AUTONOMOUS_ACTION_AGENT,
+                "policy_decision": decision,
+                "action_status": action_status,
+                "action_type": outputs.get("action_type"),
+                "dispatch_confidence": outputs.get("dispatch_confidence"),
+            },
+            queue_entry_id=run.memory_id,
             queued_at=run.finished_at,
         )
 
@@ -204,6 +252,10 @@ async def get_review_queue(
     if not items:
         unc_runs = await _load_uncertainty_runs(db, tenant.org_id)
         items = [item for run in unc_runs if (item := _run_to_queue_item(run)) is not None]
+
+    if not items:
+        auto_runs = await _load_autonomous_action_runs(db, tenant.org_id)
+        items = [item for run in auto_runs if (item := _run_to_queue_item(run)) is not None]
 
     # Deduplicate by memory_id — keep highest priority entry
     seen: dict[str, QueueItem] = {}
@@ -287,20 +339,56 @@ async def claim_review_item(
         unc_runs = result2.scalars().all()
         unc_run = unc_runs[0] if unc_runs else None
 
-        if unc_run is None or not (unc_run.outputs or {}).get("review_recommended"):
-            raise HTTPException(status_code=404, detail="memory is not in review queue")
+        if unc_run is not None and (unc_run.outputs or {}).get("review_recommended"):
+            unc_outputs = unc_run.outputs if isinstance(unc_run.outputs, dict) else {}
+            level = str(unc_outputs.get("uncertainty_level") or "medium").lower()
+            priority_map = {"critical": "urgent", "high": "high", "medium": "normal", "low": "low"}
+            priority = priority_map.get(level, "normal")
+            review_reasons = ["flagged by UncertaintyReportingAgent"]
+            review_context = {
+                "uncertainty_level": unc_outputs.get("uncertainty_level"),
+                "uncertainty_score": unc_outputs.get("uncertainty_score"),
+                "unresolved_conflicts": unc_outputs.get("unresolved_conflicts") or [],
+                "low_confidence_fields": unc_outputs.get("low_confidence_fields") or [],
+            }
+        else:
+            stmt3 = (
+                select(AgentRun)
+                .where(
+                    AgentRun.organization_id == tenant.org_id,
+                    AgentRun.memory_id == body.memory_id,
+                    AgentRun.agent_name == _AUTONOMOUS_ACTION_AGENT,
+                    AgentRun.status == "success",
+                )
+                .order_by(AgentRun.finished_at.desc())
+                .limit(1)
+            )
+            result3 = await db.execute(stmt3)
+            auto_runs = result3.scalars().all()
+            auto_run = auto_runs[0] if auto_runs else None
 
-        unc_outputs = unc_run.outputs if isinstance(unc_run.outputs, dict) else {}
-        level = str(unc_outputs.get("uncertainty_level") or "medium").lower()
-        priority_map = {"critical": "urgent", "high": "high", "medium": "normal", "low": "low"}
-        priority = priority_map.get(level, "normal")
-        review_reasons = ["flagged by UncertaintyReportingAgent"]
-        review_context = {
-            "uncertainty_level": unc_outputs.get("uncertainty_level"),
-            "uncertainty_score": unc_outputs.get("uncertainty_score"),
-            "unresolved_conflicts": unc_outputs.get("unresolved_conflicts") or [],
-            "low_confidence_fields": unc_outputs.get("low_confidence_fields") or [],
-        }
+            auto_outputs = auto_run.outputs if auto_run is not None and isinstance(auto_run.outputs, dict) else {}
+            auto_decision = str(auto_outputs.get("policy_decision") or "").lower()
+            auto_status = str(auto_outputs.get("action_status") or "").lower()
+            if auto_run is None or (auto_decision not in {"human_review_required", "denied"} and auto_status != "pending_review"):
+                raise HTTPException(status_code=404, detail="memory is not in review queue")
+
+            priority = "urgent" if auto_decision == "denied" else "high"
+            review_reasons = [
+                str(
+                    auto_outputs.get("_runtime_control_reason")
+                    or auto_outputs.get("_dispatch_error")
+                    or auto_outputs.get("_decision_reason")
+                    or f"autonomous action policy decision: {auto_decision or auto_status}"
+                )
+            ]
+            review_context = {
+                "source_agent": _AUTONOMOUS_ACTION_AGENT,
+                "policy_decision": auto_decision,
+                "action_status": auto_status,
+                "action_type": auto_outputs.get("action_type"),
+                "dispatch_confidence": auto_outputs.get("dispatch_confidence"),
+            }
 
     return ClaimResponse(
         memory_id=body.memory_id,

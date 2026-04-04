@@ -428,7 +428,9 @@ async def test_run_detects_low_confidence():
 
 
 @pytest.mark.asyncio
-async def test_run_detects_edge_cluster():
+async def test_run_detects_edge_cluster(monkeypatch):
+    import app.agents.predictive_monitor_agent as pma_mod
+    monkeypatch.setattr(pma_mod.settings, "AGENT_STRATEGY", "heuristic")
     agent = PredictiveMonitorAgent()
     ctx = _ctx(
         world_nodes=[_NODE_ACME, _NODE_BUDGET],
@@ -440,7 +442,9 @@ async def test_run_detects_edge_cluster():
 
 
 @pytest.mark.asyncio
-async def test_run_detects_unresolved_expansion():
+async def test_run_detects_unresolved_expansion(monkeypatch):
+    import app.agents.predictive_monitor_agent as pma_mod
+    monkeypatch.setattr(pma_mod.settings, "AGENT_STRATEGY", "heuristic")
     agent = PredictiveMonitorAgent()
     ctx = _ctx(world_nodes=[_NODE_CONCEPT])
     result = await agent.run("mem-1", ctx)
@@ -449,7 +453,9 @@ async def test_run_detects_unresolved_expansion():
 
 
 @pytest.mark.asyncio
-async def test_run_detects_cascade():
+async def test_run_detects_cascade(monkeypatch):
+    import app.agents.predictive_monitor_agent as pma_mod
+    monkeypatch.setattr(pma_mod.settings, "AGENT_STRATEGY", "heuristic")
     agent = PredictiveMonitorAgent()
     ctx = _ctx(
         world_nodes=[_NODE_ACME],

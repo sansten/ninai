@@ -560,6 +560,7 @@ class AgentRunner:
                         "attempt": attempt,
                         "max_attempts": max_attempts,
                         "job_id": ctx.trace_id or "",
+                        "audit_service": audit,
                     },
                     "tool_event_sink": tool_event_sink,
                 }

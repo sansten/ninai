@@ -22,6 +22,8 @@ Design rules:
 
 from __future__ import annotations
 
+import asyncio
+import inspect
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -223,6 +225,33 @@ class UncertaintyResolutionService:
     ) -> None:
         self._gateway = gateway or CognitiveGatewayService()
 
+    @staticmethod
+    def _await_if_needed(value: Any) -> Any:
+        """Resolve an awaitable result when gateway methods are async.
+
+        This service remains sync-callable for task and test code paths,
+        while still supporting async CognitiveGatewayService methods.
+        """
+        if not inspect.isawaitable(value):
+            return value
+
+        try:
+            return asyncio.run(value)
+        except RuntimeError:
+            # If already inside a running loop, run the coroutine in a short-lived
+            # loop on a helper thread so this sync service still returns a value.
+            import threading
+
+            container: dict[str, Any] = {}
+
+            def _runner() -> None:
+                container["value"] = asyncio.run(value)
+
+            t = threading.Thread(target=_runner, daemon=True)
+            t.start()
+            t.join()
+            return container.get("value")
+
     def resolve(
         self,
         *,
@@ -256,6 +285,7 @@ class UncertaintyResolutionService:
                     memories=candidate_memories,
                     limit=_MAX_MEMORIES_PER_QUERY,
                 )
+                read_result = self._await_if_needed(read_result)
                 evidence = _score_evidence(read_result.memories, q.query_text)
                 if evidence:
                     all_evidence.extend(evidence)

@@ -439,6 +439,9 @@ async def test_playbook_low_confidence_domain_leads_to_needs_evidence(pg_client,
 
     monkeypatch.setattr(CriticAgent, "critique", _critique_needs_evidence, raising=True)
 
+    import app.services.cognitive_loop.planner_agent as planner_mod
+    monkeypatch.setattr(planner_mod.settings, "AGENT_STRATEGY", "heuristic")
+
     task_db_url = migrated_test_engine.url.render_as_string(hide_password=False)
     status = await asyncio.to_thread(
         _run_cognitive_loop_task_sync,

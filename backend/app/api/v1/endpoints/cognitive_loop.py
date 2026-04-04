@@ -16,6 +16,7 @@ from app.models.tool_call_log import ToolCallLog
 from app.models.goal import Goal
 from app.services.cognitive_loop.evaluation_report_service import EvaluationReportService
 from app.services.agent_scheduler_service import AgentSchedulerService
+from app.services.cognitive_autonomy_control_service import get_cognitive_autonomy_control_service
 from app.schemas.cognitive import (
     CognitiveSessionCreateRequest,
     CognitiveSessionResponse,
@@ -95,6 +96,16 @@ async def run_cognitive_session(
     db: AsyncSession = Depends(get_db),
 ):
     await set_tenant_context(db, tenant.user_id, tenant.org_id, tenant.roles_string, tenant.clearance_level)
+
+    enabled, reason = get_cognitive_autonomy_control_service().is_enabled(org_id=tenant.org_id)
+    if not enabled:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "error": "cognitive_autonomy_disabled",
+                "reason": reason,
+            },
+        )
 
     res = await db.execute(select(CognitiveSession).where(CognitiveSession.id == session_id))
     sess = res.scalar_one_or_none()

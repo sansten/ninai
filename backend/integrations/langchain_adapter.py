@@ -5,7 +5,8 @@ Integrates Ninai Memory OS with LangChain's BaseMemory interface.
 Supports conversation history, entity memory, and vector-backed retrieval.
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, AsyncGenerator, Dict, List, Optional
+import json
 import logging
 from datetime import datetime
 
@@ -328,6 +329,44 @@ class NinaiLangChainMemory(BaseMemory):
             logger.error(f"Error searching memories: {e}")
             return []
     
+    async def astream_search(
+        self,
+        query: str,
+        k: int = 4,
+    ) -> AsyncGenerator[Dict[str, Any], None]:
+        """Async generator: yields memories one-by-one via the streaming gateway endpoint.
+
+        Falls back to a single-call asearch() if the streaming endpoint is unavailable
+        or returns an unexpected response.
+
+        Each yielded item is a memory dict as returned by the cognitive gateway.
+        """
+        try:
+            import httpx
+            url = f"{self.api_base_url}/cognitive/gateway/stream/read"
+            headers = {
+                "Authorization": f"Bearer {self.api_key}",
+                "Accept": "text/event-stream",
+                "Content-Type": "application/json",
+            }
+            body = {"query": query, "limit": k}
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                async with client.stream("POST", url, headers=headers, json=body) as response:
+                    response.raise_for_status()
+                    async for line in response.aiter_lines():
+                        if line.startswith("data: "):
+                            try:
+                                event = json.loads(line[6:])
+                            except json.JSONDecodeError:
+                                continue
+                            if event.get("event") == "result":
+                                payload = event.get("payload", {})
+                                yield payload.get("memory", payload)
+        except Exception as exc:
+            logger.warning("astream_search streaming endpoint unavailable (%s), falling back to asearch", exc)
+            for item in await self.asearch(query, k):
+                yield item
+
     def __del__(self):
         """Cleanup HTTP client."""
         try:

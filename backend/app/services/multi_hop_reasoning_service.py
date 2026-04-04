@@ -22,6 +22,7 @@ Design rules:
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -108,13 +109,34 @@ class MultiHopReasoningService:
         goal: str,
         steps: list[ChainStep],
     ) -> ChainResult:
-        """Execute the chain synchronously (all gateway calls are pure/sync).
+        """Execute the chain, bridging to async gateway calls.
 
         Parameters
         ----------
         goal:   High-level goal driving the chain (for logging/audit).
         steps:  Ordered list of ChainStep definitions.
         """
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+
+        if loop is not None:
+            # Called from within a running event loop (e.g. pytest-asyncio).
+            # Schedule a coroutine and block via a thread so we don't nest loops.
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                future = pool.submit(asyncio.run, self._execute_async(goal=goal, steps=steps))
+                return future.result()
+        else:
+            return asyncio.run(self._execute_async(goal=goal, steps=steps))
+
+    async def _execute_async(
+        self,
+        *,
+        goal: str,
+        steps: list[ChainStep],
+    ) -> ChainResult:
         if not steps:
             return ChainResult(
                 goal=goal,
@@ -139,7 +161,7 @@ class MultiHopReasoningService:
             )
             resolved_content = self._resolve_template(step.content, step_outputs)
 
-            sr = self._execute_step(
+            sr = await self._execute_step(
                 index=idx,
                 step=step,
                 resolved_input=resolved_input,
@@ -175,7 +197,7 @@ class MultiHopReasoningService:
             result = result.replace(f"{{step_{i}_output}}", output)
         return result
 
-    def _execute_step(
+    async def _execute_step(
         self,
         *,
         index: int,
@@ -185,8 +207,13 @@ class MultiHopReasoningService:
     ) -> StepResult:
         step_type = step.step_type if step.step_type in _STEP_TYPES else "plan"
 
+        plan_method = self._gateway.plan
+        decide_method = self._gateway.decide
+        read_method = self._gateway.read
+
         if step_type == "plan":
-            gw_result = self._gateway.plan(goal=resolved_input)
+            call = plan_method(goal=resolved_input)
+            gw_result = (await call) if asyncio.iscoroutine(call) else call
             output = " → ".join(
                 s.get("title", s.get("description", "")) for s in gw_result.steps
             )
@@ -200,7 +227,8 @@ class MultiHopReasoningService:
         elif step_type == "decide":
             content = resolved_content or resolved_input
             enrichment = dict(step.enrichment)
-            gw_result = self._gateway.decide(content=content, enrichment=enrichment)
+            call = decide_method(content=content, enrichment=enrichment)
+            gw_result = (await call) if asyncio.iscoroutine(call) else call
             output = f"{gw_result.decision}: {gw_result.action_recommended or ''}"
             confidence = gw_result.confidence
             raw = {
@@ -210,11 +238,12 @@ class MultiHopReasoningService:
             }
 
         else:  # "read"
-            gw_result = self._gateway.read(
+            call = read_method(
                 query=resolved_input,
                 memories=list(step.memories),
                 limit=5,
             )
+            gw_result = (await call) if asyncio.iscoroutine(call) else call
             output = "; ".join(
                 str(m.get("content", ""))[:120] for m in gw_result.memories[:3]
             )

@@ -7,18 +7,28 @@ All endpoints are scoped by the tenant's authenticated org.
 Capability gating is enforced per verb; denied verbs return 403.
 
 Prefixed at /cognitive/gateway (mounted in router.py).
+
+context_id (optional, any string): pass the same context_id across multiple
+calls to chain them — prior decisions, steps, and enrichment accumulate in
+Redis (1h TTL) and inform each subsequent call.
 """
 
 from __future__ import annotations
 
+import uuid
 from typing import Any
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Path, status
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.database import get_db
 from app.middleware.tenant_context import TenantContext, require_org_admin
 from app.services.cognitive_gateway_service import (
-    CognitiveGatewayService,
     CognitiveGatewayCapabilities,
+    CognitiveGatewayService,
+    GatewayContextSession,
+    load_gateway_context,
+    save_gateway_context,
 )
 
 router = APIRouter()
@@ -46,10 +56,11 @@ async def gateway_write(
     """Store and enrich a memory record.
 
     Request body:
-      content  (str, required)
-      title    (str, optional)
-      tags     (list[str], optional)
-      metadata (dict, optional)
+      content    (str, required)
+      title      (str, optional)
+      tags       (list[str], optional)
+      metadata   (dict, optional)
+      context_id (str, optional) — chain with prior gateway calls
     """
     content = str(payload.get("content") or "")
     if not content.strip():
@@ -57,13 +68,16 @@ async def gateway_write(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="content is required",
         )
+    context_id = payload.get("context_id") or None
 
     try:
-        result = gateway.write(
+        result = await gateway.write(
             content=content,
             title=str(payload.get("title") or ""),
             tags=list(payload.get("tags") or []),
             metadata=dict(payload.get("metadata") or {}),
+            context_id=context_id,
+            org_id=tenant.org_id if context_id else None,
         )
     except PermissionError as exc:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
@@ -74,6 +88,7 @@ async def gateway_write(
         "enrichment_summary": result.enrichment_summary,
         "tags": result.tags,
         "created_at": result.created_at.isoformat(),
+        "context_id": context_id,
     }
 
 
@@ -90,9 +105,10 @@ async def gateway_read(
     """Retrieve and rank memories for a query.
 
     Request body:
-      query    (str, required)
-      memories (list[dict], optional — pass pre-fetched candidates)
-      limit    (int, optional, default 10)
+      query      (str, required)
+      memories   (list[dict], optional — pass pre-fetched candidates)
+      limit      (int, optional, default 10)
+      context_id (str, optional) — merge prior memories from chain
     """
     query = str(payload.get("query") or "")
     if not query.strip():
@@ -100,12 +116,15 @@ async def gateway_read(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="query is required",
         )
+    context_id = payload.get("context_id") or None
 
     try:
-        result = gateway.read(
+        result = await gateway.read(
             query=query,
             memories=list(payload.get("memories") or []),
             limit=int(payload.get("limit") or 10),
+            context_id=context_id,
+            org_id=tenant.org_id if context_id else None,
         )
     except PermissionError as exc:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
@@ -115,6 +134,7 @@ async def gateway_read(
         "total": result.total,
         "query": result.query,
         "context_assembled": result.context_assembled,
+        "context_id": context_id,
     }
 
 
@@ -133,6 +153,7 @@ async def gateway_decide(
     Request body:
       content    (str, required)
       enrichment (dict, optional — pass existing enrichment to build on)
+      context_id (str, optional) — merge accumulated enrichment from chain
     """
     content = str(payload.get("content") or "")
     if not content.strip():
@@ -140,11 +161,14 @@ async def gateway_decide(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="content is required",
         )
+    context_id = payload.get("context_id") or None
 
     try:
-        result = gateway.decide(
+        result = await gateway.decide(
             content=content,
             enrichment=dict(payload.get("enrichment") or {}),
+            context_id=context_id,
+            org_id=tenant.org_id if context_id else None,
         )
     except PermissionError as exc:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
@@ -156,6 +180,7 @@ async def gateway_decide(
         "action_recommended": result.action_recommended,
         "enrichment": result.enrichment,
         "agents_run": result.agents_run,
+        "context_id": context_id,
     }
 
 
@@ -172,8 +197,9 @@ async def gateway_plan(
     """Decompose a goal into ordered, actionable steps.
 
     Request body:
-      goal    (str, required)
-      context (dict, optional)
+      goal       (str, required)
+      context    (dict, optional)
+      context_id (str, optional) — carry forward prior decision into context
     """
     goal = str(payload.get("goal") or "")
     if not goal.strip():
@@ -181,11 +207,14 @@ async def gateway_plan(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="goal is required",
         )
+    context_id = payload.get("context_id") or None
 
     try:
-        result = gateway.plan(
+        result = await gateway.plan(
             goal=goal,
             context=dict(payload.get("context") or {}),
+            context_id=context_id,
+            org_id=tenant.org_id if context_id else None,
         )
     except PermissionError as exc:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
@@ -196,6 +225,7 @@ async def gateway_plan(
         "step_count": result.step_count,
         "blocking_step": result.blocking_step,
         "confidence": result.confidence,
+        "context_id": context_id,
     }
 
 
@@ -215,7 +245,7 @@ async def gateway_explain(
     In heuristic mode returns the explainability structure with empty decisions.
     """
     try:
-        result = gateway.explain(memory_id=memory_id)
+        result = await gateway.explain(memory_id=memory_id)
     except PermissionError as exc:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
 
@@ -226,3 +256,75 @@ async def gateway_explain(
         "confidence": result.confidence,
         "explainability_summary": result.explainability_summary,
     }
+
+
+# ---------------------------------------------------------------------------
+# GET /cognitive/gateway/context/{context_id}
+# ---------------------------------------------------------------------------
+
+@router.get("/context/{context_id}")
+async def get_gateway_context(
+    context_id: str = Path(...),
+    tenant: TenantContext = Depends(require_org_admin()),
+) -> dict[str, Any]:
+    """Inspect the accumulated state of a gateway context chain.
+
+    Returns the context session including prior decision, steps, memories,
+    and enrichment accumulated across calls sharing this context_id.
+    Returns 404 if the context has expired (> 1h since last use) or never existed.
+    """
+    import dataclasses
+
+    ctx = await load_gateway_context(context_id, tenant.org_id)
+    if ctx is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Context not found or expired.",
+        )
+    return dataclasses.asdict(ctx)
+
+
+# ---------------------------------------------------------------------------
+# POST /cognitive/gateway/context  (create a new context_id)
+# ---------------------------------------------------------------------------
+
+@router.post("/context")
+async def create_gateway_context(
+    tenant: TenantContext = Depends(require_org_admin()),
+) -> dict[str, Any]:
+    """Create a new gateway context_id for chaining multiple verb calls.
+
+    Returns a fresh context_id that callers pass to write/read/decide/plan/explain
+    to accumulate state across calls.
+    """
+    context_id = str(uuid.uuid4())
+    ctx = GatewayContextSession(context_id=context_id, org_id=tenant.org_id)
+    await save_gateway_context(ctx)
+    return {"context_id": context_id, "org_id": tenant.org_id, "ttl_seconds": 3600}
+
+
+# ---------------------------------------------------------------------------
+# GET /cognitive/gateway/state
+# ---------------------------------------------------------------------------
+
+@router.get("/state")
+async def get_cognitive_state(
+    tenant: TenantContext = Depends(require_org_admin()),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """Return the current SystemCognitionState for this org.
+
+    Shows what the Cognitive OS is currently attending to, cognitive load,
+    unresolved anomaly count, and the time of the last heartbeat.
+    Updated every 5 minutes by the autonomous heartbeat task.
+    """
+    from app.services.system_cognition_state import SystemCognitionStateService
+
+    svc = SystemCognitionStateService(db)
+    state = await svc.get(tenant.org_id)
+    if state is None:
+        return {
+            "status": "no_heartbeat_data",
+            "message": "No heartbeat has run yet for this org.",
+        }
+    return state.to_dict()

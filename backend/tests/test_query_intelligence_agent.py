@@ -526,7 +526,9 @@ class TestQueryIntelligenceAgentHeuristic:
         assert result.outputs["query_intent"] == "locate"
 
     @pytest.mark.asyncio
-    async def test_content_read_from_memory_text_field(self):
+    async def test_content_read_from_memory_text_field(self, monkeypatch):
+        import app.agents.query_intelligence_agent as qia_mod
+        monkeypatch.setattr(qia_mod.settings, "AGENT_STRATEGY", "heuristic")
         agent = QueryIntelligenceAgent()
         ctx = {"memory": {"text": "explain why the system crashed", "enrichment": {}}, "runtime": {}}
         result = await agent.run("mem-001", ctx)

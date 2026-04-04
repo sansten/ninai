@@ -62,11 +62,15 @@ def _merge_effective(env_cfg: dict[str, Any], overrides: dict[str, Any]) -> dict
 
 
 async def get_auth_config_overrides(db: AsyncSession) -> dict[str, Any]:
-    result = await db.execute(select(AppSetting).where(AppSetting.key == _AUTH_CONFIG_KEY))
-    setting = result.scalar_one_or_none()
-    if setting and isinstance(setting.value, dict):
-        return dict(setting.value)
-    return {}
+    try:
+        result = await db.execute(select(AppSetting).where(AppSetting.key == _AUTH_CONFIG_KEY))
+        setting = result.scalar_one_or_none()
+        if setting and isinstance(setting.value, dict):
+            return dict(setting.value)
+        return {}
+    except Exception:
+        # If app_settings table is missing or DB is unavailable, fall back to env config.
+        return {}
 
 
 async def get_effective_auth_config(

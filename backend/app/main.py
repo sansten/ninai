@@ -10,8 +10,9 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import AsyncGenerator
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from starlette.responses import RedirectResponse
 
 from app.api.v1.router import api_router
@@ -112,6 +113,18 @@ def create_application() -> FastAPI:
     
     # Prometheus metrics middleware (collects request/response metrics)
     app.add_middleware(PrometheusMiddleware)
+
+    # ---------------------------------------------------------------------------
+    # Exception handlers
+    # ---------------------------------------------------------------------------
+
+    @app.exception_handler(Exception)
+    async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+        logger.exception("Unhandled exception on %s %s", request.method, request.url.path)
+        return JSONResponse(
+            status_code=500,
+            content={"detail": "Internal server error"},
+        )
 
     # ---------------------------------------------------------------------------
     # Routes
