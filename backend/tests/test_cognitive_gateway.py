@@ -309,68 +309,79 @@ class TestHeuristicExplain:
 # ===========================================================================
 
 class TestGatewayWrite:
-    def test_returns_write_result(self):
+    @pytest.mark.asyncio
+    async def test_returns_write_result(self):
         gw = _full_gateway()
-        result = gw.write(content="System alert: auth failure")
+        result = await gw.write(content="System alert: auth failure")
         assert isinstance(result, GatewayWriteResult)
         assert result.memory_id
         assert result.enriched
 
-    def test_enrichment_summary_populated(self):
+    @pytest.mark.asyncio
+    async def test_enrichment_summary_populated(self):
         gw = _full_gateway()
-        result = gw.write(content="critical outage in prod")
+        result = await gw.write(content="critical outage in prod")
         assert result.enrichment_summary.get("tone") == "urgent"
 
-    def test_tags_preserved(self):
+    @pytest.mark.asyncio
+    async def test_tags_preserved(self):
         gw = _full_gateway()
-        result = gw.write(content="test", tags=["tag1", "tag2"])
+        result = await gw.write(content="test", tags=["tag1", "tag2"])
         assert "tag1" in result.tags
 
-    def test_lite_gateway_allows_write(self):
+    @pytest.mark.asyncio
+    async def test_lite_gateway_allows_write(self):
         gw = _lite_gateway()
-        result = gw.write(content="test content")
+        result = await gw.write(content="test content")
         assert result.enriched
 
-    def test_memory_id_unique(self):
+    @pytest.mark.asyncio
+    async def test_memory_id_unique(self):
         gw = _full_gateway()
-        r1 = gw.write(content="a")
-        r2 = gw.write(content="b")
+        r1 = await gw.write(content="a")
+        r2 = await gw.write(content="b")
         assert r1.memory_id != r2.memory_id
 
 
 class TestGatewayRead:
-    def test_returns_read_result(self):
+    @pytest.mark.asyncio
+    async def test_returns_read_result(self):
         gw = _full_gateway()
-        result = gw.read(query="auth failure")
+        result = await gw.read(query="auth failure")
         assert isinstance(result, GatewayReadResult)
 
-    def test_empty_memories_returns_zero(self):
+    @pytest.mark.asyncio
+    async def test_empty_memories_returns_zero(self):
         gw = _full_gateway()
-        result = gw.read(query="anything", memories=[])
+        result = await gw.read(query="anything", memories=[])
         assert result.total == 0
         assert not result.context_assembled
 
-    def test_memories_ranked_by_relevance(self):
+    @pytest.mark.asyncio
+    async def test_memories_ranked_by_relevance(self):
         gw = _full_gateway()
         mems = [
             {"id": "1", "content": "unrelated content here"},
             {"id": "2", "content": "auth sso login token"},
         ]
-        result = gw.read(query="auth sso", memories=mems)
+        result = await gw.read(query="auth sso", memories=mems)
         assert result.memories[0]["id"] == "2"
 
-    def test_limit_respected(self):
+    @pytest.mark.asyncio
+    async def test_limit_respected(self):
         gw = _full_gateway()
         mems = [{"id": str(i), "content": "item"} for i in range(20)]
-        result = gw.read(query="item", memories=mems, limit=5)
+        result = await gw.read(query="item", memories=mems, limit=5)
         assert result.total <= 5
 
-    def test_lite_gateway_allows_read(self):
+    @pytest.mark.asyncio
+    async def test_lite_gateway_allows_read(self):
         gw = _lite_gateway()
-        result = gw.read(query="anything")
+        result = await gw.read(query="anything")
         assert isinstance(result, GatewayReadResult)
 
-    def test_vector_fn_used_when_provided(self):
+    @pytest.mark.asyncio
+    async def test_vector_fn_used_when_provided(self):
         # When vector_fn is supplied it replaces the token-overlap sort
         gw = _full_gateway()
         mems = [
@@ -382,10 +393,11 @@ class TestGatewayRead:
             return [m for m in memories if m["id"] == "semantic-match"] + \
                    [m for m in memories if m["id"] != "semantic-match"]
 
-        result = gw.read(query="auth sso", memories=mems, vector_fn=_fake_vector_fn)
+        result = await gw.read(query="auth sso", memories=mems, vector_fn=_fake_vector_fn)
         assert result.memories[0]["id"] == "semantic-match"
 
-    def test_vector_fn_overrides_token_sort(self):
+    @pytest.mark.asyncio
+    async def test_vector_fn_overrides_token_sort(self):
         # Without vector_fn, keyword-match wins; with it, our fn result wins
         gw = _full_gateway()
         mems = [
@@ -393,42 +405,48 @@ class TestGatewayRead:
             {"id": "B", "content": "dog cat fish"},
         ]
         # vector_fn always puts B first
-        result_default = gw.read(query="apple", memories=mems)
-        result_vector = gw.read(query="apple", memories=mems, vector_fn=lambda q, m: list(reversed(m)))
+        result_default = await gw.read(query="apple", memories=mems)
+        result_vector = await gw.read(query="apple", memories=mems, vector_fn=lambda q, m: list(reversed(m)))
         assert result_default.memories[0]["id"] == "A"
         assert result_vector.memories[0]["id"] == "B"
 
 
 class TestGatewayDecide:
-    def test_returns_decide_result(self):
+    @pytest.mark.asyncio
+    async def test_returns_decide_result(self):
         gw = _full_gateway()
-        result = gw.decide(content="critical system failure")
+        result = await gw.decide(content="critical system failure")
         assert isinstance(result, GatewayDecideResult)
 
-    def test_decision_is_valid_string(self):
+    @pytest.mark.asyncio
+    async def test_decision_is_valid_string(self):
         gw = _full_gateway()
-        result = gw.decide(content="test content")
+        result = await gw.decide(content="test content")
         assert result.decision in ("escalate", "investigate", "monitor", "acknowledge")
 
-    def test_confidence_in_range(self):
+    @pytest.mark.asyncio
+    async def test_confidence_in_range(self):
         gw = _full_gateway()
-        result = gw.decide(content="test")
+        result = await gw.decide(content="test")
         assert 0.0 <= result.confidence <= 1.0
 
-    def test_lite_gateway_denies_decide(self):
+    @pytest.mark.asyncio
+    async def test_lite_gateway_denies_decide(self):
         gw = _lite_gateway()
         with pytest.raises(PermissionError, match="decide"):
-            gw.decide(content="test")
+            await gw.decide(content="test")
 
-    def test_enrichment_passed_through(self):
+    @pytest.mark.asyncio
+    async def test_enrichment_passed_through(self):
         gw = _full_gateway()
-        result = gw.decide(content="test", enrichment={"anomaly_detected": True, "anomaly_score": 0.95})
+        result = await gw.decide(content="test", enrichment={"anomaly_detected": True, "anomaly_score": 0.95})
         assert result.decision == "escalate"
 
-    def test_real_anomaly_agent_fires(self):
+    @pytest.mark.asyncio
+    async def test_real_anomaly_agent_fires(self):
         # Low credibility in enrichment → agent detects it → non-trivial decision
         gw = _full_gateway()
-        result = gw.decide(
+        result = await gw.decide(
             content="weekly health report",
             enrichment={"credibility_score": 0.02, "uncertainty_score": 0.95},
         )
@@ -437,55 +455,64 @@ class TestGatewayDecide:
 
 
 class TestGatewayPlan:
-    def test_returns_plan_result(self):
+    @pytest.mark.asyncio
+    async def test_returns_plan_result(self):
         gw = _full_gateway()
-        result = gw.plan(goal="investigate login failure")
+        result = await gw.plan(goal="investigate login failure")
         assert isinstance(result, GatewayPlanResult)
 
-    def test_steps_non_empty(self):
+    @pytest.mark.asyncio
+    async def test_steps_non_empty(self):
         gw = _full_gateway()
-        result = gw.plan(goal="escalate P1 incident")
+        result = await gw.plan(goal="escalate P1 incident")
         assert result.step_count > 0
 
-    def test_lite_gateway_denies_plan(self):
+    @pytest.mark.asyncio
+    async def test_lite_gateway_denies_plan(self):
         gw = _lite_gateway()
         with pytest.raises(PermissionError, match="plan"):
-            gw.plan(goal="test")
+            await gw.plan(goal="test")
 
-    def test_standard_gateway_denies_plan(self):
+    @pytest.mark.asyncio
+    async def test_standard_gateway_denies_plan(self):
         gw = _standard_gateway()
         with pytest.raises(PermissionError, match="plan"):
-            gw.plan(goal="test")
+            await gw.plan(goal="test")
 
-    def test_context_blocking_step_propagated(self):
+    @pytest.mark.asyncio
+    async def test_context_blocking_step_propagated(self):
         gw = _full_gateway()
-        result = gw.plan(goal="investigate", context={"blocking_subtask": "get token"})
+        result = await gw.plan(goal="investigate", context={"blocking_subtask": "get token"})
         assert result.blocking_step == "get token"
 
-    def test_structured_goal_real_extraction(self):
+    @pytest.mark.asyncio
+    async def test_structured_goal_real_extraction(self):
         gw = _full_gateway()
         goal = "1. Identify root cause\n2. Patch the service\n3. Deploy to staging"
-        result = gw.plan(goal=goal)
+        result = await gw.plan(goal=goal)
         assert result.step_count == 3
         actions = [s["action"] for s in result.steps]
         assert any("root cause" in a.lower() or "patch" in a.lower() for a in actions)
 
 
 class TestGatewayExplain:
-    def test_returns_explain_result(self):
+    @pytest.mark.asyncio
+    async def test_returns_explain_result(self):
         gw = _full_gateway()
-        result = gw.explain(memory_id="mem-test")
+        result = await gw.explain(memory_id="mem-test")
         assert isinstance(result, GatewayExplainResult)
         assert result.memory_id == "mem-test"
 
-    def test_empty_audit_returns_no_agents(self):
+    @pytest.mark.asyncio
+    async def test_empty_audit_returns_no_agents(self):
         gw = _full_gateway()
-        result = gw.explain(memory_id="x", audit_records=[])
+        result = await gw.explain(memory_id="x", audit_records=[])
         assert result.agents == []
 
-    def test_audit_records_parsed(self):
+    @pytest.mark.asyncio
+    async def test_audit_records_parsed(self):
         gw = _full_gateway()
-        result = gw.explain(
+        result = await gw.explain(
             memory_id="m1",
             audit_records=[
                 {"agent_name": "EntityResolutionAgent", "confidence": 0.92},
@@ -495,12 +522,14 @@ class TestGatewayExplain:
         assert result.confidence > 0
         assert len(result.agents) == 2
 
-    def test_lite_gateway_denies_explain(self):
+    @pytest.mark.asyncio
+    async def test_lite_gateway_denies_explain(self):
         gw = _lite_gateway()
         with pytest.raises(PermissionError, match="explain"):
-            gw.explain(memory_id="x")
+            await gw.explain(memory_id="x")
 
-    def test_standard_gateway_allows_explain(self):
+    @pytest.mark.asyncio
+    async def test_standard_gateway_allows_explain(self):
         gw = _standard_gateway()
-        result = gw.explain(memory_id="y")
+        result = await gw.explain(memory_id="y")
         assert isinstance(result, GatewayExplainResult)

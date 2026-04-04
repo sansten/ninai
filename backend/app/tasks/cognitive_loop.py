@@ -38,6 +38,7 @@ from app.services.simulation_service import SimulationService
 from app.tasks.self_model import self_model_recompute_task
 from app.services.goal_service import GoalService
 from app.tasks.goals import goal_progress_recompute_task
+from app.services.cognitive_autonomy_control_service import get_cognitive_autonomy_control_service
 
 
 logger = get_task_logger(__name__)
@@ -61,6 +62,15 @@ def cognitive_loop_task(
     max_iterations: int = 3,
 ) -> str:
     """Run the CognitiveLoop for a previously-created session."""
+
+    enabled, reason = get_cognitive_autonomy_control_service().is_enabled(org_id=org_id)
+    if not enabled:
+        logger.warning(
+            "cognitive_loop_task blocked by autonomy control for org %s (reason=%s)",
+            org_id,
+            reason,
+        )
+        return "blocked_by_autonomy_control"
 
     async def _run() -> str:
         async with async_session_factory() as db:

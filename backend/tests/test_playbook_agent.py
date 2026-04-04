@@ -689,7 +689,9 @@ class TestPlaybookAgentHeuristic:
 
 class TestPlaybookAgentRunHeuristic:
     @pytest.mark.asyncio
-    async def test_basic_run_no_candidates(self):
+    async def test_basic_run_no_candidates(self, monkeypatch):
+        import app.agents.playbook_agent as pa_mod
+        monkeypatch.setattr(pa_mod.settings, "AGENT_STRATEGY", "heuristic")
         agent = PlaybookAgent()
         ctx = _make_context()
         result = await agent.run("mem-1", ctx)

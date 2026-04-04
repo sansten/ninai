@@ -26,6 +26,8 @@ Per-tenant capability gating:
 
 from __future__ import annotations
 
+import dataclasses
+import json
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Callable
@@ -361,6 +363,54 @@ def _is_float(v: Any) -> bool:
 
 
 # ---------------------------------------------------------------------------
+# Gateway context chain (stateful multi-call sessions via Redis)
+# ---------------------------------------------------------------------------
+
+@dataclass
+class GatewayContextSession:
+    """Accumulated state across multiple gateway verb calls sharing a context_id."""
+
+    context_id: str
+    org_id: str
+    prior_decision: str | None = None
+    prior_steps: list = field(default_factory=list)
+    prior_memories: list = field(default_factory=list)
+    accumulated_enrichment: dict = field(default_factory=dict)
+    created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    updated_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    call_count: int = 0
+
+
+def _ctx_key(context_id: str, org_id: str) -> str:
+    return f"gateway:ctx:{context_id}:{org_id}"
+
+
+async def load_gateway_context(context_id: str, org_id: str) -> GatewayContextSession | None:
+    """Load a gateway context session from Redis. Returns None if missing or expired."""
+    try:
+        from app.core.redis import get_redis_client  # type: ignore[import]
+        r = get_redis_client()
+        raw = r.get(_ctx_key(context_id, org_id))
+        if raw is None:
+            return None
+        data = json.loads(raw)
+        return GatewayContextSession(**data)
+    except Exception:
+        return None
+
+
+async def save_gateway_context(ctx: GatewayContextSession, ttl: int = 3600) -> None:
+    """Persist updated context to Redis with TTL (default 1 hour)."""
+    try:
+        from app.core.redis import get_redis_client  # type: ignore[import]
+        r = get_redis_client()
+        ctx.updated_at = datetime.now(timezone.utc).isoformat()
+        r.set(_ctx_key(ctx.context_id, ctx.org_id), json.dumps(dataclasses.asdict(ctx)), ex=ttl)
+    except Exception:
+        pass  # Context chaining degrades gracefully when Redis is unavailable
+
+
+# ---------------------------------------------------------------------------
 # Service class
 # ---------------------------------------------------------------------------
 
@@ -392,7 +442,7 @@ class CognitiveGatewayService:
     # write
     # ------------------------------------------------------------------
 
-    def write(
+    async def write(
         self,
         *,
         content: str,
@@ -400,6 +450,8 @@ class CognitiveGatewayService:
         tags: list[str] | None = None,
         metadata: dict | None = None,
         memory_id: str | None = None,
+        context_id: str | None = None,
+        org_id: str | None = None,
     ) -> GatewayWriteResult:
         """Store and enrich a memory record."""
         self._check("write")
@@ -410,7 +462,7 @@ class CognitiveGatewayService:
         import uuid
         mid = memory_id or str(uuid.uuid4())
 
-        return GatewayWriteResult(
+        result = GatewayWriteResult(
             memory_id=mid,
             enriched=True,
             enrichment_summary=enrichment,
@@ -418,17 +470,29 @@ class CognitiveGatewayService:
             created_at=datetime.now(timezone.utc),
         )
 
+        if context_id and org_id:
+            ctx = await load_gateway_context(context_id, org_id) or GatewayContextSession(
+                context_id=context_id, org_id=org_id
+            )
+            ctx.accumulated_enrichment.update(enrichment)
+            ctx.call_count += 1
+            await save_gateway_context(ctx)
+
+        return result
+
     # ------------------------------------------------------------------
     # read
     # ------------------------------------------------------------------
 
-    def read(
+    async def read(
         self,
         *,
         query: str,
         memories: list[dict] | None = None,
         limit: int = 10,
         vector_fn: Callable[[str, list[dict]], list[dict]] | None = None,
+        context_id: str | None = None,
+        org_id: str | None = None,
     ) -> GatewayReadResult:
         """Retrieve and rank context for a query.
 
@@ -438,56 +502,126 @@ class CognitiveGatewayService:
           Tests / offline: omit to use the token-overlap fallback.
         """
         self._check("read")
+
+        # Merge prior memories from context chain as additional candidates
         _mems = list(memories or [])
+        if context_id and org_id:
+            ctx = await load_gateway_context(context_id, org_id)
+            if ctx and ctx.prior_memories:
+                _mems = ctx.prior_memories + _mems
+
         if vector_fn is not None:
             ranked = vector_fn(query, _mems)[:limit]
         else:
             ranked = _assemble_read_context(_mems, query)[:limit]
-        return GatewayReadResult(
+
+        result = GatewayReadResult(
             memories=ranked,
             total=len(ranked),
             query=query,
             context_assembled=len(ranked) > 0,
         )
 
+        if context_id and org_id:
+            ctx = await load_gateway_context(context_id, org_id) or GatewayContextSession(
+                context_id=context_id, org_id=org_id
+            )
+            ctx.prior_memories = ranked
+            ctx.call_count += 1
+            await save_gateway_context(ctx)
+
+        return result
+
     # ------------------------------------------------------------------
     # decide
     # ------------------------------------------------------------------
 
-    def decide(
+    async def decide(
         self,
         *,
         content: str,
         enrichment: dict | None = None,
+        context_id: str | None = None,
+        org_id: str | None = None,
     ) -> GatewayDecideResult:
         """Run anomaly detection pipeline and return a decision with confidence."""
         self._check("decide")
-        return _heuristic_decide(content, enrichment or {})
+
+        _enrichment = dict(enrichment or {})
+        if context_id and org_id:
+            ctx = await load_gateway_context(context_id, org_id)
+            if ctx:
+                # Merge accumulated enrichment from prior calls
+                merged = {**ctx.accumulated_enrichment, **_enrichment}
+                _enrichment = merged
+
+        result = _heuristic_decide(content, _enrichment)
+
+        if context_id and org_id:
+            ctx = await load_gateway_context(context_id, org_id) or GatewayContextSession(
+                context_id=context_id, org_id=org_id
+            )
+            ctx.prior_decision = result.decision
+            ctx.accumulated_enrichment.update(result.enrichment)
+            ctx.call_count += 1
+            await save_gateway_context(ctx)
+
+        return result
 
     # ------------------------------------------------------------------
     # plan
     # ------------------------------------------------------------------
 
-    def plan(
+    async def plan(
         self,
         *,
         goal: str,
         context: dict | None = None,
+        context_id: str | None = None,
+        org_id: str | None = None,
     ) -> GatewayPlanResult:
         """Decompose a goal into ordered, actionable steps."""
         self._check("plan")
-        return _heuristic_plan(goal, context or {})
+
+        _ctx = dict(context or {})
+        if context_id and org_id:
+            prior = await load_gateway_context(context_id, org_id)
+            if prior and prior.prior_decision:
+                _ctx.setdefault("prior_decision", prior.prior_decision)
+
+        result = _heuristic_plan(goal, _ctx)
+
+        if context_id and org_id:
+            ctx = await load_gateway_context(context_id, org_id) or GatewayContextSession(
+                context_id=context_id, org_id=org_id
+            )
+            ctx.prior_steps = result.steps
+            ctx.call_count += 1
+            await save_gateway_context(ctx)
+
+        return result
 
     # ------------------------------------------------------------------
     # explain
     # ------------------------------------------------------------------
 
-    def explain(
+    async def explain(
         self,
         *,
         memory_id: str,
         audit_records: list[dict] | None = None,
+        context_id: str | None = None,
+        org_id: str | None = None,
     ) -> GatewayExplainResult:
         """Return audit trail and explainability summary for a memory."""
         self._check("explain")
-        return _heuristic_explain(memory_id, audit_records or [])
+        result = _heuristic_explain(memory_id, audit_records or [])
+
+        if context_id and org_id:
+            ctx = await load_gateway_context(context_id, org_id) or GatewayContextSession(
+                context_id=context_id, org_id=org_id
+            )
+            ctx.call_count += 1
+            await save_gateway_context(ctx)
+
+        return result

@@ -6,7 +6,9 @@ from app.agents.metadata_extraction_agent import MetadataExtractionAgent
 
 
 @pytest.mark.asyncio
-async def test_metadata_extraction_agent_extracts_entities_and_tags():
+async def test_metadata_extraction_agent_extracts_entities_and_tags(monkeypatch):
+    import app.agents.metadata_extraction_agent as meta_mod
+    monkeypatch.setattr(meta_mod.settings, "AGENT_STRATEGY", "heuristic")
     agent = MetadataExtractionAgent()
 
     ctx = {

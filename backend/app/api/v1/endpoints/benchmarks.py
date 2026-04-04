@@ -11,14 +11,44 @@ from datetime import datetime, timezone
 from typing import Any, Optional
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status, Request
 from pydantic import BaseModel
-from sqlalchemy import desc
-from sqlalchemy.orm import Session
+from sqlalchemy import desc, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.v1.admin.dependencies import AdminUser, get_admin_user
+from app.core.security import verify_token
 from app.database import get_db
 from app.models.benchmark_run import BenchmarkRun
+from app.models.user import User
+
+
+async def get_admin_user_simple(request: Request, db: AsyncSession = Depends(get_db)) -> User:
+    """Simple admin auth - extract user from JWT token in Authorization header"""
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or not auth_header.startswith("Bearer "):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing authorization header",
+        )
+    
+    token = auth_header.split(" ")[1]
+    try:
+        payload = verify_token(token)
+        if not payload:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+        
+        user_id = getattr(payload, "sub", None) or getattr(payload, "user_id", None)
+        if not user_id:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Token error: {str(e)}")
+    
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user or not user.is_admin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+    
+    return user
 
 router = APIRouter()
 
@@ -63,17 +93,11 @@ class BenchmarkRunResponse(BaseModel):
     status_code=status.HTTP_201_CREATED,
     tags=["Admin - Benchmarks"],
 )
-def create_benchmark_run(
+async def create_benchmark_run(
     payload: BenchmarkRunCreate,
-    admin: AdminUser = Depends(get_admin_user),
-    db: Session = Depends(get_db),
+    admin_user: User = Depends(get_admin_user_simple),
+    db: AsyncSession = Depends(get_db),
 ) -> BenchmarkRunResponse:
-    """Persist a completed benchmark run. Requires system:write permission."""
-    if not admin.has_permission("system:write"):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Missing permission: system:write",
-        )
     run_at = (
         datetime.fromisoformat(payload.run_at)
         if payload.run_at
@@ -91,8 +115,8 @@ def create_benchmark_run(
         results=payload.results,
     )
     db.add(run)
-    db.commit()
-    db.refresh(run)
+    await db.commit()
+    await db.refresh(run)
     return _to_response(run)
 
 
@@ -101,22 +125,19 @@ def create_benchmark_run(
     response_model=list[BenchmarkRunResponse],
     tags=["Admin - Benchmarks"],
 )
-def list_benchmark_runs(
+async def list_benchmark_runs(
     limit: int = Query(default=50, ge=1, le=200),
     strategy: Optional[str] = Query(default=None),
-    admin: AdminUser = Depends(get_admin_user),
-    db: Session = Depends(get_db),
+    admin_user: User = Depends(get_admin_user_simple),
+    db: AsyncSession = Depends(get_db),
 ) -> list[BenchmarkRunResponse]:
-    """List benchmark runs ordered newest-first. Requires system:read permission."""
-    if not admin.has_permission("system:read"):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Missing permission: system:read",
-        )
-    query = db.query(BenchmarkRun).order_by(desc(BenchmarkRun.run_at))
+    """List benchmark runs ordered newest-first. Requires admin role."""
+    result = await db.execute(
+        select(BenchmarkRun).order_by(desc(BenchmarkRun.run_at)).limit(limit)
+    )
+    runs = result.scalars().all()
     if strategy:
-        query = query.filter(BenchmarkRun.strategy == strategy)
-    runs = query.limit(limit).all()
+        runs = [r for r in runs if r.strategy == strategy]
     return [_to_response(r) for r in runs]
 
 
@@ -125,17 +146,15 @@ def list_benchmark_runs(
     response_model=BenchmarkRunResponse,
     tags=["Admin - Benchmarks"],
 )
-def get_latest_benchmark_run(
-    admin: AdminUser = Depends(get_admin_user),
-    db: Session = Depends(get_db),
+async def get_latest_benchmark_run(
+    admin_user: User = Depends(get_admin_user_simple),
+    db: AsyncSession = Depends(get_db),
 ) -> BenchmarkRunResponse:
-    """Return the most recent benchmark run. Requires system:read permission."""
-    if not admin.has_permission("system:read"):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Missing permission: system:read",
-        )
-    run = db.query(BenchmarkRun).order_by(desc(BenchmarkRun.run_at)).first()
+    """Return the most recent benchmark run. Requires admin role."""
+    result = await db.execute(
+        select(BenchmarkRun).order_by(desc(BenchmarkRun.run_at)).limit(1)
+    )
+    run = result.scalar_one_or_none()
     if run is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No benchmark runs found")
     return _to_response(run)

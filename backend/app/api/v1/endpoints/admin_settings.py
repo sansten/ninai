@@ -20,10 +20,14 @@ from app.schemas.admin_settings import (
     AuthConfig,
     AuthConfigResponse,
     AuthConfigUpdate,
+    CognitiveAutonomyConfig,
+    CognitiveAutonomyConfigResponse,
+    CognitiveAutonomyConfigUpdate,
     EnvSetting,
     EnvSettingsResponse,
 )
 from app.services.app_settings_service import get_effective_auth_config, update_auth_config_overrides
+from app.services.cognitive_autonomy_control_service import get_cognitive_autonomy_control_service
 
 
 class FeedbackLearningResponse(BaseModel):
@@ -119,6 +123,77 @@ async def get_env_settings(
         )
 
     return EnvSettingsResponse(items=items)
+
+
+@router.get("/cognitive-autonomy", response_model=CognitiveAutonomyConfigResponse)
+async def get_cognitive_autonomy_settings(
+    tenant: TenantContext = Depends(require_org_admin()),
+):
+    svc = get_cognitive_autonomy_control_service()
+    snap = svc.snapshot(org_id=tenant.org_id)
+
+    global_cfg = snap.get("global") or {}
+    org_cfg = snap.get("org")
+    effective = snap.get("effective") or {}
+
+    return CognitiveAutonomyConfigResponse(
+        org_id=tenant.org_id,
+        global_config=CognitiveAutonomyConfig(
+            enabled=bool(global_cfg.get("enabled", True)),
+            reason=global_cfg.get("reason"),
+        ),
+        org_config=(
+            CognitiveAutonomyConfig(
+                enabled=bool(org_cfg.get("enabled", True)),
+                reason=org_cfg.get("reason"),
+            )
+            if org_cfg
+            else None
+        ),
+        effective=CognitiveAutonomyConfig(
+            enabled=bool(effective.get("enabled", True)),
+            reason=effective.get("reason"),
+        ),
+    )
+
+
+@router.put("/cognitive-autonomy", response_model=CognitiveAutonomyConfigResponse)
+async def put_cognitive_autonomy_settings(
+    body: CognitiveAutonomyConfigUpdate,
+    tenant: TenantContext = Depends(require_org_admin()),
+):
+    svc = get_cognitive_autonomy_control_service()
+
+    if body.global_enabled is not None:
+        svc.set_global(enabled=bool(body.global_enabled), reason=body.global_reason)
+
+    if body.enabled is not None:
+        svc.set_org(tenant.org_id, enabled=bool(body.enabled), reason=body.reason)
+
+    snap = svc.snapshot(org_id=tenant.org_id)
+    global_cfg = snap.get("global") or {}
+    org_cfg = snap.get("org")
+    effective = snap.get("effective") or {}
+
+    return CognitiveAutonomyConfigResponse(
+        org_id=tenant.org_id,
+        global_config=CognitiveAutonomyConfig(
+            enabled=bool(global_cfg.get("enabled", True)),
+            reason=global_cfg.get("reason"),
+        ),
+        org_config=(
+            CognitiveAutonomyConfig(
+                enabled=bool(org_cfg.get("enabled", True)),
+                reason=org_cfg.get("reason"),
+            )
+            if org_cfg
+            else None
+        ),
+        effective=CognitiveAutonomyConfig(
+            enabled=bool(effective.get("enabled", True)),
+            reason=effective.get("reason"),
+        ),
+    )
 
 
 @router.get("/feedback-learning", response_model=FeedbackLearningResponse)

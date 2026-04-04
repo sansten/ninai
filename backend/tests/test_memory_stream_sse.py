@@ -100,3 +100,65 @@ async def test_memory_stream_emits_event_and_is_event_stream():
     assert "event: memory.create" in body
     assert "data:" in body
     assert "\"resource_id\":\"m1\"" in body
+
+
+@pytest.mark.asyncio
+async def test_memory_stream_filters_cross_org_rows_defense_in_depth():
+    now = datetime(2026, 1, 22, tzinfo=timezone.utc)
+
+    own = _FakeAuditEvent(
+        id="e-own",
+        timestamp=now,
+        event_type="memory.create",
+        actor_id="u1",
+        organization_id="o1",
+        resource_type="memory",
+        resource_id="m-own",
+        success=True,
+        details={"tenant": "o1"},
+        request_id="rid-own",
+    )
+    other = _FakeAuditEvent(
+        id="e-other",
+        timestamp=now,
+        event_type="memory.create",
+        actor_id="u2",
+        organization_id="o2",
+        resource_type="memory",
+        resource_id="m-other",
+        success=True,
+        details={"tenant": "o2"},
+        request_id="rid-other",
+    )
+
+    session = AsyncMock(spec=AsyncSession)
+
+    async def _execute(stmt, *args, **kwargs):
+        sql = str(stmt)
+        if "SET LOCAL app.current_" in sql:
+            return AsyncMock()
+        if "FROM audit_events" in sql:
+            # Return mixed-org rows to verify endpoint-side defensive filtering.
+            return _Result([own, other])
+        return _Result([])
+
+    session.execute = AsyncMock(side_effect=_execute)
+
+    async def override_get_db():
+        yield session
+
+    app.dependency_overrides[get_db] = override_get_db
+
+    token = create_access_token(user_id="u1", org_id="o1", roles=["member"])
+    headers = {"Authorization": f"Bearer {token}"}
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        resp = await ac.get("/api/v1/memories/stream?max_events=1", headers=headers)
+
+    app.dependency_overrides.clear()
+
+    assert resp.status_code == 200
+    body = resp.text
+    assert "m-own" in body
+    assert "m-other" not in body

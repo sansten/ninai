@@ -6,7 +6,9 @@ from app.agents.topic_modeling_agent import TopicModelingAgent
 
 
 @pytest.mark.asyncio
-async def test_topic_modeling_agent_billing_topic_from_content_and_tags():
+async def test_topic_modeling_agent_billing_topic_from_content_and_tags(monkeypatch):
+    import app.agents.topic_modeling_agent as tma_mod
+    monkeypatch.setattr(tma_mod.settings, "AGENT_STRATEGY", "heuristic")
     agent = TopicModelingAgent()
 
     ctx = {

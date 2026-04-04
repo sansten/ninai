@@ -371,7 +371,11 @@ def test_extract_subtasks_max_200_chars():
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
-async def test_heuristic_basic_run():
+async def test_heuristic_basic_run(monkeypatch):
+    import app.agents.compositional_generalization_agent as cga_mod
+    monkeypatch.setattr(cga_mod, "settings",
+                        type("S", (), {"AGENT_STRATEGY": "heuristic",
+                                       "COMPOSITIONAL_STRATEGY": None})())
     agent = CompositionalGeneralizationAgent()
     ctx = _ctx(
         content="deploy application to on-premise server",
@@ -402,7 +406,11 @@ async def test_heuristic_no_subtasks_falls_back_to_content():
 
 
 @pytest.mark.asyncio
-async def test_heuristic_all_novel():
+async def test_heuristic_all_novel(monkeypatch):
+    import app.agents.compositional_generalization_agent as cga_mod
+    monkeypatch.setattr(cga_mod, "settings",
+                        type("S", (), {"AGENT_STRATEGY": "heuristic",
+                                       "COMPOSITIONAL_STRATEGY": None})())
     agent = CompositionalGeneralizationAgent()
     ctx = _ctx(
         content="xyzzy foobar quux",
@@ -424,7 +432,11 @@ async def test_heuristic_empty_content():
 
 
 @pytest.mark.asyncio
-async def test_heuristic_no_candidates():
+async def test_heuristic_no_candidates(monkeypatch):
+    import app.agents.compositional_generalization_agent as cga_mod
+    monkeypatch.setattr(cga_mod, "settings",
+                        type("S", (), {"AGENT_STRATEGY": "heuristic",
+                                       "COMPOSITIONAL_STRATEGY": None})())
     agent = CompositionalGeneralizationAgent()
     ctx = _ctx(
         content="deploy application",

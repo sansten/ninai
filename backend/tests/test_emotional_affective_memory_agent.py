@@ -554,7 +554,9 @@ async def test_run_with_high_feedback_signals():
 
 
 @pytest.mark.asyncio
-async def test_run_high_urgency_score():
+async def test_run_high_urgency_score(monkeypatch):
+    import app.agents.emotional_affective_memory_agent as eama_mod
+    monkeypatch.setattr(eama_mod.settings, "AGENT_STRATEGY", "heuristic")
     result = await AGENT.run("m7", _ctx("routine update", urgency_score=0.9))
     assert result.outputs["escalation_recommended"] is True
 
@@ -586,7 +588,9 @@ async def test_run_confidence_in_range():
 
 
 @pytest.mark.asyncio
-async def test_run_rationale_heuristic():
+async def test_run_rationale_heuristic(monkeypatch):
+    import app.agents.emotional_affective_memory_agent as eama_mod
+    monkeypatch.setattr(eama_mod.settings, "AGENT_STRATEGY", "heuristic")
     result = await AGENT.run("m12", _ctx("test content"))
     assert result.outputs["rationale"] == "heuristic"
 

@@ -4,7 +4,9 @@ from app.agents.pattern_detection_agent import PatternDetectionAgent
 
 
 @pytest.mark.asyncio
-async def test_pattern_detection_heuristic_detects_resolution_pattern():
+async def test_pattern_detection_heuristic_detects_resolution_pattern(monkeypatch):
+    import app.agents.pattern_detection_agent as pda_mod
+    monkeypatch.setattr(pda_mod.settings, "AGENT_STRATEGY", "heuristic")
     agent = PatternDetectionAgent()
     ctx = {
         "tenant": {"org_id": "org", "org_slug": None},
