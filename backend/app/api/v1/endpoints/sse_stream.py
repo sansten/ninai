@@ -60,7 +60,7 @@ async def _stream_events(
     block_ms: int,
     filter_fn: Callable[[str, dict], bool] | None = None,
 ):
-    stream_key = f"events:{org_id}"
+    stream_key = f"ninai:events:{org_id}:all"
     cursor = last_event_id or "$"
     sent = 0
 

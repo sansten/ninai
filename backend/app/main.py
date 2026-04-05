@@ -26,6 +26,7 @@ from app.core.enterprise_loader import try_register_enterprise
 from app.graphql.middleware import get_graphql_context
 from app.graphql.schema import schema as graphql_schema
 from app.middleware.audit_logger import AuditLoggerMiddleware
+from app.middleware.cognitive_namespace import cognitive_namespace_middleware
 from app.middleware.rate_limiter import init_rate_limiter
 from app.middleware.request_id import RequestIdMiddleware
 from app.middleware.prometheus import PrometheusMiddleware, StructuredLoggingMiddleware
@@ -116,6 +117,9 @@ def create_application() -> FastAPI:
     
     # Prometheus metrics middleware (collects request/response metrics)
     app.add_middleware(PrometheusMiddleware)
+
+    # Namespace guard for cognitive/sse/ws API surfaces.
+    app.middleware("http")(cognitive_namespace_middleware)
 
     # ---------------------------------------------------------------------------
     # Exception handlers
