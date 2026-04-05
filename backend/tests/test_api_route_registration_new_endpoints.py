@@ -30,3 +30,11 @@ def test_knowledge_feature_routes_registered():
     assert _has_path("/api/v1/graph/relationships")
     assert _has_path("/api/v1/topics")
     assert _has_path("/api/v1/knowledge/reports/summary")
+
+
+def test_explainability_routes_registered():
+    assert _has_path("/api/v1/explain/{decision_id}")
+    assert _has_path("/api/v1/explain/memory/{memory_id}")
+    assert _has_path("/api/v1/explain/conflict/{conflict_id}")
+    assert _has_path("/api/v1/explain/anomaly/{anomaly_id}")
+    assert _has_path("/api/v1/audit/trail/{session_id}")

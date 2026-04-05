@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select, and_, func, desc
+from sqlalchemy import select, and_, func, desc, or_, asc
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db, set_tenant_context
@@ -18,6 +18,9 @@ from app.middleware.tenant_context import (
     get_tenant_context,
     require_roles,
 )
+from app.models.agent_run import AgentRun
+from app.models.agent_run_event import AgentRunEvent
+from app.models.action_execution_record import ActionExecutionRecord
 from app.models.audit import AuditEvent, MemoryAccessLog
 from app.schemas.base import PaginatedResponse
 
@@ -507,3 +510,119 @@ async def get_recent_denials(
     logs = result.scalars().all()
     
     return [AccessLogResponse.model_validate(l) for l in logs]
+
+
+@router.get("/trail/{session_id}")
+async def get_session_audit_trail(
+    session_id: str,
+    tenant: TenantContext = Depends(require_roles("org_admin", "security_admin", "system_admin")),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return a full trail for a cognitive session across audit + agent execution logs."""
+    await set_tenant_context(db, tenant.user_id, tenant.org_id, tenant.roles_string, tenant.clearance_level)
+
+    audit_result = await db.execute(
+        select(AuditEvent)
+        .where(
+            AuditEvent.organization_id == tenant.org_id,
+            or_(
+                AuditEvent.resource_id == session_id,
+                AuditEvent.request_id == session_id,
+            ),
+        )
+        .order_by(desc(AuditEvent.timestamp))
+        .limit(200)
+    )
+    audit_events = list(audit_result.scalars().all())
+
+    runs_result = await db.execute(
+        select(AgentRun)
+        .where(
+            AgentRun.organization_id == tenant.org_id,
+            AgentRun.trace_id == session_id,
+        )
+        .order_by(asc(AgentRun.started_at))
+    )
+    agent_runs = list(runs_result.scalars().all())
+    run_ids = [str(run.id) for run in agent_runs]
+
+    agent_events: list[AgentRunEvent] = []
+    if run_ids:
+        events_result = await db.execute(
+            select(AgentRunEvent)
+            .where(
+                AgentRunEvent.organization_id == tenant.org_id,
+                AgentRunEvent.agent_run_id.in_(run_ids),
+            )
+            .order_by(asc(AgentRunEvent.created_at), asc(AgentRunEvent.step_index))
+        )
+        agent_events = list(events_result.scalars().all())
+
+    actions_result = await db.execute(
+        select(ActionExecutionRecord)
+        .where(
+            ActionExecutionRecord.organization_id == tenant.org_id,
+            ActionExecutionRecord.session_id == session_id,
+        )
+        .order_by(desc(ActionExecutionRecord.created_at))
+    )
+    actions = list(actions_result.scalars().all())
+
+    if not audit_events and not agent_runs and not agent_events and not actions:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No audit trail found for session")
+
+    return {
+        "session_id": session_id,
+        "audit_events": [
+            {
+                "id": str(e.id),
+                "timestamp": e.timestamp,
+                "event_type": e.event_type,
+                "severity": e.severity,
+                "resource_type": e.resource_type,
+                "resource_id": e.resource_id,
+                "success": e.success,
+                "details": e.details or {},
+            }
+            for e in audit_events
+        ],
+        "agent_runs": [
+            {
+                "id": str(r.id),
+                "agent_name": r.agent_name,
+                "status": r.status,
+                "confidence": r.confidence,
+                "memory_id": str(r.memory_id),
+                "started_at": r.started_at,
+                "finished_at": r.finished_at,
+                "trace_id": r.trace_id,
+            }
+            for r in agent_runs
+        ],
+        "agent_events": [
+            {
+                "id": str(evt.id),
+                "agent_run_id": str(evt.agent_run_id),
+                "event_type": evt.event_type,
+                "step_index": evt.step_index,
+                "summary_text": evt.summary_text,
+                "payload": evt.payload or {},
+                "created_at": evt.created_at,
+            }
+            for evt in agent_events
+        ],
+        "actions": [
+            {
+                "id": str(action.id),
+                "action_type": action.action_type,
+                "status": action.status,
+                "policy_decision": action.policy_decision,
+                "attempt_count": action.attempt_count,
+                "http_status_code": action.http_status_code,
+                "error_message": action.error_message,
+                "created_at": action.created_at,
+                "completed_at": action.completed_at,
+            }
+            for action in actions
+        ],
+    }
