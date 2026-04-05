@@ -77,6 +77,7 @@ from app.api.v1.endpoints import (
     cognitive_gateway_stream,
     benchmarks,
     a2a,
+    openai_tool_schema,
 )
 from app.api.v1.admin import routes as admin_routes
 from app.api.v1.endpoints import event_publishing_batch
@@ -507,4 +508,9 @@ api_router.include_router(
     a2a.router,
     prefix="/a2a",
     tags=["A2A Protocol"],
+)
+
+api_router.include_router(
+    openai_tool_schema.router,
+    tags=["OpenAI Tool Schema"],
 )
