@@ -35,6 +35,8 @@ class Settings(BaseSettings):
     APP_ENV: str | None = None
     DEBUG: bool | None = None
     LOG_LEVEL: str | None = None
+    DEPLOYMENT_MODE: str = "cloud"
+    LOCAL_FIRST_MODE: bool = False
 
     # -------------------------------------------------------------------------
     # API
