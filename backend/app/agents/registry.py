@@ -72,6 +72,80 @@ from app.agents.semantic_role_inference_agent import SemanticRoleInferenceAgent
 from app.agents.cross_modal_reasoning_agent import CrossModalReasoningAgent
 
 
+AGENT_CLASSES: tuple[type[BaseAgent], ...] = (
+    ClassificationAgent,
+    MetadataExtractionAgent,
+    TopicModelingAgent,
+    PatternDetectionAgent,
+    PromotionAgent,
+    GraphLinkingAgent,
+    LogseqExportAgent,
+    FeedbackLearningAgent,
+    SemanticNormalizationAgent,
+    EntityResolutionAgent,
+    ContextAmplifierAgent,
+    SiloPropagationAgent,
+    OrgAttentionAgent,
+    ProactiveMemoryPushAgent,
+    WorldModelAgent,
+    PredictiveMonitorAgent,
+    CausalReasoningAgent,
+    ConflictDetectionAgent,
+    AdaptiveConflictResolutionAgent,
+    MemoryDecayAgent,
+    MemoryConsolidationAgent,
+    TemporalReasoningAgent,
+    EpisodicGroupingAgent,
+    CredibilityAgent,
+    PlaybookAgent,
+    GoalDecompositionAgent,
+    UncertaintyReportingAgent,
+    NarrativeSynthesisAgent,
+    FeedbackIntegrationAgent,
+    AnomalyDetectionAgent,
+    QueryIntelligenceAgent,
+    OrchestrationBusAgent,
+    AuditTrailAgent,
+    HumanReviewQueueAgent,
+    PlaybookExecutionTrackerAgent,
+    MultiTurnGoalTrackingAgent,
+    AdaptiveEnrichmentBudgetAgent,
+    MetaCognitivePlanningAgent,
+    AutonomousGoalGenerationAgent,
+    TheoryOfMindAgent,
+    MemorySleepAgent,
+    CompositionalGeneralizationAgent,
+    EmotionalAffectiveMemoryAgent,
+    MultimodalDeepMemoryAgent,
+    FederatedMemoryAgent,
+    AutonomousActionAgent,
+    CounterfactualMemoryAgent,
+    AdaptivePersonaAgent,
+    ProspectiveMemoryAgent,
+    AnalogicalReasoningAgent,
+    NarrativeCompressionAgent,
+    SemanticChangeDetectionAgent,
+    ConceptLearningAgent,
+    SelfImprovementPlannerAgent,
+    TemporalPatternMinerAgent,
+    ActiveKnowledgeSeekerAgent,
+    HierarchicalGoalPlannerAgent,
+    SocialMemoryAgent,
+    EpisodicFutureSimulationAgent,
+    ErrorRecoveryAgent,
+    SemanticRoleInferenceAgent,
+    CrossModalReasoningAgent,
+)
+
+
+def list_registered_agent_classes() -> tuple[type[BaseAgent], ...]:
+    return AGENT_CLASSES
+
+
+def list_registered_agents() -> list[BaseAgent]:
+    return [agent_class() for agent_class in AGENT_CLASSES]
+
+
 def get_agent(agent_name: str) -> Optional[BaseAgent]:
     name = (agent_name or "").strip().lower()
 
