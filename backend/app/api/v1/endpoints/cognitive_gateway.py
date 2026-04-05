@@ -43,6 +43,15 @@ def _get_gateway(tenant: TenantContext = Depends(require_org_admin())) -> Cognit
     return CognitiveGatewayService(capabilities=CognitiveGatewayCapabilities.full())
 
 
+async def _context_working_set_summary(context_id: str | None, org_id: str) -> dict[str, Any] | None:
+    if not context_id:
+        return None
+    ctx = await load_gateway_context(context_id, org_id)
+    if ctx is None:
+        return None
+    return dict(ctx.working_set_summary or {})
+
+
 # ---------------------------------------------------------------------------
 # POST /cognitive/gateway/write
 # ---------------------------------------------------------------------------
@@ -89,6 +98,7 @@ async def gateway_write(
         "tags": result.tags,
         "created_at": result.created_at.isoformat(),
         "context_id": context_id,
+        "working_set_summary": await _context_working_set_summary(context_id, tenant.org_id),
     }
 
 
@@ -138,6 +148,7 @@ async def gateway_read(
         "corrected_by": result.corrected_by,
         "reasoning_steps": result.reasoning_steps,
         "context_id": context_id,
+        "working_set_summary": await _context_working_set_summary(context_id, tenant.org_id),
     }
 
 
@@ -184,6 +195,7 @@ async def gateway_decide(
         "enrichment": result.enrichment,
         "agents_run": result.agents_run,
         "context_id": context_id,
+        "working_set_summary": await _context_working_set_summary(context_id, tenant.org_id),
     }
 
 
@@ -229,6 +241,7 @@ async def gateway_plan(
         "blocking_step": result.blocking_step,
         "confidence": result.confidence,
         "context_id": context_id,
+        "working_set_summary": await _context_working_set_summary(context_id, tenant.org_id),
     }
 
 
@@ -303,7 +316,12 @@ async def create_gateway_context(
     context_id = str(uuid.uuid4())
     ctx = GatewayContextSession(context_id=context_id, org_id=tenant.org_id)
     await save_gateway_context(ctx)
-    return {"context_id": context_id, "org_id": tenant.org_id, "ttl_seconds": 3600}
+    return {
+        "context_id": context_id,
+        "org_id": tenant.org_id,
+        "ttl_seconds": 3600,
+        "working_set_summary": ctx.working_set_summary,
+    }
 
 
 # ---------------------------------------------------------------------------
