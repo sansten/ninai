@@ -59,15 +59,15 @@ def _sse_frame(event: str, payload: dict[str, Any]) -> bytes:
 
 async def _emit_session_event(*, org_id: str, event_type: str, payload: dict[str, Any]) -> None:
     try:
-        await RedisClient.xadd(
-            f"events:{org_id}",
-            {
-                "event_type": event_type,
-                "payload": json.dumps(payload, default=str),
-                "event_id": payload.get("event_id") or payload.get("session_id") or "",
-            },
-            maxlen=1000,
-        )
+        fields = {
+            "event_type": event_type,
+            "payload": json.dumps(payload, default=str),
+            "event_id": payload.get("event_id") or payload.get("session_id") or "",
+        }
+        await RedisClient.xadd(f"ninai:events:{org_id}:all", fields, maxlen=1000)
+        await RedisClient.xadd(f"ninai:events:{org_id}:{event_type}", fields, maxlen=1000)
+        # Backward compatibility for existing consumers/tests.
+        await RedisClient.xadd(f"events:{org_id}", fields, maxlen=1000)
     except Exception:
         pass
 
