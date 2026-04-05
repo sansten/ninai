@@ -38,6 +38,7 @@ from app.agents.goal_decomposition_agent import (
     detect_blocking_subtask,
     detect_goal,
 )
+from app.agents.memory_tier_manager_agent import MemoryTierManagerAgent
 from app.services.corrective_rag_service import CorrectiveRagService
 from app.services.self_rag_service import SelfRagService
 
@@ -381,6 +382,15 @@ class GatewayContextSession:
     prior_steps: list = field(default_factory=list)
     prior_memories: list = field(default_factory=list)
     accumulated_enrichment: dict = field(default_factory=dict)
+    working_set_summary: dict = field(default_factory=lambda: {
+        "working_set": [],
+        "archival": [],
+        "working_set_size": 0,
+        "archival_size": 0,
+        "loaded_ids": [],
+        "offloaded_ids": [],
+        "updated_at": None,
+    })
     created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     updated_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     call_count: int = 0
@@ -438,6 +448,7 @@ class CognitiveGatewayService:
         capabilities: CognitiveGatewayCapabilities | None = None,
     ) -> None:
         self._caps = capabilities or CognitiveGatewayCapabilities.full()
+        self._tier_manager = MemoryTierManagerAgent()
 
     def _check(self, verb: str) -> None:
         if not self._caps.is_enabled(verb):
@@ -480,6 +491,11 @@ class CognitiveGatewayService:
                 context_id=context_id, org_id=org_id
             )
             ctx.accumulated_enrichment.update(enrichment)
+            ctx.working_set_summary = self._tier_manager.reconcile(
+                working_set=list(ctx.working_set_summary.get("working_set") or []),
+                archival=list(ctx.working_set_summary.get("archival") or []),
+                incoming=[{"id": mid, "content": content}],
+            )
             ctx.call_count += 1
             await save_gateway_context(ctx)
 
@@ -555,6 +571,11 @@ class CognitiveGatewayService:
                 context_id=context_id, org_id=org_id
             )
             ctx.prior_memories = corrective.memories
+            ctx.working_set_summary = self._tier_manager.reconcile(
+                working_set=list(ctx.working_set_summary.get("working_set") or []),
+                archival=list(ctx.working_set_summary.get("archival") or []),
+                incoming=list(corrective.memories or []),
+            )
             ctx.call_count += 1
             await save_gateway_context(ctx)
 
@@ -591,6 +612,11 @@ class CognitiveGatewayService:
             )
             ctx.prior_decision = result.decision
             ctx.accumulated_enrichment.update(result.enrichment)
+            ctx.working_set_summary = self._tier_manager.reconcile(
+                working_set=list(ctx.working_set_summary.get("working_set") or []),
+                archival=list(ctx.working_set_summary.get("archival") or []),
+                incoming=[],
+            )
             ctx.call_count += 1
             await save_gateway_context(ctx)
 
@@ -624,6 +650,11 @@ class CognitiveGatewayService:
                 context_id=context_id, org_id=org_id
             )
             ctx.prior_steps = result.steps
+            ctx.working_set_summary = self._tier_manager.reconcile(
+                working_set=list(ctx.working_set_summary.get("working_set") or []),
+                archival=list(ctx.working_set_summary.get("archival") or []),
+                incoming=[],
+            )
             ctx.call_count += 1
             await save_gateway_context(ctx)
 
@@ -648,6 +679,11 @@ class CognitiveGatewayService:
         if context_id and org_id:
             ctx = await load_gateway_context(context_id, org_id) or GatewayContextSession(
                 context_id=context_id, org_id=org_id
+            )
+            ctx.working_set_summary = self._tier_manager.reconcile(
+                working_set=list(ctx.working_set_summary.get("working_set") or []),
+                archival=list(ctx.working_set_summary.get("archival") or []),
+                incoming=[],
             )
             ctx.call_count += 1
             await save_gateway_context(ctx)

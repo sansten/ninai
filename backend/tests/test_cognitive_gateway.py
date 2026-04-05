@@ -9,6 +9,7 @@ semantic-ranking hook in read().
 from __future__ import annotations
 
 import pytest
+import app.services.cognitive_gateway_service as gateway_module
 
 from app.services.cognitive_gateway_service import (
     CognitiveGatewayService,
@@ -444,6 +445,39 @@ class TestGatewayRead:
         assert result.corrected_by == "external_connector"
         assert any(mem["id"] == "ext-1" for mem in result.memories)
         assert result.retrieval_confidence < 0.45
+
+    @pytest.mark.asyncio
+    async def test_context_updates_working_set_summary(self, monkeypatch):
+        gw = _full_gateway()
+        store: dict[tuple[str, str], gateway_module.GatewayContextSession] = {}
+
+        async def _fake_load(context_id: str, org_id: str):
+            return store.get((context_id, org_id))
+
+        async def _fake_save(ctx, ttl: int = 3600):
+            store[(ctx.context_id, ctx.org_id)] = ctx
+
+        monkeypatch.setattr(gateway_module, "load_gateway_context", _fake_load)
+        monkeypatch.setattr(gateway_module, "save_gateway_context", _fake_save)
+
+        await gw.write(
+            content="auth outage detected",
+            context_id="ctx-1",
+            org_id="org-1",
+        )
+
+        await gw.read(
+            query="auth outage",
+            memories=[{"id": "m-2", "content": "auth outage postmortem"}],
+            context_id="ctx-1",
+            org_id="org-1",
+        )
+
+        saved = store[("ctx-1", "org-1")]
+        summary = saved.working_set_summary
+        assert summary["working_set_size"] >= 1
+        assert "working_set" in summary
+        assert isinstance(summary["working_set"], list)
 
 
 class TestGatewayDecide:
