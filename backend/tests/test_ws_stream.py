@@ -30,7 +30,7 @@ async def test_xadd_calls_redis_xadd():
     mock_client = AsyncMock()
     mock_client.xadd = AsyncMock(return_value="1718000000000-0")
     with patch.object(RedisClient, "get_client", return_value=mock_client):
-        result = await RedisClient.xadd("events:org-1", {"event_type": "memory.created", "payload": "{}"})
+        result = await RedisClient.xadd("ninai:events:org-1:all", {"event_type": "memory.created", "payload": "{}"})
     mock_client.xadd.assert_called_once()
     assert result == "1718000000000-0"
 
@@ -40,7 +40,7 @@ async def test_xadd_passes_maxlen():
     mock_client = AsyncMock()
     mock_client.xadd = AsyncMock(return_value="id-1")
     with patch.object(RedisClient, "get_client", return_value=mock_client):
-        await RedisClient.xadd("events:org-1", {"k": "v"}, maxlen=500)
+        await RedisClient.xadd("ninai:events:org-1:all", {"k": "v"}, maxlen=500)
     _, kwargs = mock_client.xadd.call_args
     assert kwargs.get("maxlen") == 500 or mock_client.xadd.call_args[0][2] == 500  # positional or kw
 
@@ -49,12 +49,12 @@ async def test_xadd_passes_maxlen():
 async def test_xread_calls_redis_xread():
     mock_client = AsyncMock()
     mock_client.xread = AsyncMock(return_value=[
-        ["events:org-1", [("id-1", {"event_type": "test", "payload": "{}"})]],
+        ["ninai:events:org-1:all", [("id-1", {"event_type": "test", "payload": "{}"})]],
     ])
     with patch.object(RedisClient, "get_client", return_value=mock_client):
-        result = await RedisClient.xread({"events:org-1": "$"}, count=10, block_ms=0)
+        result = await RedisClient.xread({"ninai:events:org-1:all": "$"}, count=10, block_ms=0)
     assert len(result) == 1
-    assert result[0][0] == "events:org-1"
+    assert result[0][0] == "ninai:events:org-1:all"
 
 
 @pytest.mark.asyncio
@@ -62,7 +62,7 @@ async def test_xread_returns_empty_list_when_no_entries():
     mock_client = AsyncMock()
     mock_client.xread = AsyncMock(return_value=None)
     with patch.object(RedisClient, "get_client", return_value=mock_client):
-        result = await RedisClient.xread({"events:org-1": "$"}, count=10, block_ms=0)
+        result = await RedisClient.xread({"ninai:events:org-1:all": "$"}, count=10, block_ms=0)
     assert result == []
 
 
@@ -71,7 +71,7 @@ async def test_xread_passes_block_none_when_block_ms_zero():
     mock_client = AsyncMock()
     mock_client.xread = AsyncMock(return_value=None)
     with patch.object(RedisClient, "get_client", return_value=mock_client):
-        await RedisClient.xread({"events:org-1": "0"}, count=5, block_ms=0)
+        await RedisClient.xread({"ninai:events:org-1:all": "0"}, count=5, block_ms=0)
     _, kwargs = mock_client.xread.call_args
     # block_ms=0 → block=None (non-blocking)
     assert kwargs.get("block") is None
@@ -82,7 +82,7 @@ async def test_xread_passes_block_value_when_nonzero():
     mock_client = AsyncMock()
     mock_client.xread = AsyncMock(return_value=None)
     with patch.object(RedisClient, "get_client", return_value=mock_client):
-        await RedisClient.xread({"events:org-1": "0"}, count=5, block_ms=5000)
+        await RedisClient.xread({"ninai:events:org-1:all": "0"}, count=5, block_ms=5000)
     _, kwargs = mock_client.xread.call_args
     assert kwargs.get("block") == 5000
 
@@ -125,9 +125,9 @@ async def test_emit_event_publishes_to_redis_stream():
             payload={"memory_id": "m-1"},
         )
 
-    assert len(xadd_calls) == 1
+    assert len(xadd_calls) == 3
     stream, fields, maxlen = xadd_calls[0]
-    assert stream == "events:org-1"
+    assert stream == "ninai:events:org-1:all"
     assert fields["event_type"] == "memory.created"
     assert maxlen == 1000
 
@@ -180,6 +180,19 @@ async def test_emit_event_stream_key_uses_org_id():
         )
 
     assert captured["stream"] == "events:tenant-xyz"
+
+
+@pytest.mark.asyncio
+async def test_ws_rejects_org_query_mismatch():
+    from app.api.v1.endpoints.ws_stream import ws_stream
+
+    ws = AsyncMock(spec=WebSocket)
+    ws.close = AsyncMock()
+
+    with patch("app.api.v1.endpoints.ws_stream.verify_token", return_value=_make_token_data(org_id="org-1")):
+        await ws_stream(ws, token="valid", org_id="org-2")
+
+    ws.close.assert_called_once_with(code=4008)
 
 
 # ---------------------------------------------------------------------------
@@ -283,7 +296,7 @@ async def test_ws_sends_event_frame():
         nonlocal call_count
         call_count += 1
         if call_count == 1:
-            return [["events:org-1", [("1-0", fields)]]]
+            return [["ninai:events:org-1:all", [("1-0", fields)]]]
         raise WebSocketDisconnect()
 
     with patch("app.api.v1.endpoints.ws_stream.verify_token", return_value=token_data), \
@@ -343,7 +356,7 @@ async def test_ws_advances_last_id_after_reading():
         call_count += 1
         received_streams.append(dict(streams))
         if call_count == 1:
-            return [["events:org-1", [("5-0", {"event_type": "t", "payload": "{}", "event_id": "e"})]]]
+            return [["ninai:events:org-1:all", [("5-0", {"event_type": "t", "payload": "{}", "event_id": "e"})]]]
         raise WebSocketDisconnect()
 
     with patch("app.api.v1.endpoints.ws_stream.verify_token", return_value=token_data), \
@@ -353,7 +366,7 @@ async def test_ws_advances_last_id_after_reading():
     # First call uses "$"; we can't easily check the second call's last_id since
     # the disconnect happens immediately — but we verify at least one read happened.
     assert call_count >= 1
-    assert received_streams[0].get("events:org-1") == "$"
+    assert received_streams[0].get("ninai:events:org-1:all") == "$"
 
 
 @pytest.mark.asyncio
@@ -376,7 +389,7 @@ async def test_ws_stream_key_scoped_to_org():
          patch.object(RedisClient, "xread", side_effect=_fake_xread):
         await ws_stream(ws, token="valid")
 
-    assert read_streams[0] == ["events:tenant-abc"]
+    assert read_streams[0] == ["ninai:events:tenant-abc:all"]
 
 
 @pytest.mark.asyncio
@@ -400,8 +413,8 @@ async def test_ws_tenant_isolation():
             await ws_stream(ws, token="valid")
 
     assert keys_used[0] != keys_used[1]
-    assert "events:org-alpha" in keys_used[0]
-    assert "events:org-beta" in keys_used[1]
+    assert "ninai:events:org-alpha:all" in keys_used[0]
+    assert "ninai:events:org-beta:all" in keys_used[1]
 
 
 @pytest.mark.asyncio
@@ -450,7 +463,7 @@ async def test_ws_cleans_up_on_unexpected_exception():
         nonlocal call_count
         call_count += 1
         if call_count == 1:
-            return [["events:org-1", [("1-0", fields)]]]
+            return [["ninai:events:org-1:all", [("1-0", fields)]]]
         raise WebSocketDisconnect()
 
     # send_json raises on the first call (delivering the event frame), then ping

@@ -28,7 +28,7 @@ async def test_sse_events_filters_by_event_type():
 
     batch = [
         (
-            "events:org-1",
+            "ninai:events:org-1:all",
             [
                 (
                     "1-0",
@@ -76,7 +76,7 @@ async def test_sse_goal_stream_filters_goal_id():
 
     batch = [
         (
-            "events:org-42",
+            "ninai:events:org-42:all",
             [
                 (
                     "1-0",
@@ -123,7 +123,7 @@ async def test_sse_session_stream_matches_session_id_or_context_id():
 
     batch = [
         (
-            "events:org-99",
+            "ninai:events:org-99:all",
             [
                 (
                     "1-0",
