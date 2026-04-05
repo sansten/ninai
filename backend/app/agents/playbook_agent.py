@@ -354,7 +354,7 @@ class PlaybookAgent(BaseAgent):
             )
         else:
             prompt = (
-                "You are an enterprise playbook matching engine for a memory OS. "
+                "You are an enterprise playbook matching engine for a Cognitive OS. "
                 "Output JSON only. Do not hallucinate.\n\n"
                 "Match this memory against the provided playbook candidates and "
                 "identify which step in a known playbook sequence this memory "

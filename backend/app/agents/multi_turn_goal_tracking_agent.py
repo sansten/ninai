@@ -316,7 +316,7 @@ class MultiTurnGoalTrackingAgent(BaseAgent):
             outputs = run_heuristic(enrichment, session_goals, content)
         else:
             prompt = (
-                "You are an enterprise multi-turn goal tracking engine for a memory OS. "
+                "You are an enterprise multi-turn goal tracking engine for a Cognitive OS. "
                 "Output JSON only. Do not hallucinate.\n\n"
                 "Given the current memory enrichment and prior session goals, identify "
                 "which goals are active, which are stalled, and whether the user is "

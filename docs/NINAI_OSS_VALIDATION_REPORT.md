@@ -18,7 +18,7 @@ The Ninai OSS repository has been audited and cleaned to ensure:
 ## Changes Made
 
 ### 1. **README Repositioning** (Commit: `bfd16ce`)
-- ✅ Title changed from "Enterprise Agentic AI Memory OS" → "The Secure Memory Layer for AI Agents"
+- ✅ Title changed from "Enterprise Agentic AI Cognitive OS" → "The Secure Memory Layer for AI Agents"
 - ✅ Framed as OSS-first with focus on 30-minute time-to-value
 - ✅ Added missing technical concepts:
   - Data Plane vs Control Plane architecture

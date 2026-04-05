@@ -1,4 +1,4 @@
-"""Capability token system for memory OS syscalls.
+"""Capability token system for Cognitive OS syscalls.
 
 Issues least-privilege scoped tokens for read/append/search/upsert/consolidate operations.
 Tokens are bound to: tenant/org, session/context, and agent/actor.

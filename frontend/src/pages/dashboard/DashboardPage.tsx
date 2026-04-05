@@ -118,7 +118,7 @@ export function DashboardPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
           <p className="text-gray-500 mt-1">
-            Welcome to {org.name}'s Memory OS
+            Welcome to {org.name}'s Cognitive OS
           </p>
         </div>
         <div className="card bg-red-50 border border-red-200">
@@ -143,7 +143,7 @@ export function DashboardPage() {
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
         <p className="text-gray-500 mt-1">
-          Welcome to {org.name}'s Memory OS
+          Welcome to {org.name}'s Cognitive OS
         </p>
       </div>
 

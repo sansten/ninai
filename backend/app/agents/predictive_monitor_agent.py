@@ -354,7 +354,7 @@ class PredictiveMonitorAgent(BaseAgent):
             )
         else:
             prompt = (
-                "You are a predictive risk monitor for an enterprise memory OS. "
+                "You are a predictive risk monitor for an enterprise Cognitive OS. "
                 "Output JSON only. Do not hallucinate.\n\n"
                 "Analyse the world model snapshot and detect risk patterns that "
                 "could cause downstream incidents before they manifest.\n\n"

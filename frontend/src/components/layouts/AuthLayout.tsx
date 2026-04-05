@@ -50,7 +50,7 @@ export function AuthLayout() {
           Ninai
         </h2>
         <p className="mt-2 text-center text-sm text-gray-600">
-          Agentic AI Memory Operating System
+          Agentic AI Cognitive Operating System
         </p>
       </div>
 

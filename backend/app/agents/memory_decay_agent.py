@@ -249,7 +249,7 @@ class MemoryDecayAgent(BaseAgent):
             )
         else:
             prompt = (
-                "You are a memory relevance scoring engine for an enterprise memory OS. "
+                "You are a memory relevance scoring engine for an enterprise Cognitive OS. "
                 "Output JSON only. Do not hallucinate.\n\n"
                 "Score the freshness of this memory based on its age, domain, and access patterns.\n\n"
                 f"CREATED_AT: {created_at.isoformat()}\n"

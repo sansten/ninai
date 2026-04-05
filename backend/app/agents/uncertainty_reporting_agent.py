@@ -320,7 +320,7 @@ class UncertaintyReportingAgent(BaseAgent):
             outputs = run_heuristic(enrichment)
         else:
             prompt = (
-                "You are an enterprise uncertainty analysis engine for a memory OS. "
+                "You are an enterprise uncertainty analysis engine for a Cognitive OS. "
                 "Output JSON only. Do not hallucinate.\n\n"
                 "Analyze the enrichment signals below and produce an uncertainty report. "
                 "Identify unresolved conflicts, fields with low confidence, and whether "

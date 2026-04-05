@@ -283,7 +283,7 @@ class AdaptiveConflictResolutionAgent(BaseAgent):
             )
         else:
             prompt = (
-                "You are an adaptive conflict resolution engine for an enterprise memory OS. "
+                "You are an adaptive conflict resolution engine for an enterprise Cognitive OS. "
                 "Output JSON only. Do not hallucinate.\n\n"
                 "Given the detected conflicts, assign resolution actions and routing.\n\n"
                 f"CONFLICTS: {conflicts}\n"

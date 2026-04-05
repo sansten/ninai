@@ -1,7 +1,7 @@
 """
 LangChain Memory Adapter
 
-Integrates Ninai Memory OS with LangChain's BaseMemory interface.
+Integrates Ninai Cognitive OS with LangChain's BaseMemory interface.
 Supports conversation history, entity memory, and vector-backed retrieval.
 """
 
@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 
 class NinaiLangChainMemory(BaseMemory):
     """
-    LangChain memory adapter using Ninai Memory OS backend.
+    LangChain memory adapter using Ninai Cognitive OS backend.
     
     Features:
     - Conversation history stored in Ninai
@@ -118,7 +118,7 @@ class NinaiLangChainMemory(BaseMemory):
     
     def load_memory_variables(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Load conversation history from Ninai Memory OS.
+        Load conversation history from Ninai Cognitive OS.
         
         Returns dict with memory_key → conversation history.
         """
@@ -188,7 +188,7 @@ class NinaiLangChainMemory(BaseMemory):
     
     def save_context(self, inputs: Dict[str, Any], outputs: Dict[str, Any]) -> None:
         """
-        Save conversation turn to Ninai Memory OS.
+        Save conversation turn to Ninai Cognitive OS.
         
         Stores both human input and AI output as separate memories.
         """

@@ -260,7 +260,7 @@ class ContextAmplifierAgent(BaseAgent):
             )
         else:
             prompt = (
-                "You are an expert context amplifier for an enterprise memory OS. "
+                "You are an expert context amplifier for an enterprise Cognitive OS. "
                 "Output JSON only. Do not hallucinate.\n\n"
                 "Given resolved entities and cross-silo links, assemble a role-scoped context bundle "
                 "showing signals from other business domains relevant to the actor's roles.\n\n"

@@ -169,7 +169,7 @@ class SemanticNormalizationAgent(BaseAgent):
             outputs = self._heuristic(content=content)
         else:
             prompt = (
-                "You are a semantic normalization engine for an enterprise memory OS. "
+                "You are a semantic normalization engine for an enterprise Cognitive OS. "
                 "Output JSON only. Do not hallucinate.\n\n"
                 "Analyze the content and return:\n"
                 "- intent: one of document_decision|report_issue|share_learning|"

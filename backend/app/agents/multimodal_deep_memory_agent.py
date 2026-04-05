@@ -471,7 +471,7 @@ class MultimodalDeepMemoryAgent(BaseAgent):
             )
         else:
             prompt = (
-                "You are a multimodal memory indexing engine for an enterprise memory OS. "
+                "You are a multimodal memory indexing engine for an enterprise Cognitive OS. "
                 "Output JSON only. Do not hallucinate.\n\n"
                 "Analyse the attachment metadata and any pre-extracted visual data. "
                 "Return a semantic index with the following fields:\n"

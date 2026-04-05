@@ -304,7 +304,7 @@ class CompositionalGeneralizationAgent(BaseAgent):
             )
         else:
             prompt = (
-                "You are a compositional generalization engine for an enterprise memory OS. "
+                "You are a compositional generalization engine for an enterprise Cognitive OS. "
                 "Output JSON only. Do not hallucinate.\n\n"
                 "Given a novel goal and a set of known playbooks, compose a new procedure "
                 "by remixing steps from the playbooks. Steps that cannot be sourced from "
