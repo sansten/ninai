@@ -33,6 +33,7 @@ _XREAD_COUNT = 50          # max events per XREAD call
 async def ws_stream(
     websocket: WebSocket,
     token: Optional[str] = Query(default=None),
+    org_id: Optional[str] = None,
 ):
     """Stream org-scoped events over WebSocket.
 
@@ -53,8 +54,13 @@ async def ws_stream(
         await websocket.close(code=4008)
         return
 
-    org_id = token_data.org_id
-    stream_key = f"events:{org_id}"
+    token_org_id = str(token_data.org_id)
+    if org_id and org_id != token_org_id:
+        await websocket.close(code=4008)
+        return
+
+    org_id = token_org_id
+    stream_key = f"ninai:events:{org_id}:all"
 
     await websocket.accept()
     logger.info("WS connect", extra={"org_id": org_id, "user_id": token_data.user_id})

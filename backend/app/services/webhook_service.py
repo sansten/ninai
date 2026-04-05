@@ -78,16 +78,15 @@ class WebhookService:
         # Best-effort: never let a Redis error block the DB write path.
         try:
             from app.core.redis import RedisClient
-            stream_key = f"events:{organization_id}"
-            await RedisClient.xadd(
-                stream_key,
-                {
-                    "event_type": event_type,
-                    "payload": json.dumps(payload, default=str),
-                    "event_id": str(event.id),
-                },
-                maxlen=1000,
-            )
+            fields = {
+                "event_type": event_type,
+                "payload": json.dumps(payload, default=str),
+                "event_id": str(event.id),
+            }
+            await RedisClient.xadd(f"ninai:events:{organization_id}:all", fields, maxlen=1000)
+            await RedisClient.xadd(f"ninai:events:{organization_id}:{event_type}", fields, maxlen=1000)
+            # Backward compatibility for existing consumers/tests.
+            await RedisClient.xadd(f"events:{organization_id}", fields, maxlen=1000)
         except Exception:
             pass
 
