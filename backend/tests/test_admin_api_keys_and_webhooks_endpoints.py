@@ -35,6 +35,15 @@ class _FakeWebhookSub:
     created_at: datetime
 
 
+@dataclass
+class _FakeWebhookDelivery:
+    id: str
+    status: str
+    attempts: int
+    last_http_status: int | None = None
+    last_error: str | None = None
+
+
 class _Scalars:
     def __init__(self, items: list[Any]):
         self._items = items
@@ -288,3 +297,81 @@ async def test_admin_webhooks_list_create_delete_happy_path(monkeypatch):
         assert session.commit.await_count == 2
 
     app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_admin_webhook_test_delivery_happy_path(monkeypatch):
+    session = AsyncMock(spec=AsyncSession)
+    session.execute = AsyncMock(return_value=AsyncMock())
+    session.commit = AsyncMock()
+
+    async def override_get_db():
+        yield session
+
+    app.dependency_overrides[get_db] = override_get_db
+
+    import app.api.v1.endpoints.webhooks as webhooks_endpoints
+
+    fake_delivery = _FakeWebhookDelivery(
+        id="d1",
+        status="delivered",
+        attempts=0,
+        last_http_status=200,
+        last_error=None,
+    )
+
+    async def _fake_create_test_delivery(self, *, organization_id: str, webhook_id: str, payload):
+        assert organization_id == "o1"
+        assert webhook_id == "w1"
+        assert payload["subscription_id"] == "w1"
+        return fake_delivery
+
+    async def _fake_dispatch_delivery(self, *, delivery_id: str):
+        assert delivery_id == "d1"
+        return True
+
+    monkeypatch.setattr(webhooks_endpoints.WebhookService, "create_test_delivery", _fake_create_test_delivery)
+    monkeypatch.setattr(webhooks_endpoints.WebhookService, "dispatch_delivery", _fake_dispatch_delivery)
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        resp = await ac.post("/api/v1/admin/webhooks/w1/test", headers=_admin_headers())
+
+    app.dependency_overrides.clear()
+
+    assert resp.status_code == 200
+    payload = resp.json()
+    assert payload["delivery_id"] == "d1"
+    assert payload["status"] == "delivered"
+    assert payload["attempts"] == 0
+    assert payload["last_http_status"] == 200
+    assert session.commit.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_admin_webhook_test_delivery_not_found(monkeypatch):
+    session = AsyncMock(spec=AsyncSession)
+    session.execute = AsyncMock(return_value=AsyncMock())
+    session.commit = AsyncMock()
+
+    async def override_get_db():
+        yield session
+
+    app.dependency_overrides[get_db] = override_get_db
+
+    import app.api.v1.endpoints.webhooks as webhooks_endpoints
+
+    async def _fake_create_test_delivery(self, *, organization_id: str, webhook_id: str, payload):
+        raise ValueError("Webhook not found")
+
+    monkeypatch.setattr(webhooks_endpoints.WebhookService, "create_test_delivery", _fake_create_test_delivery)
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        resp = await ac.post("/api/v1/admin/webhooks/missing/test", headers=_admin_headers())
+
+    app.dependency_overrides.clear()
+
+    assert resp.status_code == 404
+    assert resp.json()["detail"] == "Webhook not found"
+    assert session.commit.await_count == 0
