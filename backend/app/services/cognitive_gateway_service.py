@@ -39,6 +39,7 @@ from app.agents.goal_decomposition_agent import (
     detect_goal,
 )
 from app.agents.memory_tier_manager_agent import MemoryTierManagerAgent
+from app.services.context_compression_service import ContextCompressionService
 from app.services.corrective_rag_service import CorrectiveRagService
 from app.services.self_rag_service import SelfRagService
 
@@ -96,6 +97,8 @@ class GatewayReadResult:
     retrieval_confidence: float = 0.0
     corrected_by: str | None = None
     reasoning_steps: list[dict] = field(default_factory=list)
+    compression_ratio: float = 1.0
+    information_density: float = 0.0
 
 
 @dataclass
@@ -511,6 +514,7 @@ class CognitiveGatewayService:
         query: str,
         memories: list[dict] | None = None,
         limit: int = 10,
+        context_token_budget: int = 240,
         vector_fn: Callable[[str, list[dict]], list[dict]] | None = None,
         external_connector_fn: Callable[[str, int], list[dict]] | None = None,
         cross_encoder_fn: Callable[[str, list[dict]], list[dict]] | None = None,
@@ -556,25 +560,32 @@ class CognitiveGatewayService:
             cross_encoder_fn=cross_encoder_fn,
         )
 
-        result = GatewayReadResult(
+        compression = ContextCompressionService().compress(
             memories=corrective.memories,
-            total=len(corrective.memories),
+            token_budget=context_token_budget,
+        )
+
+        result = GatewayReadResult(
+            memories=compression.memories,
+            total=len(compression.memories),
             query=query,
-            context_assembled=len(corrective.memories) > 0,
+            context_assembled=len(compression.memories) > 0,
             retrieval_confidence=corrective.retrieval_confidence,
             corrected_by=corrective.corrected_by,
             reasoning_steps=verification.reasoning_steps,
+            compression_ratio=compression.compression_ratio,
+            information_density=compression.information_density,
         )
 
         if context_id and org_id:
             ctx = await load_gateway_context(context_id, org_id) or GatewayContextSession(
                 context_id=context_id, org_id=org_id
             )
-            ctx.prior_memories = corrective.memories
+            ctx.prior_memories = compression.memories
             ctx.working_set_summary = self._tier_manager.reconcile(
                 working_set=list(ctx.working_set_summary.get("working_set") or []),
                 archival=list(ctx.working_set_summary.get("archival") or []),
-                incoming=list(corrective.memories or []),
+                incoming=list(compression.memories or []),
             )
             ctx.call_count += 1
             await save_gateway_context(ctx)
