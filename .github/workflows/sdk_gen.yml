@@ -1,0 +1,45 @@
+name: generate-sdk-clients
+
+on:
+  push:
+    paths:
+      - backend/app/api/**
+      - backend/app/schemas/**
+      - backend/scripts/export_openapi.py
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install backend dependencies
+        run: |
+          cd backend
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Export OpenAPI spec
+        run: |
+          cd backend
+          python scripts/export_openapi.py
+
+      - name: Generate TypeScript client
+        uses: openapi-generators/openapitools-generator-action@v1
+        with:
+          generator: typescript-fetch
+          openapi-file: backend/openapi_v1.json
+          generator-tag: v7.3.0
+          config-file: sdk/typescript/openapi-config.json
+
+      - name: Generate Python client
+        uses: openapi-generators/openapitools-generator-action@v1
+        with:
+          generator: python
+          openapi-file: backend/openapi_v1.json
+          generator-tag: v7.3.0
