@@ -77,6 +77,7 @@ from app.api.v1.endpoints import (
     connectors,
     cognitive_gateway,
     cognitive_gateway_stream,
+    explainability,
     benchmarks,
     a2a,
     openai_tool_schema,
@@ -510,6 +511,12 @@ api_router.include_router(
     cognitive_gateway_stream.router,
     prefix="/cognitive/gateway/stream",
     tags=["Cognitive Gateway Stream"],
+)
+
+api_router.include_router(
+    explainability.router,
+    prefix="/explain",
+    tags=["Explainability"],
 )
 
 api_router.include_router(
