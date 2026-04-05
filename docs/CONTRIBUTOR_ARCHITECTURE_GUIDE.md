@@ -1,6 +1,6 @@
 # Ninai OSS - Architecture Guide for Contributors
 
-**Vision**: Build a memory operating system designed for AI agents, not documents.
+**Vision**: Build a Cognitive Operating System designed for AI agents, not documents.
 
 ---
 

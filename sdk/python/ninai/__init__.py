@@ -2,7 +2,7 @@
 Ninai Python SDK
 ================
 
-Official Python client for Ninai Enterprise Agentic AI Memory OS.
+Official Python client for Ninai Enterprise Agentic AI Cognitive OS.
 
 Quick Start:
     from ninai import NinaiClient

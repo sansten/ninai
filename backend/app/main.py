@@ -3,7 +3,7 @@ Ninai - Main Application Entry Point
 ====================================
 
 This module initializes the FastAPI application with all routes, middleware,
-and event handlers configured for the enterprise memory operating system.
+and event handlers configured for the enterprise Cognitive OS.
 """
 
 from contextlib import asynccontextmanager
@@ -77,7 +77,7 @@ def create_application() -> FastAPI:
     """
     app = FastAPI(
         title=settings.APP_NAME,
-        description="Enterprise Agentic AI Memory Operating System",
+        description="Enterprise Agentic AI Cognitive Operating System",
         version="1.0.0",
         openapi_url=f"{settings.API_PREFIX}/openapi.json",
         docs_url="/docs",

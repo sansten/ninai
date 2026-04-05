@@ -1,6 +1,6 @@
 """backend.app.services.consolidation_service
 
-This service is used by the Memory OS consolidation endpoints and tests.
+This service is used by the Cognitive OS consolidation endpoints and tests.
 
 The full production implementation may incorporate vector search via Qdrant.
 For the test suite (and as a safe fallback), this module implements a

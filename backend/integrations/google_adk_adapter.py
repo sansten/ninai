@@ -333,7 +333,7 @@ class NinaiADKAgent:
         model: str = "gemini-2.0-flash",
         name: str = "ninai-cognitive-agent",
         instruction: str = (
-            "You are a Ninai cognitive agent with access to an enterprise memory OS. "
+            "You are a Ninai cognitive agent with access to an enterprise Cognitive OS. "
             "Use ninai_read to recall context, ninai_decide to evaluate anomalies, "
             "ninai_plan to decompose goals, and ninai_write to store important findings."
         ),

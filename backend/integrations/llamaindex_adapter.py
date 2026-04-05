@@ -1,7 +1,7 @@
 """
 LlamaIndex Vector Store Adapter
 
-Integrates Ninai Memory OS with LlamaIndex's VectorStore interface.
+Integrates Ninai Cognitive OS with LlamaIndex's VectorStore interface.
 Supports document indexing, retrieval, and hybrid search.
 """
 
@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 
 class NinaiLlamaIndexVectorStore(VectorStore):
     """
-    LlamaIndex vector store adapter using Ninai Memory OS.
+    LlamaIndex vector store adapter using Ninai Cognitive OS.
     
     Features:
     - Document storage with embeddings

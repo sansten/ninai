@@ -1,6 +1,6 @@
 # Ninai OSS - Contributor Learning Resources
 
-**For new open-source contributors who want to understand and contribute to Ninai Memory OS**
+**For new open-source contributors who want to understand and contribute to Ninai Cognitive OS**
 
 ---
 

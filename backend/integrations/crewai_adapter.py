@@ -1,7 +1,7 @@
 """
 CrewAI Memory Adapter
 
-Integrates Ninai Memory OS with CrewAI's memory system.
+Integrates Ninai Cognitive OS with CrewAI's memory system.
 Supports agent memory, task context, and crew-level knowledge sharing.
 """
 
@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 class NinaiCrewAIMemory(Memory if CREWAI_AVAILABLE else object):
     """
-    CrewAI memory adapter using Ninai Memory OS backend.
+    CrewAI memory adapter using Ninai Cognitive OS backend.
     
     Features:
     - Agent-level memory (scoped to individual agents)

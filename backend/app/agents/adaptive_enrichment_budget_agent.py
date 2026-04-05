@@ -286,7 +286,7 @@ class AdaptiveEnrichmentBudgetAgent(BaseAgent):
         else:
             prompt = (
                 "You are an adaptive enrichment budget planner for an enterprise "
-                "memory OS.  Output JSON only.  Do not hallucinate.\n\n"
+                "Cognitive OS.  Output JSON only.  Do not hallucinate.\n\n"
                 "Given the memory enrichment signals and feature readiness, decide "
                 "which agents from the candidate list should run (agent_budget) and "
                 "which should be skipped (skipped_agents) for this memory write.\n\n"

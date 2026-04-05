@@ -1,5 +1,5 @@
 """
-Integration tests for Memory OS services (Fixed Version).
+Integration tests for Cognitive OS services (Fixed Version).
 
 Tests all Phase 2+ features with corrected service initialization.
 """

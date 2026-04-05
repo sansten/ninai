@@ -200,6 +200,9 @@ async def test_learning_velocity_calculation(
             sample_count=1,
         )
         db_session.add(entry)
+        # Force per-row insert to avoid asyncpg insertmany sentinel mismatch
+        # on explicit string UUID primary keys during bulk flush.
+        await db_session.flush()
     
     await db_session.commit()
     
@@ -208,7 +211,7 @@ async def test_learning_velocity_calculation(
     result = await db_session.execute(
         select(func.count()).select_from(StrategyLibraryEntry).where(
             StrategyLibraryEntry.organization_id == test_org,
-            StrategyLibraryEntry.created_at >= week_ago,
+            StrategyLibraryEntry.last_updated >= week_ago,
         )
     )
     entries_in_week = result.scalar() or 0
@@ -266,6 +269,7 @@ async def test_learning_success_rate_distribution(
             sample_count=5,
         )
         db_session.add(entry)
+        await db_session.flush()
     
     await db_session.commit()
     
@@ -408,6 +412,7 @@ async def test_learning_velocity_tracks_promotion_events(
             sample_count=5,  # Min sample count to consider
         )
         db_session.add(entry)
+        await db_session.flush()
     
     await db_session.commit()
     

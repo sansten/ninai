@@ -301,7 +301,7 @@ class CausalReasoningService:
             f"  [{i['pos']}] id={i['id']}: {i['text']}" for i in items
         )
         prompt = (
-            "You are a causal reasoning engine for an enterprise memory OS. "
+            "You are a causal reasoning engine for an enterprise Cognitive OS. "
             "Output JSON only. Do not hallucinate.\n\n"
             "Analyze the following memories from a single episode and identify "
             "direct causal relationships between them.\n\n"
