@@ -354,7 +354,7 @@ async def seed_database():
             {
                 "memory_type": "semantic",
                 "title": "Project Architecture Overview",
-                "content": "The Ninai Memory OS is built with a microservices architecture...",
+                "content": "The Ninai Cognitive OS is built with a microservices architecture...",
                 "tags": ["architecture", "documentation", "overview"],
                 "scope": "organization",
             },

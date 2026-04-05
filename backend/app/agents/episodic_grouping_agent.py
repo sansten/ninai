@@ -517,7 +517,7 @@ class EpisodicGroupingAgent(BaseAgent):
             sib_json = siblings[:5]
             cross_json = cross_episode_memories[:5]
             prompt = (
-                "You are an episodic memory grouping engine for an enterprise memory OS. "
+                "You are an episodic memory grouping engine for an enterprise Cognitive OS. "
                 "Output JSON only. Do not hallucinate.\n\n"
                 "Assign this memory to an episode and determine its role.\n\n"
                 f"CREATED_AT: {created_at.isoformat()}\n"

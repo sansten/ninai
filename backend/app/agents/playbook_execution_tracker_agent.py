@@ -261,7 +261,7 @@ class PlaybookExecutionTrackerAgent(BaseAgent):
         else:
             trace_str = str(execution_trace) if execution_trace else "null"
             prompt = (
-                "You are an enterprise playbook execution tracker for a memory OS. "
+                "You are an enterprise playbook execution tracker for a Cognitive OS. "
                 "Output JSON only. Do not hallucinate.\n\n"
                 "Determine whether the suggested playbook was followed, compute an "
                 "outcome score, and list deviation steps.\n\n"

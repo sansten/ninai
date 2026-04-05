@@ -335,7 +335,12 @@ class EmotionalAffectiveMemoryAgent(BaseAgent):
         narrative_tone = str(enrichment.get("narrative_tone") or "")
         urgency_score = float(enrichment.get("urgency_score") or 0.0)
 
-        strategy = getattr(settings, "EMOTIONAL_AFFECTIVE_STRATEGY", None)
+        context_settings = context.get("settings") or {}
+        strategy = context_settings.get("EMOTIONAL_AFFECTIVE_STRATEGY")
+        if not strategy:
+            strategy = context_settings.get("AGENT_STRATEGY")
+        if not strategy:
+            strategy = getattr(settings, "EMOTIONAL_AFFECTIVE_STRATEGY", None)
         if not strategy:
             strategy = getattr(settings, "AGENT_STRATEGY", "llm")
         strategy = str(strategy or "llm").strip().lower()
@@ -351,7 +356,7 @@ class EmotionalAffectiveMemoryAgent(BaseAgent):
             )
         else:
             prompt = (
-                "You are an emotional intelligence engine for an enterprise memory OS. "
+                "You are an emotional intelligence engine for an enterprise Cognitive OS. "
                 "Output JSON only. Do not hallucinate.\n\n"
                 "Analyse the memory content and feedback signals. Return an emotional "
                 "assessment with the following fields:\n"

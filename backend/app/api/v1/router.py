@@ -416,7 +416,7 @@ api_router.include_router(
     tags=["Backups"],
 )
 
-# Memory OS Phase 2+ Endpoints
+# Cognitive OS Phase 2+ Endpoints
 api_router.include_router(
     admission_control.router,
     tags=["Admission Control"],

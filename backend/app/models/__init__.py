@@ -2,7 +2,7 @@
 Database Models
 ===============
 
-SQLAlchemy models for the Ninai memory operating system.
+SQLAlchemy models for the Ninai Cognitive Operating System.
 All models include organization_id for RLS-based multi-tenant isolation.
 """
 

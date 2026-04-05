@@ -296,7 +296,7 @@ class ProactiveMemoryPushAgent(BaseAgent):
             )
         else:
             prompt = (
-                "You are a proactive memory push engine for an enterprise memory OS. "
+                "You are a proactive memory push engine for an enterprise Cognitive OS. "
                 "Output JSON only. Do not hallucinate.\n\n"
                 "Detect triggers from the memory content and attention context, then "
                 "recommend which teams should receive a proactive push of this memory.\n\n"

@@ -260,7 +260,7 @@ class OrgAttentionAgent(BaseAgent):
             )
         else:
             prompt = (
-                "You are an organizational attention model for an enterprise memory OS. "
+                "You are an organizational attention model for an enterprise Cognitive OS. "
                 "Output JSON only. Do not hallucinate.\n\n"
                 "Track which teams are working on which topics and detect overlap "
                 "when 2+ teams independently work on the same entity.\n\n"

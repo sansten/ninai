@@ -61,7 +61,7 @@
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │ TIER 1: COMMUNITY EDITION (MIT)                                            │
 │ ┌──────────────────────────────────────────────────────────────────────┐   │
-│ │ Production-Ready Memory OS (Zero Enterprise Dependencies)            │   │
+│ │ Production-Ready Cognitive OS (Zero Enterprise Dependencies)            │   │
 │ ├──────────────────────────────────────────────────────────────────────┤   │
 │ │ ✅ Multi-Tenant Memory System                                        │   │
 │ │    • Short-Term Memory (Redis) + Long-Term Memory (PostgreSQL + Qdrant) │

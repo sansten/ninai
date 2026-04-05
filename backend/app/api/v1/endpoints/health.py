@@ -17,6 +17,7 @@ async def health_check():
     """Basic health check."""
     return {
         "status": "ok",
+        "description": "Ninai Cognitive OS is healthy",
         "bootstrap_complete": bootstrap_service.bootstrap_complete,
     }
 

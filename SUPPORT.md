@@ -1,6 +1,6 @@
 # Support
 
-Thanks for using Ninai Memory OS. Here are the best ways to get help:
+Thanks for using Ninai Cognitive OS. Here are the best ways to get help:
 
 ## Questions and Help
 
