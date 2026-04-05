@@ -1,0 +1,1 @@
+"""Ninai CLI package."""
