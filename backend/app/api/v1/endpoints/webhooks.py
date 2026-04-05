@@ -16,6 +16,7 @@ from app.schemas.webhook import (
     WebhookSubscriptionResponse,
     WebhookDeliveryResponse,
     WebhookDeliveryHistoryResponse,
+    WebhookTestDeliveryResponse,
 )
 from app.services.webhook_service import WebhookService
 
@@ -99,6 +100,39 @@ async def delete_webhook(
     await db.delete(sub)
     await db.commit()
     return None
+
+
+@router.post("/webhooks/{webhook_id}/test", response_model=WebhookTestDeliveryResponse)
+async def test_webhook(
+    webhook_id: str,
+    tenant: TenantContext = Depends(require_org_admin()),
+    db: AsyncSession = Depends(get_db),
+):
+    """Send a test webhook event immediately and return delivery status."""
+    await set_tenant_context(db, tenant.user_id, tenant.org_id, tenant.roles_string, tenant.clearance_level)
+
+    svc = WebhookService(db)
+    try:
+        delivery = await svc.create_test_delivery(
+            organization_id=tenant.org_id,
+            webhook_id=webhook_id,
+            payload={
+                "subscription_id": webhook_id,
+                "initiated_by": tenant.user_id,
+            },
+        )
+        await svc.dispatch_delivery(delivery_id=delivery.id)
+        await db.commit()
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+    return WebhookTestDeliveryResponse(
+        delivery_id=delivery.id,
+        status=delivery.status,
+        attempts=delivery.attempts,
+        last_http_status=delivery.last_http_status,
+        last_error=delivery.last_error,
+    )
 
 
 @router.get("/webhooks/{webhook_id}/deliveries", response_model=WebhookDeliveryHistoryResponse)
