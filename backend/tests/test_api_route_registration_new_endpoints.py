@@ -38,3 +38,11 @@ def test_explainability_routes_registered():
     assert _has_path("/api/v1/explain/conflict/{conflict_id}")
     assert _has_path("/api/v1/explain/anomaly/{anomaly_id}")
     assert _has_path("/api/v1/audit/trail/{session_id}")
+
+
+def test_action_approval_routes_registered():
+    assert _has_path("/api/v1/actions/pending")
+    assert _has_path("/api/v1/actions/history")
+    assert _has_path("/api/v1/actions/{action_id}")
+    assert _has_path("/api/v1/actions/{action_id}/approve")
+    assert _has_path("/api/v1/actions/{action_id}/reject")
