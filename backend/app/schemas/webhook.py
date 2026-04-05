@@ -46,3 +46,11 @@ class WebhookDeliveryHistoryResponse(BaseSchema):
     total: int
     pending_count: int
     failed_count: int
+
+
+class WebhookTestDeliveryResponse(BaseSchema):
+    delivery_id: str
+    status: str
+    attempts: int
+    last_http_status: int | None = None
+    last_error: str | None = None
