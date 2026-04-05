@@ -7,6 +7,7 @@ from typing import AsyncGenerator
 from typing import Any
 
 import strawberry
+from strawberry.scalars import JSON
 
 from app.core.redis import RedisClient
 from app.middleware.tenant_context import TenantContext
@@ -16,7 +17,7 @@ from app.middleware.tenant_context import TenantContext
 class MemoryEvent:
     id: str
     event_type: str
-    payload: dict[str, Any]
+    payload: JSON
 
 
 @strawberry.type
