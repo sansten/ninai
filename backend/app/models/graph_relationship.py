@@ -66,6 +66,7 @@ class GraphRelationship(Base):
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for API responses."""
+        metadata = self.metadata_ or {}
         return {
             "id": str(self.id),
             "organization_id": str(self.organization_id),
@@ -75,7 +76,9 @@ class GraphRelationship(Base):
             "similarity_score": self.similarity_score,
             "auto_created": self.auto_created,
             "created_by_user_id": str(self.created_by_user_id) if self.created_by_user_id else None,
-            "metadata": self.metadata_,
+            "metadata": metadata,
+            "valid_from": metadata.get("valid_from"),
+            "valid_until": metadata.get("valid_until"),
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
