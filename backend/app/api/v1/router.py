@@ -78,6 +78,7 @@ from app.api.v1.endpoints import (
     connectors,
     cognitive_gateway,
     cognitive_gateway_stream,
+    cognitive_diff,
     provenance,
     explainability,
     benchmarks,
@@ -295,6 +296,13 @@ api_router.include_router(
     prefix="/cognitive",
     tags=["Cognitive Session Protocol"],
 )
+
+api_router.include_router(
+    cognitive_diff.router,
+    prefix="/cognitive/diff",
+    tags=["Cognitive Diff"],
+)
+
 api_router.include_router(
     meta_agent.router,
     prefix="/meta",
