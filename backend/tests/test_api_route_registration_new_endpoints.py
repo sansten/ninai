@@ -68,3 +68,11 @@ def test_feedback_routes_registered():
     assert _has_path("/api/v1/feedback/conflict/{conflict_id}")
     assert _has_path("/api/v1/feedback/anomaly/{anomaly_id}")
     assert _has_path("/api/v1/feedback/stats")
+
+
+def test_plugin_registry_routes_registered():
+    assert _has_path("/api/v1/plugins")
+    assert _has_path("/api/v1/plugins/install")
+    assert _has_path("/api/v1/plugins/{name}")
+    assert _has_path("/api/v1/plugins/{name}/logs")
+    assert _has_path("/api/v1/plugins/{name}/config")
