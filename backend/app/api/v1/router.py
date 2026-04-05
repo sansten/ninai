@@ -72,6 +72,7 @@ from app.api.v1.endpoints import (
     digests,
     proof,
     ws_stream as ws_stream_endpoint,
+    sse_stream,
     connectors,
     cognitive_gateway,
     cognitive_gateway_stream,
@@ -479,6 +480,12 @@ api_router.include_router(
 api_router.include_router(
     ws_stream_endpoint.router,
     tags=["Real-Time Event Stream"],
+)
+
+api_router.include_router(
+    sse_stream.router,
+    prefix="/sse",
+    tags=["Cognitive Streaming API"],
 )
 
 api_router.include_router(
