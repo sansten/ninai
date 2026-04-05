@@ -116,6 +116,81 @@ class WebhookService:
 
         await self.session.flush()
 
+    async def create_test_delivery(
+        self,
+        *,
+        organization_id: str,
+        webhook_id: str,
+        payload: dict | None = None,
+    ) -> WebhookDelivery:
+        """Create a one-off webhook.test delivery for a single subscription."""
+        sub_res = await self.session.execute(
+            select(WebhookSubscription).where(
+                WebhookSubscription.id == webhook_id,
+                WebhookSubscription.organization_id == organization_id,
+            )
+        )
+        sub = sub_res.scalar_one_or_none()
+        if not sub:
+            raise ValueError("Webhook not found")
+
+        event = WebhookOutboxEvent(
+            organization_id=organization_id,
+            event_type="webhook.test",
+            payload=payload
+            or {
+                "subscription_id": webhook_id,
+                "message": "Test event from Ninai Cognitive OS",
+            },
+        )
+        self.session.add(event)
+        await self.session.flush()
+
+        delivery = WebhookDelivery(
+            organization_id=organization_id,
+            subscription_id=sub.id,
+            outbox_event_id=event.id,
+            status="pending",
+            attempts=0,
+            next_attempt_at=self._utcnow(),
+        )
+        self.session.add(delivery)
+        await self.session.flush()
+        return delivery
+
+    async def dispatch_delivery(self, *, delivery_id: str) -> bool:
+        """Dispatch one pending delivery immediately.
+
+        Returns True when delivered successfully.
+        """
+        res = await self.session.execute(
+            select(WebhookDelivery).where(WebhookDelivery.id == delivery_id)
+        )
+        delivery = res.scalar_one_or_none()
+        if not delivery:
+            raise ValueError("Delivery not found")
+
+        sub_res = await self.session.execute(
+            select(WebhookSubscription).where(WebhookSubscription.id == delivery.subscription_id)
+        )
+        sub = sub_res.scalar_one_or_none()
+
+        event_res = await self.session.execute(
+            select(WebhookOutboxEvent).where(WebhookOutboxEvent.id == delivery.outbox_event_id)
+        )
+        event = event_res.scalar_one_or_none()
+
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            delivered = await self._attempt_delivery(
+                client=client,
+                delivery=delivery,
+                subscription=sub,
+                event=event,
+            )
+
+        await self.session.flush()
+        return delivered
+
     async def dispatch_due_deliveries(self, *, limit: int = 50) -> int:
         now = self._utcnow()
         res = await self.session.execute(
@@ -142,47 +217,65 @@ class WebhookService:
             for delivery in deliveries:
                 sub = subs_by_id.get(delivery.subscription_id)
                 ev = events_by_id.get(delivery.outbox_event_id)
-                if not sub or not sub.is_active or not ev:
-                    delivery.status = "failed"
-                    delivery.last_error = "Subscription or event missing/inactive"
-                    continue
-
-                body = json.dumps(
-                    {
-                        "id": ev.id,
-                        "type": ev.event_type,
-                        "organization_id": ev.organization_id,
-                        "created_at": ev.created_at.isoformat() if ev.created_at else None,
-                        "payload": ev.payload,
-                    },
-                    separators=(",", ":"),
-                ).encode("utf-8")
-
-                secret = self.decrypt_secret(sub.secret_encrypted)
-                sig = hmac.new(secret.encode("utf-8"), body, hashlib.sha256).hexdigest()
-
-                headers = {
-                    "Content-Type": "application/json",
-                    "X-Ninai-Event-Id": str(ev.id),
-                    "X-Ninai-Event-Type": ev.event_type,
-                    "X-Ninai-Signature": f"sha256={sig}",
-                }
-
-                try:
-                    resp = await client.post(sub.url, content=body, headers=headers)
-                    delivery.last_http_status = resp.status_code
-                    if 200 <= resp.status_code < 300:
-                        delivery.status = "delivered"
-                        delivery.delivered_at = self._utcnow()
-                        delivery.last_error = None
-                        sent += 1
-                    else:
-                        self._schedule_retry(delivery, f"HTTP {resp.status_code}")
-                except Exception as e:
-                    self._schedule_retry(delivery, f"{type(e).__name__}: {e}")
+                if await self._attempt_delivery(
+                    client=client,
+                    delivery=delivery,
+                    subscription=sub,
+                    event=ev,
+                ):
+                    sent += 1
 
         await self.session.flush()
         return sent
+
+    async def _attempt_delivery(
+        self,
+        *,
+        client: httpx.AsyncClient,
+        delivery: WebhookDelivery,
+        subscription: WebhookSubscription | None,
+        event: WebhookOutboxEvent | None,
+    ) -> bool:
+        if not subscription or not subscription.is_active or not event:
+            delivery.status = "failed"
+            delivery.last_error = "Subscription or event missing/inactive"
+            return False
+
+        body = json.dumps(
+            {
+                "id": event.id,
+                "type": event.event_type,
+                "organization_id": event.organization_id,
+                "created_at": event.created_at.isoformat() if event.created_at else None,
+                "payload": event.payload,
+            },
+            separators=(",", ":"),
+        ).encode("utf-8")
+
+        secret = self.decrypt_secret(subscription.secret_encrypted)
+        sig = hmac.new(secret.encode("utf-8"), body, hashlib.sha256).hexdigest()
+
+        headers = {
+            "Content-Type": "application/json",
+            "X-Ninai-Event-Id": str(event.id),
+            "X-Ninai-Event-Type": event.event_type,
+            "X-Ninai-Signature": f"sha256={sig}",
+        }
+
+        try:
+            resp = await client.post(subscription.url, content=body, headers=headers)
+            delivery.last_http_status = resp.status_code
+            if 200 <= resp.status_code < 300:
+                delivery.status = "delivered"
+                delivery.delivered_at = self._utcnow()
+                delivery.last_error = None
+                return True
+
+            self._schedule_retry(delivery, f"HTTP {resp.status_code}")
+            return False
+        except Exception as e:
+            self._schedule_retry(delivery, f"{type(e).__name__}: {e}")
+            return False
 
     def _schedule_retry(self, delivery: WebhookDelivery, error: str) -> None:
         delivery.attempts += 1
