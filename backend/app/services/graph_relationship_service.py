@@ -288,7 +288,9 @@ class GraphRelationshipService:
                 "created_at": datetime.utcnow(),
                 "metadata_": {
                     "algorithm": "cosine_similarity",
-                    "version": "1.0"
+                    "version": "1.0",
+                    "valid_from": datetime.utcnow().isoformat(),
+                    "valid_until": None,
                 }
             }
             for rel in relationships
