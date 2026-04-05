@@ -81,3 +81,12 @@ def test_plugin_registry_routes_registered():
 def test_cognitive_manifest_route_registered():
     assert _has_path("/.well-known/cognitive-manifest.json")
 
+
+def test_cognitive_metrics_routes_registered():
+    assert _has_path("/metrics/cognitive")
+    assert _has_path("/metrics/cognitive/summary")
+    assert _has_path("/metrics/agents")
+    assert _has_path("/metrics/memory")
+    assert _has_path("/metrics/events")
+
+
