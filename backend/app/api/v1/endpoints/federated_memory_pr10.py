@@ -11,6 +11,7 @@ from datetime import datetime
 
 from app.core.database import get_db
 from app.core.config import settings
+from app.core.local_mode import external_federation_enabled
 from app.models.federated_knowledge import PrivacyPolicy
 from app.services.federated_knowledge_service import FederatedKnowledgeService
 from app.services.org_benchmark_service import OrgBenchmarkService
@@ -44,6 +45,11 @@ from sqlalchemy import select, func
 
 def require_org_federated_login_enabled() -> None:
     """Gate PR-10 federated routes behind explicit config opt-in."""
+    if not external_federation_enabled():
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Federated routes are disabled in local-first edge mode",
+        )
     if not settings.ORG_FEDERATED_LOGIN_ENABLED:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
