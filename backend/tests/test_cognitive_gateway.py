@@ -410,6 +410,41 @@ class TestGatewayRead:
         assert result_default.memories[0]["id"] == "A"
         assert result_vector.memories[0]["id"] == "B"
 
+    @pytest.mark.asyncio
+    async def test_self_rag_filters_irrelevant_memories(self):
+        gw = _full_gateway()
+        mems = [
+            {"id": "keep", "content": "auth login failure on gateway"},
+            {"id": "drop", "content": "finance planning note"},
+        ]
+
+        result = await gw.read(query="auth failure", memories=mems)
+
+        assert result.total == 1
+        assert result.memories[0]["id"] == "keep"
+        assert any(step["decision"] == "filtered" for step in result.reasoning_steps)
+
+    @pytest.mark.asyncio
+    async def test_corrective_rag_invokes_external_connector_on_low_confidence(self):
+        gw = _full_gateway()
+        mems = [
+            {"id": "m1", "content": "misc note"},
+            {"id": "m2", "content": "another unrelated line"},
+        ]
+
+        def _external(query: str, limit: int) -> list[dict]:
+            return [{"id": "ext-1", "content": "auth failure incident report", "credibility_score": 0.9}]
+
+        result = await gw.read(
+            query="auth failure",
+            memories=mems,
+            external_connector_fn=_external,
+        )
+
+        assert result.corrected_by == "external_connector"
+        assert any(mem["id"] == "ext-1" for mem in result.memories)
+        assert result.retrieval_confidence < 0.45
+
 
 class TestGatewayDecide:
     @pytest.mark.asyncio

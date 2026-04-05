@@ -38,6 +38,8 @@ from app.agents.goal_decomposition_agent import (
     detect_blocking_subtask,
     detect_goal,
 )
+from app.services.corrective_rag_service import CorrectiveRagService
+from app.services.self_rag_service import SelfRagService
 
 
 # ---------------------------------------------------------------------------
@@ -90,6 +92,9 @@ class GatewayReadResult:
     total: int
     query: str
     context_assembled: bool
+    retrieval_confidence: float = 0.0
+    corrected_by: str | None = None
+    reasoning_steps: list[dict] = field(default_factory=list)
 
 
 @dataclass
@@ -491,6 +496,8 @@ class CognitiveGatewayService:
         memories: list[dict] | None = None,
         limit: int = 10,
         vector_fn: Callable[[str, list[dict]], list[dict]] | None = None,
+        external_connector_fn: Callable[[str, int], list[dict]] | None = None,
+        cross_encoder_fn: Callable[[str, list[dict]], list[dict]] | None = None,
         context_id: str | None = None,
         org_id: str | None = None,
     ) -> GatewayReadResult:
@@ -515,18 +522,39 @@ class CognitiveGatewayService:
         else:
             ranked = _assemble_read_context(_mems, query)[:limit]
 
-        result = GatewayReadResult(
-            memories=ranked,
-            total=len(ranked),
+        # Self-RAG verification before answer-time consumption.
+        self_rag = SelfRagService()
+        verification = self_rag.verify_and_filter(
             query=query,
-            context_assembled=len(ranked) > 0,
+            memories=ranked,
+            strict_support=vector_fn is None,
+        )
+        verified = verification.verified_memories
+
+        # CRAG corrective pass if verified context quality is low.
+        corrective = CorrectiveRagService().apply(
+            query=query,
+            memories=verified,
+            limit=limit,
+            external_connector_fn=external_connector_fn,
+            cross_encoder_fn=cross_encoder_fn,
+        )
+
+        result = GatewayReadResult(
+            memories=corrective.memories,
+            total=len(corrective.memories),
+            query=query,
+            context_assembled=len(corrective.memories) > 0,
+            retrieval_confidence=corrective.retrieval_confidence,
+            corrected_by=corrective.corrected_by,
+            reasoning_steps=verification.reasoning_steps,
         )
 
         if context_id and org_id:
             ctx = await load_gateway_context(context_id, org_id) or GatewayContextSession(
                 context_id=context_id, org_id=org_id
             )
-            ctx.prior_memories = ranked
+            ctx.prior_memories = corrective.memories
             ctx.call_count += 1
             await save_gateway_context(ctx)
 

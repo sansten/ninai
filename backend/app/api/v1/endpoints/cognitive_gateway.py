@@ -134,6 +134,9 @@ async def gateway_read(
         "total": result.total,
         "query": result.query,
         "context_assembled": result.context_assembled,
+        "retrieval_confidence": result.retrieval_confidence,
+        "corrected_by": result.corrected_by,
+        "reasoning_steps": result.reasoning_steps,
         "context_id": context_id,
     }
 
