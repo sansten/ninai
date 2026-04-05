@@ -60,3 +60,11 @@ def test_cognitive_diff_routes_registered():
     assert _has_path("/api/v1/cognitive/diff/goals")
     assert _has_path("/api/v1/cognitive/diff/conflicts")
     assert _has_path("/api/v1/actions/{action_id}/reject")
+
+
+def test_feedback_routes_registered():
+    assert _has_path("/api/v1/feedback/memory/{memory_id}")
+    assert _has_path("/api/v1/feedback/decision/{decision_id}")
+    assert _has_path("/api/v1/feedback/conflict/{conflict_id}")
+    assert _has_path("/api/v1/feedback/anomaly/{anomaly_id}")
+    assert _has_path("/api/v1/feedback/stats")
