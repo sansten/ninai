@@ -1,7 +1,7 @@
 """
 Framework Integrations
 
-Adapters for LangChain, LlamaIndex, CrewAI, and LangGraph to use Ninai Memory OS.
+Adapters for LangChain, LlamaIndex, CrewAI, and LangGraph to use Ninai Cognitive OS.
 Also includes external system sync adapters for Obsidian, Notion, and Roam Research.
 """
 

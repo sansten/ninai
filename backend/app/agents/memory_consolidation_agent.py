@@ -323,7 +323,7 @@ class MemoryConsolidationAgent(BaseAgent):
         else:
             sim_json = similar_memories[:5]
             prompt = (
-                "You are a memory consolidation engine for an enterprise memory OS. "
+                "You are a memory consolidation engine for an enterprise Cognitive OS. "
                 "Output JSON only. Do not hallucinate.\n\n"
                 "Decide the consolidation action for this memory.\n\n"
                 f"DOMAIN: {domain}\n"

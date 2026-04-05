@@ -282,7 +282,7 @@ class MemorySleepAgent(BaseAgent):
             )
         else:
             prompt = (
-                "You are a memory sleep cycle engine for an enterprise memory OS. "
+                "You are a memory sleep cycle engine for an enterprise Cognitive OS. "
                 "Output JSON only. Do not hallucinate.\n\n"
                 "Decide the sleep action for this memory.\n\n"
                 f"CONSOLIDATION_ACTION: {consolidation_action}\n"

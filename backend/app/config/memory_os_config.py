@@ -1,5 +1,5 @@
 """
-Configuration file for Memory OS services for testing and deployment.
+Configuration file for Cognitive OS services for testing and deployment.
 """
 
 import os

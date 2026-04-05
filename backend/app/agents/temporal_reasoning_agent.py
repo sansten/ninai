@@ -362,7 +362,7 @@ class TemporalReasoningAgent(BaseAgent):
         else:
             rel_json = related_memories[:5]
             prompt = (
-                "You are a temporal reasoning engine for an enterprise memory OS. "
+                "You are a temporal reasoning engine for an enterprise Cognitive OS. "
                 "Output JSON only. Do not hallucinate.\n\n"
                 "Classify the temporal context of this memory.\n\n"
                 f"CREATED_AT: {created_at.isoformat()}\n"

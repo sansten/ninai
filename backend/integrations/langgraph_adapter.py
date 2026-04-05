@@ -1,7 +1,7 @@
 """
 LangGraph Checkpoint Store Adapter
 
-Integrates Ninai Memory OS with LangGraph's checkpoint/state persistence system.
+Integrates Ninai Cognitive OS with LangGraph's checkpoint/state persistence system.
 Supports agent state snapshots, graph execution history, and resumable workflows.
 """
 
@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 class NinaiLangGraphCheckpointSaver(BaseCheckpointSaver if LANGGRAPH_AVAILABLE else object):
     """
-    LangGraph checkpoint saver using Ninai Memory OS backend.
+    LangGraph checkpoint saver using Ninai Cognitive OS backend.
     
     Features:
     - Persistent graph state storage

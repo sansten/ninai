@@ -179,7 +179,7 @@ class CounterfactualMemoryAgent(BaseAgent):
             )
         else:
             prompt = (
-                "You are a counterfactual simulation engine for an enterprise memory OS. "
+                "You are a counterfactual simulation engine for an enterprise Cognitive OS. "
                 "Output JSON only.\n\n"
                 f"MEMORY_ID: {memory_id}\n"
                 f"INTERVENTION: {intervention}\n"

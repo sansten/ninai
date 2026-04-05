@@ -223,7 +223,7 @@ class SiloPropagationAgent(BaseAgent):
             )
         else:
             prompt = (
-                "You are a cross-silo signal propagation engine for an enterprise memory OS. "
+                "You are a cross-silo signal propagation engine for an enterprise Cognitive OS. "
                 "Output JSON only. Do not hallucinate.\n\n"
                 "Given a context_bundle of cross-silo signals, score each for propagation relevance "
                 "and emit only those above the threshold as propagation_signals.\n\n"

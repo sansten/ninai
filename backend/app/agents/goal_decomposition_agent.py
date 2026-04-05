@@ -339,7 +339,7 @@ class GoalDecompositionAgent(BaseAgent):
             )
         else:
             prompt = (
-                "You are an enterprise goal decomposition engine for a memory OS. "
+                "You are an enterprise goal decomposition engine for a Cognitive OS. "
                 "Output JSON only. Do not hallucinate.\n\n"
                 "Analyze this memory and detect whether it contains a high-level goal. "
                 "If so, decompose it into ordered subtasks, estimate how complete the "
