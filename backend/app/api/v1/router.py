@@ -9,6 +9,7 @@ from fastapi import APIRouter
 
 from app.api.v1.endpoints import (
     auth,
+    actions,
     agent_runs,
     admin_settings,
     admin_knowledge,
@@ -263,6 +264,12 @@ api_router.include_router(
     audit.router,
     prefix="/audit",
     tags=["Audit"],
+)
+
+api_router.include_router(
+    actions.router,
+    prefix="/actions",
+    tags=["Actions"],
 )
 
 api_router.include_router(
