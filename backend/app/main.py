@@ -81,7 +81,7 @@ def create_application() -> FastAPI:
         FastAPI: Configured application instance
     """
     app = FastAPI(
-        title=settings.APP_NAME,
+        title="Ninai Cognitive OS API",
         description="Enterprise Agentic AI Cognitive Operating System",
         version="1.0.0",
         openapi_url=f"{settings.API_PREFIX}/openapi.json",
