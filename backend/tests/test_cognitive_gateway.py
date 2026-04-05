@@ -447,6 +447,44 @@ class TestGatewayRead:
         assert result.retrieval_confidence < 0.45
 
     @pytest.mark.asyncio
+    async def test_read_emits_compression_metrics(self):
+        gw = _full_gateway()
+        mems = [
+            {"id": "m1", "content": " ".join(["auth"] * 100), "credibility_score": 0.9},
+            {"id": "m2", "content": " ".join(["timeout"] * 100), "credibility_score": 0.8},
+        ]
+
+        result = await gw.read(
+            query="auth timeout",
+            memories=mems,
+            context_token_budget=80,
+        )
+
+        assert 0.0 < result.compression_ratio <= 1.0
+        assert result.information_density >= 0.0
+
+    @pytest.mark.asyncio
+    async def test_read_compression_keeps_entity_signal(self):
+        gw = _full_gateway()
+        mems = [
+            {
+                "id": "m-entity",
+                "content": "intro text. customer_id C42 triggered auth failure because token expired. "
+                + " ".join(["filler"] * 90),
+                "entities": {"customer_id": "C42"},
+                "credibility_score": 0.85,
+            }
+        ]
+
+        result = await gw.read(
+            query="auth failure",
+            memories=mems,
+            context_token_budget=40,
+        )
+
+        assert "C42" in result.memories[0]["content"]
+
+    @pytest.mark.asyncio
     async def test_context_updates_working_set_summary(self, monkeypatch):
         gw = _full_gateway()
         store: dict[tuple[str, str], gateway_module.GatewayContextSession] = {}

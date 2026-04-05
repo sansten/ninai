@@ -147,6 +147,8 @@ async def gateway_read(
         "retrieval_confidence": result.retrieval_confidence,
         "corrected_by": result.corrected_by,
         "reasoning_steps": result.reasoning_steps,
+        "compression_ratio": result.compression_ratio,
+        "information_density": result.information_density,
         "context_id": context_id,
         "working_set_summary": await _context_working_set_summary(context_id, tenant.org_id),
     }
