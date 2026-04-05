@@ -79,6 +79,7 @@ celery_app = Celery(
         "app.tasks.strategy_evolution",
         "app.tasks.retention_enforcement",
         "app.tasks.cognitive_heartbeat",
+        "app.tasks.proactive_push_beat",
         *_enterprise_includes,
     ],
 )
@@ -166,6 +167,9 @@ celery_app.conf.update(
         # Cognitive OS heartbeat
         "app.tasks.cognitive_heartbeat.cognitive_heartbeat_task": {"queue": "q.cognitive_loop"},
 
+        # Proactive intelligence push (Feature 24.10)
+        "app.tasks.proactive_push_beat.proactive_push_beat_task": {"queue": "q.cognitive_loop"},
+
         # Retention policy enforcement — Gap D
         "app.tasks.retention_enforcement.retention_enforcement_task": {"queue": "q.maintenance"},
 
@@ -232,6 +236,15 @@ celery_app.conf.update(
             "task": "app.tasks.cognitive_heartbeat.cognitive_heartbeat_task",
             "schedule": 300.0,  # every 5 minutes
             "args": (),
+        },
+        "proactive-intelligence-push": {
+            "task": "app.tasks.proactive_push_beat.proactive_push_beat_task",
+            "schedule": 900.0,  # every 15 minutes
+            "kwargs": {
+                "session_lookback_minutes": 180,
+                "event_lookback_minutes": 30,
+                "max_pushes_per_org": 25,
+            },
         },
         **_enterprise_beat,
     },
