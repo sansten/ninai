@@ -26,6 +26,7 @@ from app.api.v1.endpoints import (
     webhooks,
     exports,
     cognitive_loop,
+    cognitive_session_protocol,
     meta_agent,
     goals,
     self_model,
@@ -281,6 +282,11 @@ api_router.include_router(
 )
 
 api_router.include_router(
+    cognitive_session_protocol.router,
+    prefix="/cognitive",
+    tags=["Cognitive Session Protocol"],
+)
+api_router.include_router(
     meta_agent.router,
     prefix="/meta",
     tags=["Meta"],
@@ -521,3 +527,5 @@ api_router.include_router(
     openai_tool_schema.router,
     tags=["OpenAI Tool Schema"],
 )
+
+
