@@ -71,6 +71,7 @@ from app.agents.error_recovery_agent import ErrorRecoveryAgent
 from app.agents.semantic_role_inference_agent import SemanticRoleInferenceAgent
 from app.agents.cross_modal_reasoning_agent import CrossModalReasoningAgent
 from app.agents.memory_tier_manager_agent import MemoryTierManagerAgent
+from app.agents.debate_ensemble_agent import DebateEnsembleAgent
 
 
 AGENT_CLASSES: tuple[type[BaseAgent], ...] = (
@@ -137,6 +138,7 @@ AGENT_CLASSES: tuple[type[BaseAgent], ...] = (
     SemanticRoleInferenceAgent,
     CrossModalReasoningAgent,
     MemoryTierManagerAgent,
+    DebateEnsembleAgent,
 )
 
 
@@ -376,6 +378,9 @@ def get_agent(agent_name: str) -> Optional[BaseAgent]:
     if name in {"memory_tier_manager", "memorytiermanager", "memorytiermanageragent",
                 "memory_tiers", "working_set_manager"}:
         return MemoryTierManagerAgent()
+
+    if name in {"debate_ensemble", "debateensemble", "debateensembleagent", "debate"}:
+        return DebateEnsembleAgent()
 
     return None
 

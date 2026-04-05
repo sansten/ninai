@@ -209,6 +209,19 @@ class TestHeuristicDecide:
         assert "anomaly_detected" in result.enrichment
         assert result.enrichment["tone"] == "cautionary"
 
+    def test_high_stakes_decide_emits_debate_transcript(self):
+        result = _heuristic_decide(
+            "critical incident with cascading impact",
+            {"anomaly_detected": True, "anomaly_score": 0.95},
+        )
+        assert len(result.debate_transcript) >= 4
+        assert result.debate_transcript[-1]["speaker"] == "moderator"
+        assert "debate_ensemble" in result.agents_run
+
+    def test_low_stakes_decide_has_no_debate_transcript(self):
+        result = _heuristic_decide("routine status update", {})
+        assert result.debate_transcript == []
+
 
 # ===========================================================================
 # _heuristic_plan tests — uses real subtask extraction + template fallback
@@ -559,6 +572,16 @@ class TestGatewayDecide:
         )
         assert result.decision in ("escalate", "investigate")
         assert result.enrichment.get("anomaly_detected") is True
+
+    @pytest.mark.asyncio
+    async def test_high_stakes_gateway_decide_has_debate_transcript(self):
+        gw = _full_gateway()
+        result = await gw.decide(
+            content="critical outage requiring immediate response",
+            enrichment={"anomaly_detected": True, "anomaly_score": 0.9},
+        )
+        assert len(result.debate_transcript) >= 4
+        assert result.debate_transcript[-1]["speaker"] == "moderator"
 
 
 class TestGatewayPlan:

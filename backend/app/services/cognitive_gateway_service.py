@@ -38,6 +38,7 @@ from app.agents.goal_decomposition_agent import (
     detect_blocking_subtask,
     detect_goal,
 )
+from app.agents.debate_ensemble_agent import DebateEnsembleAgent
 from app.agents.memory_tier_manager_agent import MemoryTierManagerAgent
 from app.services.context_compression_service import ContextCompressionService
 from app.services.corrective_rag_service import CorrectiveRagService
@@ -109,6 +110,7 @@ class GatewayDecideResult:
     action_recommended: str | None
     enrichment: dict
     agents_run: list[str]
+    debate_transcript: list[dict] = field(default_factory=list)
 
 
 @dataclass
@@ -241,6 +243,31 @@ def _heuristic_decide(content: str, enrichment: dict) -> GatewayDecideResult:
         confidence = 0.55
         action = None
 
+    debate_transcript: list[dict] = []
+    if confidence >= 0.7:
+        debate = DebateEnsembleAgent().generate_transcript(
+            content=content,
+            decision=decision,
+            confidence=confidence,
+            enrichment=merged,
+        )
+        debate_transcript = list(debate.get("debate_transcript") or [])
+        moderator_decision = str(debate.get("moderator_decision") or decision)
+        if moderator_decision:
+            decision_rank = {
+                "acknowledge": 0,
+                "monitor": 1,
+                "investigate": 2,
+                "escalate": 3,
+            }
+            base_rank = decision_rank.get(decision, 1)
+            mod_rank = decision_rank.get(moderator_decision, base_rank)
+            # Moderator synthesis can strengthen or keep severity, but should
+            # not downgrade a stronger safety posture.
+            if mod_rank >= base_rank:
+                decision = moderator_decision
+        agents_run.append("debate_ensemble")
+
     return GatewayDecideResult(
         decision=decision,
         confidence=round(confidence, 4),
@@ -248,6 +275,7 @@ def _heuristic_decide(content: str, enrichment: dict) -> GatewayDecideResult:
         action_recommended=action,
         enrichment=merged,
         agents_run=agents_run,
+        debate_transcript=debate_transcript,
     )
 
 

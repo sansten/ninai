@@ -196,6 +196,7 @@ async def gateway_decide(
         "action_recommended": result.action_recommended,
         "enrichment": result.enrichment,
         "agents_run": result.agents_run,
+        "debate_transcript": result.debate_transcript,
         "context_id": context_id,
         "working_set_summary": await _context_working_set_summary(context_id, tenant.org_id),
     }
