@@ -1,0 +1,8 @@
+{
+  "npmName": "@ninai/sdk",
+  "npmVersion": "0.1.0",
+  "supportsES6": true,
+  "withSeparateModelsAndApi": true,
+  "modelPackage": "models",
+  "apiPackage": "api"
+}
