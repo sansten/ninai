@@ -80,6 +80,7 @@ from app.api.v1.endpoints import (
     cognitive_gateway_stream,
     cognitive_diff,
     cognitive_federated,
+    cognitive_simulate,
     feedback,
     plugins,
     provenance,
@@ -549,6 +550,12 @@ api_router.include_router(
     cognitive_federated.router,
     prefix="/cognitive/federated",
     tags=["Cognitive Federated Learning"],
+)
+
+api_router.include_router(
+    cognitive_simulate.router,
+    prefix="/cognitive",
+    tags=["Cognitive Simulation"],
 )
 
 api_router.include_router(
