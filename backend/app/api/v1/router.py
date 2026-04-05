@@ -78,6 +78,7 @@ from app.api.v1.endpoints import (
     connectors,
     cognitive_gateway,
     cognitive_gateway_stream,
+    provenance,
     explainability,
     benchmarks,
     a2a,
@@ -524,6 +525,12 @@ api_router.include_router(
     explainability.router,
     prefix="/explain",
     tags=["Explainability"],
+)
+
+api_router.include_router(
+    provenance.router,
+    prefix="/provenance",
+    tags=["Provenance"],
 )
 
 api_router.include_router(
