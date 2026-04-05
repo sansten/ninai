@@ -76,3 +76,8 @@ def test_plugin_registry_routes_registered():
     assert _has_path("/api/v1/plugins/{name}")
     assert _has_path("/api/v1/plugins/{name}/logs")
     assert _has_path("/api/v1/plugins/{name}/config")
+
+
+def test_cognitive_manifest_route_registered():
+    assert _has_path("/.well-known/cognitive-manifest.json")
+

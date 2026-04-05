@@ -16,6 +16,7 @@ from fastapi.responses import JSONResponse
 from starlette.responses import RedirectResponse
 from strawberry.fastapi import GraphQLRouter
 
+from app.api.well_known import router as well_known_router
 from app.api.v1.router import api_router
 from app.api.v1.metrics import router as metrics_router
 from app.core.config import settings
@@ -159,6 +160,9 @@ def create_application() -> FastAPI:
 
     # Metrics endpoint (Prometheus metrics)
     app.include_router(metrics_router, prefix="")
+
+    # Public machine-readable deployment metadata.
+    app.include_router(well_known_router, prefix="")
     
     # API v1 routes
     app.include_router(api_router, prefix=settings.API_PREFIX)
