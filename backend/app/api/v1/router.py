@@ -83,6 +83,7 @@ from app.api.v1.endpoints import (
     plugins,
     provenance,
     explainability,
+    scim,
     benchmarks,
     a2a,
     openai_tool_schema,
@@ -94,6 +95,12 @@ from app.api.v1 import features
 api_router = APIRouter()
 
 # Include all endpoint routers
+api_router.include_router(
+    scim.router,
+    prefix="/scim/v2",
+    tags=["SCIM"],
+)
+
 api_router.include_router(
     auth.router,
     prefix="/auth",
