@@ -45,4 +45,11 @@ def test_action_approval_routes_registered():
     assert _has_path("/api/v1/actions/history")
     assert _has_path("/api/v1/actions/{action_id}")
     assert _has_path("/api/v1/actions/{action_id}/approve")
+
+
+def test_provenance_routes_registered():
+    assert _has_path("/api/v1/provenance/{memory_id}/lineage")
+    assert _has_path("/api/v1/provenance/{memory_id}/citations")
+    assert _has_path("/api/v1/provenance/search")
+    assert _has_path("/api/v1/provenance/assert")
     assert _has_path("/api/v1/actions/{action_id}/reject")
