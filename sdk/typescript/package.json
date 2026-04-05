@@ -1,7 +1,7 @@
 {
   "name": "@ninai/sdk",
   "version": "0.1.0",
-  "description": "Official TypeScript SDK for Ninai Cognitive OS",
+  "description": "JavaScript SDK for Ninai Cognitive OS",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
