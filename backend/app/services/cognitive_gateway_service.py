@@ -40,6 +40,7 @@ from app.agents.goal_decomposition_agent import (
 )
 from app.agents.debate_ensemble_agent import DebateEnsembleAgent
 from app.agents.memory_tier_manager_agent import MemoryTierManagerAgent
+from app.services.cognitive_fingerprint_service import CognitiveFingerprintService
 from app.services.context_compression_service import ContextCompressionService
 from app.services.corrective_rag_service import CorrectiveRagService
 from app.services.self_rag_service import SelfRagService
@@ -111,6 +112,7 @@ class GatewayDecideResult:
     enrichment: dict
     agents_run: list[str]
     debate_transcript: list[dict] = field(default_factory=list)
+    fingerprint_alerts: list[dict] = field(default_factory=list)
 
 
 @dataclass
@@ -480,6 +482,7 @@ class CognitiveGatewayService:
     ) -> None:
         self._caps = capabilities or CognitiveGatewayCapabilities.full()
         self._tier_manager = MemoryTierManagerAgent()
+        self._fingerprint = CognitiveFingerprintService()
 
     def _check(self, verb: str) -> None:
         if not self._caps.is_enabled(verb):
@@ -644,6 +647,22 @@ class CognitiveGatewayService:
                 _enrichment = merged
 
         result = _heuristic_decide(content, _enrichment)
+
+        # Fingerprint the anomaly detection agent's output distribution.
+        fp_result = self._fingerprint.detect_anomaly("anomaly_detection", result.enrichment)
+        self._fingerprint.update_fingerprint("anomaly_detection", result.enrichment)
+        result.fingerprint_alerts = [
+            {
+                "agent": a.agent_name,
+                "field": a.field,
+                "current_value": a.current_value,
+                "expected_mean": a.expected_mean,
+                "z_score": a.z_score,
+            }
+            for a in fp_result.alerts
+        ]
+        if fp_result.anomalous and "cognitive_fingerprint" not in result.agents_run:
+            result.agents_run.append("cognitive_fingerprint")
 
         if context_id and org_id:
             ctx = await load_gateway_context(context_id, org_id) or GatewayContextSession(
