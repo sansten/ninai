@@ -76,6 +76,7 @@ from app.api.v1.endpoints import (
     cognitive_gateway,
     cognitive_gateway_stream,
     benchmarks,
+    a2a,
 )
 from app.api.v1.admin import routes as admin_routes
 from app.api.v1.endpoints import event_publishing_batch
@@ -500,4 +501,10 @@ api_router.include_router(
 api_router.include_router(
     benchmarks.router,
     tags=["Admin - Benchmarks"],
+)
+
+api_router.include_router(
+    a2a.router,
+    prefix="/a2a",
+    tags=["A2A Protocol"],
 )
