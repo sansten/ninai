@@ -52,4 +52,11 @@ def test_provenance_routes_registered():
     assert _has_path("/api/v1/provenance/{memory_id}/citations")
     assert _has_path("/api/v1/provenance/search")
     assert _has_path("/api/v1/provenance/assert")
+
+
+def test_cognitive_diff_routes_registered():
+    assert _has_path("/api/v1/cognitive/diff")
+    assert _has_path("/api/v1/cognitive/diff/memory/{memory_id}")
+    assert _has_path("/api/v1/cognitive/diff/goals")
+    assert _has_path("/api/v1/cognitive/diff/conflicts")
     assert _has_path("/api/v1/actions/{action_id}/reject")
