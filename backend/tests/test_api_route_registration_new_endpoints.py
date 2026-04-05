@@ -90,3 +90,10 @@ def test_cognitive_metrics_routes_registered():
     assert _has_path("/metrics/events")
 
 
+def test_scim_routes_registered():
+    assert _has_path("/api/v1/scim/v2/Users")
+    assert _has_path("/api/v1/scim/v2/Users/{user_id}")
+    assert _has_path("/api/v1/scim/v2/Groups")
+
+
+
