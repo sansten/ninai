@@ -80,6 +80,7 @@ from app.api.v1.endpoints import (
     cognitive_gateway_stream,
     cognitive_diff,
     feedback,
+    plugins,
     provenance,
     explainability,
     benchmarks,
@@ -308,6 +309,12 @@ api_router.include_router(
     feedback.router,
     prefix="/feedback",
     tags=["Feedback"],
+)
+
+api_router.include_router(
+    plugins.router,
+    prefix="/plugins",
+    tags=["Plugins"],
 )
 
 api_router.include_router(
