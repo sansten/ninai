@@ -14,6 +14,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.responses import RedirectResponse
+from strawberry.fastapi import GraphQLRouter
 
 from app.api.v1.router import api_router
 from app.api.v1.metrics import router as metrics_router
@@ -22,6 +23,8 @@ from app.core.database import engine, create_db_and_tables, get_db
 from app.core.bootstrap import bootstrap_service, create_default_bootstrap_checks
 from app.core.feature_gate import CommunityFeatureGate, set_feature_gate
 from app.core.enterprise_loader import try_register_enterprise
+from app.graphql.middleware import get_graphql_context
+from app.graphql.schema import schema as graphql_schema
 from app.middleware.audit_logger import AuditLoggerMiddleware
 from app.middleware.rate_limiter import init_rate_limiter
 from app.middleware.request_id import RequestIdMiddleware
@@ -155,6 +158,13 @@ def create_application() -> FastAPI:
     
     # API v1 routes
     app.include_router(api_router, prefix=settings.API_PREFIX)
+
+    # GraphQL API surface
+    graphql_router = GraphQLRouter(
+        graphql_schema,
+        context_getter=get_graphql_context,
+    )
+    app.include_router(graphql_router, prefix="/graphql", tags=["GraphQL"])
 
     # Optional: register Enterprise add-ons (routes/tasks/gates) if installed.
     try_register_enterprise(app)
