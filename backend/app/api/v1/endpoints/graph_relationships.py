@@ -12,6 +12,7 @@ Endpoints:
 import logging
 from typing import Optional, Dict, Any
 from uuid import UUID
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -30,6 +31,7 @@ from app.core.database import get_db
 from app.models.user import User
 from app.models.graph_relationship import GraphRelationship
 from app.services.graph_relationship_service import GraphRelationshipService
+from app.services.temporal_kg_service import TemporalKnowledgeGraphService
 
 logger = logging.getLogger(__name__)
 
@@ -131,6 +133,7 @@ async def list_relationships(
     relationship_type: Optional[str] = Query(None),
     auto_created_only: bool = Query(False),
     min_similarity: float = Query(0.0, ge=0.0, le=1.0),
+    as_of: Optional[str] = Query(None, description="Optional ISO datetime to query temporal graph state"),
     limit: int = Query(100, ge=1, le=1000),
     offset: int = Query(0, ge=0),
     current_user: User = Depends(get_current_user),
@@ -188,11 +191,23 @@ async def list_relationships(
     stmt = stmt.order_by(GraphRelationship.similarity_score.desc()).offset(offset).limit(limit)
     result = await db.execute(stmt)
     relationships = result.scalars().all()
+
+    if as_of:
+        try:
+            as_of_dt = datetime.fromisoformat(as_of.replace("Z", "+00:00"))
+            if as_of_dt.tzinfo is None:
+                as_of_dt = as_of_dt.replace(tzinfo=timezone.utc)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid as_of datetime format")
+        temporal_svc = TemporalKnowledgeGraphService(db)
+        relationships = temporal_svc.filter_edges_as_of(relationships, as_of_dt)
+        total = len(relationships)
     
     return {
         "total": total,
         "limit": limit,
         "offset": offset,
+        "as_of": as_of,
         "relationships": [r.to_dict() for r in relationships]
     }
 
