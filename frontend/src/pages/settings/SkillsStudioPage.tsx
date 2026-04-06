@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import { apiClient, getErrorMessage } from '@/lib/api';
+import { useCanApproveSkills, useCanEditSkills } from '@/stores/auth';
 
 interface AgentSkillDraft {
   enabled: boolean;
@@ -13,6 +14,17 @@ interface AgentSkillRow {
   is_core: boolean;
   skill: AgentSkillDraft;
   published_skill: AgentSkillDraft;
+  active_version: string;
+  submitted?: {
+    submitted_at?: string;
+    submitted_by_user_id?: string;
+    status?: string;
+  } | null;
+  versions: Array<{
+    version: string;
+    approved_at?: string;
+    source?: string;
+  }>;
 }
 
 interface CoreAgentRow {
@@ -24,16 +36,24 @@ interface SkillsStudioResponse {
   total_agents: number;
   core_agents: CoreAgentRow[];
   non_core_agents: AgentSkillRow[];
+  can_edit: boolean;
+  can_approve: boolean;
   last_published_at?: string | null;
   last_published_by_user_id?: string | null;
 }
 
 export function SkillsStudioPage() {
+  const canEditSkills = useCanEditSkills();
+  const canApproveSkills = useCanApproveSkills();
   const [data, setData] = useState<SkillsStudioResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isPublishing, setIsPublishing] = useState(false);
   const [savingAgent, setSavingAgent] = useState<string | null>(null);
+  const [submittingAgent, setSubmittingAgent] = useState<string | null>(null);
+  const [approvingAgent, setApprovingAgent] = useState<string | null>(null);
+  const [rollingBackAgent, setRollingBackAgent] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<Record<string, AgentSkillDraft>>({});
+  const [rollbackTargets, setRollbackTargets] = useState<Record<string, string>>({});
 
   async function load() {
     setIsLoading(true);
@@ -49,6 +69,12 @@ export function SkillsStudioPage() {
         };
       }
       setDrafts(nextDrafts);
+
+      const targets: Record<string, string> = {};
+      for (const row of res.data.non_core_agents) {
+        targets[row.agent_name] = 'v1';
+      }
+      setRollbackTargets(targets);
     } catch (error) {
       toast.error(getErrorMessage(error));
     } finally {
@@ -83,6 +109,7 @@ export function SkillsStudioPage() {
   }
 
   async function publishAll() {
+    if (!canApproveSkills) return;
     setIsPublishing(true);
     try {
       const res = await apiClient.post('/admin/skills-studio/publish');
@@ -92,6 +119,51 @@ export function SkillsStudioPage() {
       toast.error(getErrorMessage(error));
     } finally {
       setIsPublishing(false);
+    }
+  }
+
+  async function submitAgent(agentName: string) {
+    if (!canEditSkills) return;
+    setSubmittingAgent(agentName);
+    try {
+      await apiClient.post(`/admin/skills-studio/${agentName}/submit`);
+      toast.success(`Submitted ${agentName} for admin approval`);
+      await load();
+    } catch (error) {
+      toast.error(getErrorMessage(error));
+    } finally {
+      setSubmittingAgent(null);
+    }
+  }
+
+  async function approveAgent(agentName: string) {
+    if (!canApproveSkills) return;
+    setApprovingAgent(agentName);
+    try {
+      const res = await apiClient.post(`/admin/skills-studio/${agentName}/approve`);
+      toast.success(`Approved ${agentName} as ${res.data.version}`);
+      await load();
+    } catch (error) {
+      toast.error(getErrorMessage(error));
+    } finally {
+      setApprovingAgent(null);
+    }
+  }
+
+  async function rollbackAgent(agentName: string) {
+    if (!canApproveSkills) return;
+    const targetVersion = rollbackTargets[agentName] || 'v1';
+    setRollingBackAgent(agentName);
+    try {
+      await apiClient.post(`/admin/skills-studio/${agentName}/rollback`, {
+        target_version: targetVersion,
+      });
+      toast.success(`Rolled back ${agentName} using ${targetVersion}`);
+      await load();
+    } catch (error) {
+      toast.error(getErrorMessage(error));
+    } finally {
+      setRollingBackAgent(null);
     }
   }
 
@@ -123,7 +195,8 @@ export function SkillsStudioPage() {
         <button
           className="btn-primary"
           onClick={publishAll}
-          disabled={isPublishing}
+          disabled={isPublishing || !canApproveSkills}
+          title={canApproveSkills ? 'Publish all drafts as new versions' : 'Only admins can publish'}
         >
           {isPublishing ? 'Publishing…' : 'Publish Skills'}
         </button>
@@ -184,19 +257,71 @@ export function SkillsStudioPage() {
 
               <div className="rounded-lg bg-gray-50 border border-gray-200 p-3">
                 <p className="text-xs font-medium text-gray-700">Published Snapshot</p>
+                <p className="text-xs text-gray-500 mt-1">Active version: {row.active_version}</p>
                 <p className="text-xs text-gray-500 mt-1 whitespace-pre-wrap">
                   {row.published_skill.instructions || 'No published instructions yet.'}
                 </p>
+                {row.submitted && (
+                  <p className="text-xs text-amber-700 mt-2">
+                    Submission pending since {row.submitted.submitted_at ? new Date(row.submitted.submitted_at).toLocaleString() : 'now'}
+                  </p>
+                )}
+                <p className="text-xs text-gray-500 mt-2">
+                  Versions: {row.versions.map((v) => v.version).join(', ')}
+                </p>
               </div>
 
-              <div className="flex justify-end">
+              <div className="flex flex-wrap items-center justify-end gap-2">
                 <button
                   className="btn-secondary"
                   onClick={() => saveAgent(row.agent_name)}
-                  disabled={savingAgent === row.agent_name}
+                  disabled={savingAgent === row.agent_name || !canEditSkills}
                 >
                   {savingAgent === row.agent_name ? 'Saving…' : 'Save Draft'}
                 </button>
+
+                <button
+                  className="btn-secondary"
+                  onClick={() => submitAgent(row.agent_name)}
+                  disabled={submittingAgent === row.agent_name || !canEditSkills}
+                  title={canEditSkills ? 'Submit this draft to admin for approval' : 'Developer/admin role required'}
+                >
+                  {submittingAgent === row.agent_name ? 'Submitting…' : 'Submit for Approval'}
+                </button>
+
+                {canApproveSkills && (
+                  <>
+                    <button
+                      className="btn-primary"
+                      onClick={() => approveAgent(row.agent_name)}
+                      disabled={approvingAgent === row.agent_name || !row.submitted}
+                      title={row.submitted ? 'Approve submitted draft as next version' : 'No submitted draft'}
+                    >
+                      {approvingAgent === row.agent_name ? 'Approving…' : 'Approve'}
+                    </button>
+
+                    <select
+                      className="input w-28"
+                      value={rollbackTargets[row.agent_name] || 'v1'}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        setRollbackTargets((prev) => ({ ...prev, [row.agent_name]: value }));
+                      }}
+                    >
+                      {row.versions.map((v) => (
+                        <option key={v.version} value={v.version}>{v.version}</option>
+                      ))}
+                    </select>
+
+                    <button
+                      className="btn-danger"
+                      onClick={() => rollbackAgent(row.agent_name)}
+                      disabled={rollingBackAgent === row.agent_name}
+                    >
+                      {rollingBackAgent === row.agent_name ? 'Rolling back…' : 'Rollback'}
+                    </button>
+                  </>
+                )}
               </div>
             </div>
           );

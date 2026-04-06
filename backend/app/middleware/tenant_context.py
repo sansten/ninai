@@ -281,6 +281,16 @@ def require_org_admin():
     return require_roles("org_admin", "system_admin")
 
 
+def require_skills_studio_editor():
+    """Dependency that allows developer/admin to edit skill drafts."""
+    return require_roles("developer", "org_admin", "system_admin")
+
+
+def require_skills_studio_approver():
+    """Dependency that allows only admins to approve/publish/rollback skill versions."""
+    return require_roles("org_admin", "system_admin")
+
+
 def require_knowledge_reviewer():
     """Dependency that grants access to knowledge review queue.
 
