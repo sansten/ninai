@@ -50,6 +50,8 @@ function Sidebar({ mobile = false, onClose }: { mobile?: boolean; onClose?: () =
     ...(isReviewer ? [{ name: 'Review Queue', href: '/review', icon: ClipboardDocumentListIcon }] : []),
     { name: 'Teams', href: '/teams', icon: UserGroupIcon },
     ...(isAdmin ? [{ name: 'Users', href: '/users', icon: UsersIcon }] : []),
+    ...(isAdmin ? [{ name: 'Skills Studio', href: '/settings/skills-studio', icon: Cog6ToothIcon }] : []),
+    ...(isAdmin ? [{ name: 'Benchmarks', href: '/admin/benchmarks', icon: ChartBarIcon }] : []),
     ...(isAdmin ? [{ name: 'Audit Log', href: '/audit', icon: ClipboardDocumentListIcon }] : []),
     { name: 'Settings', href: '/settings', icon: Cog6ToothIcon },
   ];
