@@ -19,6 +19,7 @@ const TeamsPage = lazy(() => import('@/pages/teams/TeamsPage').then(m => ({ defa
 const UsersPage = lazy(() => import('@/pages/users/UsersPage').then(m => ({ default: m.UsersPage })));
 const AuditPage = lazy(() => import('@/pages/audit/AuditPage').then(m => ({ default: m.AuditPage })));
 const SettingsPage = lazy(() => import('@/pages/settings/SettingsPage').then(m => ({ default: m.SettingsPage })));
+const SkillsStudioPage = lazy(() => import('@/pages/settings/SkillsStudioPage').then(m => ({ default: m.SkillsStudioPage })));
 const KnowledgeReviewPage = lazy(() => import('@/pages/review/KnowledgeReviewPage').then(m => ({ default: m.KnowledgeReviewPage })));
 const MemoryInsightsPage = lazy(() => import('@/pages/insights/MemoryInsightsPage').then(m => ({ default: m.MemoryInsightsPage })));
 
@@ -125,6 +126,7 @@ export default function App() {
         <Route path="/review" element={<Suspense fallback={<LoadingFallback />}><KnowledgeReviewPage /></Suspense>} />
         <Route path="/insights" element={<Suspense fallback={<LoadingFallback />}><MemoryInsightsPage /></Suspense>} />
         <Route path="/settings" element={<Suspense fallback={<LoadingFallback />}><SettingsPage /></Suspense>} />
+        <Route path="/settings/skills-studio" element={<Suspense fallback={<LoadingFallback />}><SkillsStudioPage /></Suspense>} />
         
         {/* Admin routes - lazy loaded */}
         <Route path="/admin" element={<Navigate to="/admin/dashboard" replace />} />

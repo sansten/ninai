@@ -28,6 +28,15 @@ from app.schemas.admin_settings import (
 )
 from app.services.app_settings_service import get_effective_auth_config, update_auth_config_overrides
 from app.services.cognitive_autonomy_control_service import get_cognitive_autonomy_control_service
+from app.services.skills_studio_service import (
+    CORE_AGENT_NAMES,
+    build_agent_skill_rows,
+    list_agent_names,
+    load_skills_studio_state,
+    mark_published,
+    normalize_skill_payload,
+    save_skills_studio_state,
+)
 
 
 class FeedbackLearningResponse(BaseModel):
@@ -37,6 +46,44 @@ class FeedbackLearningResponse(BaseModel):
     calibration_delta: dict
     last_agent_version: Optional[str] = None
     updated_at: Optional[str] = None
+
+
+class AgentSkillDraft(BaseModel):
+    enabled: bool = False
+    instructions: str = ""
+    parameters: dict[str, Any] = {}
+
+
+class AgentSkillRow(BaseModel):
+    agent_name: str
+    is_core: bool = False
+    skill: AgentSkillDraft
+    published_skill: AgentSkillDraft
+
+
+class CoreAgentRow(BaseModel):
+    agent_name: str
+    is_core: bool = True
+
+
+class SkillsStudioResponse(BaseModel):
+    total_agents: int
+    core_agents: list[CoreAgentRow]
+    non_core_agents: list[AgentSkillRow]
+    last_published_at: Optional[str] = None
+    last_published_by_user_id: Optional[str] = None
+
+
+class UpdateSkillRequest(BaseModel):
+    enabled: Optional[bool] = None
+    instructions: Optional[str] = None
+    parameters: Optional[dict[str, Any]] = None
+
+
+class PublishSkillsResponse(BaseModel):
+    status: str
+    published_count: int
+    last_published_at: str
 
 
 router = APIRouter()
@@ -234,3 +281,93 @@ async def reset_feedback_learning_config(
         )
     )
     await db.commit()
+
+
+@router.get("/skills-studio", response_model=SkillsStudioResponse)
+async def get_skills_studio_settings(
+    tenant: TenantContext = Depends(require_org_admin()),
+    db: AsyncSession = Depends(get_db),
+):
+    await set_tenant_context(db, tenant.user_id, tenant.org_id, tenant.roles_string, tenant.clearance_level)
+    state = await load_skills_studio_state(db, tenant.org_id)
+    core_rows, non_core_rows = build_agent_skill_rows(state)
+
+    return SkillsStudioResponse(
+        total_agents=len(list_agent_names()),
+        core_agents=[CoreAgentRow(**row) for row in core_rows],
+        non_core_agents=[AgentSkillRow(**row) for row in non_core_rows],
+        last_published_at=state.get("last_published_at"),
+        last_published_by_user_id=state.get("last_published_by_user_id"),
+    )
+
+
+@router.put("/skills-studio/{agent_name}", response_model=AgentSkillRow)
+async def update_agent_skill(
+    agent_name: str,
+    body: UpdateSkillRequest,
+    tenant: TenantContext = Depends(require_org_admin()),
+    db: AsyncSession = Depends(get_db),
+):
+    all_agents = set(list_agent_names())
+    if agent_name not in all_agents:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Unknown agent")
+    if agent_name in CORE_AGENT_NAMES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Core agents are not editable in Skills Studio",
+        )
+
+    await set_tenant_context(db, tenant.user_id, tenant.org_id, tenant.roles_string, tenant.clearance_level)
+    state = await load_skills_studio_state(db, tenant.org_id)
+
+    draft = state.setdefault("draft", {})
+    existing = normalize_skill_payload(draft.get(agent_name))
+
+    patch = body.model_dump(exclude_unset=True)
+    if "enabled" in patch:
+        existing["enabled"] = bool(patch["enabled"])
+    if "instructions" in patch:
+        existing["instructions"] = str(patch["instructions"] or "")
+    if "parameters" in patch:
+        existing["parameters"] = patch["parameters"] if isinstance(patch["parameters"], dict) else {}
+
+    draft[agent_name] = existing
+    await save_skills_studio_state(
+        db,
+        org_id=tenant.org_id,
+        state=state,
+        updated_by_user_id=tenant.user_id,
+    )
+    await db.commit()
+
+    published = normalize_skill_payload(state.get("published", {}).get(agent_name))
+    return AgentSkillRow(
+        agent_name=agent_name,
+        is_core=False,
+        skill=AgentSkillDraft(**existing),
+        published_skill=AgentSkillDraft(**published),
+    )
+
+
+@router.post("/skills-studio/publish", response_model=PublishSkillsResponse)
+async def publish_skills_studio(
+    tenant: TenantContext = Depends(require_org_admin()),
+    db: AsyncSession = Depends(get_db),
+):
+    await set_tenant_context(db, tenant.user_id, tenant.org_id, tenant.roles_string, tenant.clearance_level)
+    state = await load_skills_studio_state(db, tenant.org_id)
+
+    state = mark_published(state, tenant.user_id)
+    await save_skills_studio_state(
+        db,
+        org_id=tenant.org_id,
+        state=state,
+        updated_by_user_id=tenant.user_id,
+    )
+    await db.commit()
+
+    return PublishSkillsResponse(
+        status="published",
+        published_count=len(state.get("published", {})),
+        last_published_at=state.get("last_published_at"),
+    )
