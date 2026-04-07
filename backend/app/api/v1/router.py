@@ -90,6 +90,7 @@ from app.api.v1.endpoints import (
     billing,
     onboarding,
     usage,
+    data_residency,
     benchmarks,
     a2a,
     openai_tool_schema,
@@ -616,6 +617,11 @@ api_router.include_router(
 api_router.include_router(
     usage.router,
     tags=["Usage"],
+)
+
+api_router.include_router(
+    data_residency.router,
+    tags=["Data Residency"],
 )
 
 api_router.include_router(
