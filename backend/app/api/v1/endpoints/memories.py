@@ -64,6 +64,7 @@ from app.schemas.feedback import (
 )
 from app.schemas.base import BaseSchema
 from app.services.memory_feedback_service import MemoryFeedbackService
+from app.services.usage_service import UsageService
 from app.tasks.memory_pipeline import enqueue_feedback_learning
 
 
@@ -141,6 +142,8 @@ async def create_memory(
             embedding=embedding,
             request_id=request_id,
         )
+        usage = UsageService(db, tenant.org_id)
+        await usage.increment(metric="memory_writes", value=1)
         await db.commit()
 
         # Emit webhook event (best-effort). In tests, avoid invoking webhook
