@@ -203,6 +203,16 @@ export function useCanViewAudit(): boolean {
   return roles.includes('org_admin') || roles.includes('security_admin') || roles.includes('system_admin');
 }
 
+export function useCanEditSkills(): boolean {
+  const roles = useAuthStore((state) => state.user?.roles ?? []);
+  return roles.includes('developer') || roles.includes('org_admin') || roles.includes('system_admin');
+}
+
+export function useCanApproveSkills(): boolean {
+  const roles = useAuthStore((state) => state.user?.roles ?? []);
+  return roles.includes('org_admin') || roles.includes('system_admin');
+}
+
 /**
  * Get current org or throw
  */
