@@ -60,7 +60,8 @@ class ConnectorTestResult:
 # ---------------------------------------------------------------------------
 
 _VALID_TYPES = frozenset({
-    "webhook", "pagerduty", "jira", "slack", "generic_rest"
+    "webhook", "pagerduty", "jira", "slack", "generic_rest",
+    "discord", "telegram",
 })
 _VALID_TEST_STATUSES = frozenset({"ok", "failed", "untested"})
 
