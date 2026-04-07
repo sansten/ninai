@@ -73,6 +73,7 @@ from app.agents.cross_modal_reasoning_agent import CrossModalReasoningAgent
 from app.agents.memory_tier_manager_agent import MemoryTierManagerAgent
 from app.agents.debate_ensemble_agent import DebateEnsembleAgent
 from app.agents.playbook_auto_synthesis_agent import PlaybookAutoSynthesisAgent
+from app.agents.error_remediation_agent import ErrorRemediationAgent
 
 
 AGENT_CLASSES: tuple[type[BaseAgent], ...] = (
@@ -141,6 +142,8 @@ AGENT_CLASSES: tuple[type[BaseAgent], ...] = (
     MemoryTierManagerAgent,
     DebateEnsembleAgent,
     PlaybookAutoSynthesisAgent,
+    PlaybookAutoSynthesisAgent,
+    ErrorRemediationAgent,
 )
 
 
@@ -387,6 +390,10 @@ def get_agent(agent_name: str) -> Optional[BaseAgent]:
     if name in {"playbook_auto_synthesis", "playbookautosynthesis",
                 "playbookautosynthesisagent", "playbook_synthesis"}:
         return PlaybookAutoSynthesisAgent()
+
+    if name in {"error_remediation", "errorremediation", "errorremediationagent",
+                "remediation"}:
+        return ErrorRemediationAgent()
 
     return None
 
