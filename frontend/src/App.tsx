@@ -30,6 +30,7 @@ const AdminRoles = lazy(() => import('@/pages/admin/Roles'));
 const AdminSettings = lazy(() => import('@/pages/admin/Settings'));
 const AdminAuditLogs = lazy(() => import('@/pages/admin/AuditLogs'));
 const AdminBenchmarks = lazy(() => import('@/pages/admin/BenchmarkDashboardPage'));
+const AdminUsage = lazy(() => import('@/pages/admin/UsageDashboard'));
 
 /**
  * Loading fallback component
@@ -136,6 +137,7 @@ export default function App() {
         <Route path="/admin/settings" element={<Suspense fallback={<LoadingFallback />}><AdminSettings /></Suspense>} />
         <Route path="/admin/audit-logs" element={<Suspense fallback={<LoadingFallback />}><AdminAuditLogs /></Suspense>} />
         <Route path="/admin/benchmarks" element={<Suspense fallback={<LoadingFallback />}><AdminBenchmarks /></Suspense>} />
+        <Route path="/admin/usage" element={<Suspense fallback={<LoadingFallback />}><AdminUsage /></Suspense>} />
       </Route>
 
       {/* Catch-all redirect */}
