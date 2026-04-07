@@ -91,6 +91,7 @@ from app.api.v1.endpoints import (
     a2a,
     openai_tool_schema,
 )
+from app.api.v1.endpoints import cognitive_schedules
 from app.api.v1.admin import routes as admin_routes
 from app.api.v1.endpoints import event_publishing_batch
 from app.api.v1 import features
@@ -598,5 +599,12 @@ api_router.include_router(
     openai_tool_schema.router,
     tags=["OpenAI Tool Schema"],
 )
+
+api_router.include_router(
+    cognitive_schedules.router,
+    prefix="/cognitive/schedules",
+    tags=["Cognitive Schedules"],
+)
+
 
 

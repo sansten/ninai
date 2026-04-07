@@ -115,6 +115,7 @@ from app.models.temporal_reasoning import (
 from app.models.meta_cognitive import CognitiveStrategy, EpistemicState, StrategySelected
 from app.models.contradiction import Contradiction, ContradictionSeverity
 from app.models.playbook import Playbook, PlaybookScopeType
+from app.models.cognitive_schedule import CognitiveSchedule
 from app.models.run_checkpoint import RunCheckpoint
 from app.models.eval_suite import EvalSuite
 from app.models.eval_run import EvalRun
