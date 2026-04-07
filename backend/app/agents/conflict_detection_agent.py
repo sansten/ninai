@@ -26,6 +26,7 @@ Outputs:
 
 from __future__ import annotations
 
+import re
 from datetime import datetime, timezone
 from typing import Any
 
@@ -291,6 +292,74 @@ def merge_and_rank_conflicts(
     return conflicts
 
 
+def _extract_causal_loop_pair(conflict: dict[str, Any]) -> tuple[str, str] | None:
+    """Extract the two entities involved in a causal loop when possible."""
+    descs = conflict.get("descriptions") or []
+    if not isinstance(descs, list):
+        descs = []
+
+    for desc in descs:
+        if not isinstance(desc, str):
+            continue
+        m = re.search(r"between\s+(.+?)\s+and\s+(.+?)(?:\s+with\b|\.|$)", desc, re.IGNORECASE)
+        if m:
+            a = m.group(1).strip()
+            b = m.group(2).strip()
+            if a and b and a != b:
+                return tuple(sorted((a, b)))
+
+        m = re.search(r"(.+?)\s*[↔]\s*(.+?)(?:\.|$)", desc)
+        if m:
+            a = m.group(1).strip().strip(":")
+            b = m.group(2).strip().strip(":")
+            if a and b and a != b:
+                return tuple(sorted((a, b)))
+
+    return None
+
+
+def _normalize_outputs(outputs: dict[str, Any]) -> dict[str, Any]:
+    """Normalize llm/heuristic outputs into a stable schema for downstream consumers."""
+    conflicts = outputs.get("conflicts")
+    if not isinstance(conflicts, list):
+        conflicts = []
+
+    deduped: list[dict[str, Any]] = []
+    seen_loop_keys: set[tuple[str, ...]] = set()
+
+    for conflict in conflicts:
+        if not isinstance(conflict, dict):
+            continue
+        if conflict.get("conflict_type") == "causal_loop":
+            pair = _extract_causal_loop_pair(conflict)
+            if pair is not None:
+                key = pair
+            else:
+                entity = str(conflict.get("entity", "")).strip().lower()
+                key = ("entity", entity)
+            if key in seen_loop_keys:
+                continue
+            seen_loop_keys.add(key)
+        deduped.append(conflict)
+
+    outputs["conflicts"] = deduped
+    outputs["conflict_count"] = len(deduped)
+    outputs["high_severity_conflicts"] = [
+        {
+            "entity": c.get("entity", ""),
+            "entity_type": c.get("entity_type", ""),
+            "conflict_type": c.get("conflict_type", ""),
+            "silos": c.get("silos", []),
+            "severity": c.get("severity", _SEVERITY_LOW),
+        }
+        for c in deduped
+        if c.get("severity") == _SEVERITY_HIGH
+    ]
+    outputs["resolution_hints"] = [build_resolution_hint(conflict=c) for c in deduped]
+
+    return outputs
+
+
 class ConflictDetectionAgent(BaseAgent):
     """Phase 13: Detect cross-silo state conflicts, data gaps, and causal loops.
 
@@ -458,6 +527,8 @@ class ConflictDetectionAgent(BaseAgent):
                     propagated_signals=propagated_signals,
                     causal_chains=causal_chains,
                 )
+
+        outputs = _normalize_outputs(outputs)
 
         finished_at = datetime.now(timezone.utc)
 
