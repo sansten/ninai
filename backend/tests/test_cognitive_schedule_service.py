@@ -15,6 +15,9 @@ import pytest
 def _make_count_session(count: int = 0) -> AsyncMock:
     """Return a mocked async session whose execute() yields a scalar_one() count."""
     session = AsyncMock()
+    # SQLAlchemy session.add is synchronous; using AsyncMock here causes
+    # un-awaited coroutine warnings when service code calls add(...).
+    session.add = MagicMock()
     count_result = MagicMock()
     count_result.scalar_one.return_value = count
     session.execute.return_value = count_result
@@ -24,6 +27,7 @@ def _make_count_session(count: int = 0) -> AsyncMock:
 def _make_get_session(obj=None) -> AsyncMock:
     """Return a mocked async session whose execute() yields a scalars().first() object."""
     session = AsyncMock()
+    session.add = MagicMock()
     scalars_mock = MagicMock()
     scalars_mock.first.return_value = obj
     result_mock = MagicMock()

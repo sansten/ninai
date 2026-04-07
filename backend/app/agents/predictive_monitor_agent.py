@@ -294,6 +294,49 @@ class PredictiveMonitorAgent(BaseAgent):
         except (TypeError, ValueError):
             return _DEFAULT_THRESHOLD
 
+    def _normalize_outputs(self, outputs: dict[str, Any]) -> dict[str, Any]:
+        """Normalize model outputs to the contract expected by downstream code/tests."""
+        if not isinstance(outputs, dict):
+            return outputs
+
+        state_alerts = outputs.get("state_alerts")
+        if not isinstance(state_alerts, list):
+            state_alerts = []
+            outputs["state_alerts"] = state_alerts
+
+        risk_summary = outputs.get("risk_summary")
+        if not isinstance(risk_summary, dict):
+            risk_summary = {}
+            outputs["risk_summary"] = risk_summary
+
+        patterns = risk_summary.get("patterns_detected")
+        if isinstance(patterns, list):
+            normalized_patterns = patterns
+        elif isinstance(patterns, str):
+            normalized_patterns = [patterns]
+        else:
+            normalized_patterns = sorted(
+                {
+                    str(a.get("pattern"))
+                    for a in state_alerts
+                    if isinstance(a, dict) and a.get("pattern")
+                }
+            )
+        risk_summary["patterns_detected"] = normalized_patterns
+
+        if "total_alerts" not in risk_summary:
+            risk_summary["total_alerts"] = len(state_alerts)
+        if "high_risk_alerts" not in risk_summary:
+            risk_summary["high_risk_alerts"] = sum(
+                1
+                for a in state_alerts
+                if isinstance(a, dict) and float(a.get("risk_score", 0.0)) >= _HIGH_RISK_THRESHOLD
+            )
+        if "monitored_nodes" not in risk_summary:
+            risk_summary["monitored_nodes"] = 0
+
+        return outputs
+
     def _heuristic(
         self,
         *,
@@ -396,6 +439,21 @@ class PredictiveMonitorAgent(BaseAgent):
                     state_changes=state_changes,
                     threshold=threshold,
                 )
+
+            # Guard against low-information llm responses: if llm returns no
+            # alerts but heuristic detection finds concrete risk patterns,
+            # prefer heuristic outputs for stable behavior.
+            if outputs is resp and isinstance(outputs.get("state_alerts"), list):
+                heuristic_outputs = self._heuristic(
+                    world_nodes=world_nodes,
+                    entity_edges=entity_edges,
+                    state_changes=state_changes,
+                    threshold=threshold,
+                )
+                if not outputs.get("state_alerts") and heuristic_outputs.get("state_alerts"):
+                    outputs = heuristic_outputs
+
+        outputs = self._normalize_outputs(outputs)
 
         finished_at = datetime.now(timezone.utc)
 
