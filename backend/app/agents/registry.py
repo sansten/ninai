@@ -72,6 +72,7 @@ from app.agents.semantic_role_inference_agent import SemanticRoleInferenceAgent
 from app.agents.cross_modal_reasoning_agent import CrossModalReasoningAgent
 from app.agents.memory_tier_manager_agent import MemoryTierManagerAgent
 from app.agents.debate_ensemble_agent import DebateEnsembleAgent
+from app.agents.playbook_auto_synthesis_agent import PlaybookAutoSynthesisAgent
 
 
 AGENT_CLASSES: tuple[type[BaseAgent], ...] = (
@@ -139,6 +140,7 @@ AGENT_CLASSES: tuple[type[BaseAgent], ...] = (
     CrossModalReasoningAgent,
     MemoryTierManagerAgent,
     DebateEnsembleAgent,
+    PlaybookAutoSynthesisAgent,
 )
 
 
@@ -381,6 +383,10 @@ def get_agent(agent_name: str) -> Optional[BaseAgent]:
 
     if name in {"debate_ensemble", "debateensemble", "debateensembleagent", "debate"}:
         return DebateEnsembleAgent()
+
+    if name in {"playbook_auto_synthesis", "playbookautosynthesis",
+                "playbookautosynthesisagent", "playbook_synthesis"}:
+        return PlaybookAutoSynthesisAgent()
 
     return None
 
