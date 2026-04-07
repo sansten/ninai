@@ -333,6 +333,98 @@ Use:
 ---
 
 ## Frequently Asked Questions
+## CognitiveOS: Autonomous Intelligence Platform
+
+Ninai operates as a **CognitiveOS** — an autonomous cognitive layer that continuously monitors organizational context, plans ahead, and executes bounded actions on behalf of users. This section documents what is implemented, what the system commits to, and where human oversight is always maintained.
+
+### What is Implemented (H1 — Phase Status)
+
+| Capability | Status | Evidence |
+|------------|--------|----------|
+| Autonomous cognitive heartbeat (spawn sessions without user prompt) | ✅ Implemented | `cognitive_heartbeat_task`, `test_gate_a1_a4_autonomous_trigger.py` |
+| Per-org system cognition state (focus, load, next action) | ✅ Implemented | `SystemCognitionState`, `GET /api/v1/cognitive/gateway/state`, `test_gate_a2_cognition_state.py` |
+| Context chaining across cognitive verbs (read/decide/plan/write) | ✅ Implemented | `GatewayContextSession`, `test_cognitive_context_aggregator.py` |
+| Closed-loop output to action path (tracked action records) | ✅ Implemented | `AutonomousActionAgent`, `CognitiveSession.is_autonomous`, `test_gate_a1_a4_autonomous_trigger.py` |
+| Policy guardrails on autonomous actions | ✅ Implemented | Audit events `policy.autonomous_action.*`, `test_autonomous_action_agent.py` |
+| Human-in-the-loop review queue | ✅ Implemented | `/api/v1/review/queue`, `test_human_review_queue_agent.py` |
+| Kill switch (per-org and global) | ✅ Implemented | `PUT /api/v1/admin/cognitive-autonomy`, `test_cognitive_autonomy_control.py` |
+| Heartbeat freshness and queue lag SLOs | ✅ Implemented | `test_heartbeat_freshness_slo.py`, `test_session_autonomy_slo.py` |
+| Context loss safe fallback | ✅ Implemented | `load_gateway_context` → None on Redis unavail, `test_gate_c4_context_resilience.py` |
+| Streaming SSE contract stability | ✅ Implemented | `test_gate_f1_f3_sse_contract.py` |
+| External framework adapters (ADK, LangChain) | ✅ Implemented | `test_framework_integrations_new.py` |
+| Multi-tenant isolation at cognitive layer | ✅ Implemented | RLS + org-scoped heartbeat, `test_cognitive_autonomy_control.py` |
+
+**Not yet available** (on roadmap, not committed):
+- Formal decision quality benchmarks (E1/E2)
+- Explanation fidelity audit suite (E3)
+- Uncertainty hypothesis closure (E4)
+- SCIM / advanced SSO (Enterprise identity)
+
+---
+
+### What Ninai as a CognitiveOS Does and Does Not Do (H2 — Bounded Claims)
+
+**Ninai autonomously:**
+- Monitors your organization's cognitive state via a scheduled heartbeat (every ~5 minutes)
+- Spawns cognitive sessions to make decisions, plans, and write memory when autonomy is enabled
+- Routes high-risk or ambiguous actions to a human review queue before proceeding
+- Evaluates each action through a configurable policy before executing
+
+**Ninai does NOT:**
+- Execute actions outside your configured tool scope and capability tokens
+- Retain or use data from other organizations (strict RLS isolation)
+- Bypass human review for actions classified as `human_review_required`
+- Continue autonomous operation if the global or org-level kill switch is disabled
+- Guarantee specific decision quality on all tasks — this is a probabilistic system; quality depends on your LLM configuration and data quality
+
+**Capability boundaries:**
+- All autonomous actions are bounded by the capabilities you grant via `POST /api/v1/admin/capability-tokens`
+- Actions that would normally require `syscall` scope are blocked unless explicitly granted
+- There is no self-modification of policy or capability grants — configuration changes require human admin action
+
+---
+
+### Autonomy Transparency and Trust (H3 — How It Works for Customers)
+
+**Where humans are always in the loop:**
+1. **Policy decisions marked `human_review_required`** — placed in queue at `/api/v1/review/queue`, not executed until a human claims and approves.
+2. **First-time capability grant** — no autonomous action can use a capability that has not been explicitly granted by an org admin.
+3. **Emergency halt** — any org admin can disable autonomous mode; a global kill switch is available to platform admins.
+4. **Audit trail** — every autonomous action emits a `policy.autonomous_action.*` audit event linkable back to the triggering heartbeat session.
+
+**How tenant safety is enforced:**
+- Every cognitive session, heartbeat run, and context write is scoped to a single `organization_id`
+- PostgreSQL row-level security (RLS) prevents cross-org reads/writes at the database layer
+- SSE streams filter events by `organization_id` before emitting — defense in depth above RLS
+- Capability tokens are org-scoped; a token from one org cannot authorize actions in another
+
+**How to audit autonomous activity:**
+```bash
+# All autonomous decisions in the last hour
+GET /api/v1/audit?event_type=policy.autonomous_action.approved&limit=50
+
+# Sessions spawned by heartbeat (not by user)
+GET /api/v1/cognitive/sessions?is_autonomous=true&limit=20
+
+# Current cognition state
+GET /api/v1/cognitive/gateway/state
+```
+
+**How to limit or disable autonomy:**
+```bash
+# Disable for your org
+PUT /api/v1/admin/cognitive-autonomy
+{"enabled": false}
+
+# Set a lower heartbeat spawn rate (reduce autonomous activity)
+PUT /api/v1/admin/cognitive-autonomy
+{"enabled": true, "max_sessions_per_heartbeat": 1}
+```
+
+---
+
+## Frequently Asked Questions
+
 
 **Q: Can I use Community edition in production?**
 A: Yes! Community is MIT-licensed and suitable for production. Choose Enterprise if you need advanced ops/observability.
