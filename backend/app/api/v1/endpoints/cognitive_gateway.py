@@ -21,8 +21,9 @@ from typing import Any
 from fastapi import APIRouter, Body, Depends, HTTPException, Path, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.database import get_db
+from app.core.database import get_db, set_tenant_context
 from app.middleware.tenant_context import TenantContext, require_org_admin
+from app.services.usage_service import UsageService
 from app.services.cognitive_gateway_service import (
     CognitiveGatewayCapabilities,
     CognitiveGatewayService,
@@ -162,6 +163,7 @@ async def gateway_read(
 async def gateway_decide(
     payload: dict[str, Any] = Body(...),
     tenant: TenantContext = Depends(require_org_admin()),
+    db: AsyncSession = Depends(get_db),
     gateway: CognitiveGatewayService = Depends(_get_gateway),
 ) -> dict[str, Any]:
     """Run the enrichment pipeline and return a decision with confidence.
@@ -178,6 +180,7 @@ async def gateway_decide(
             detail="content is required",
         )
     context_id = payload.get("context_id") or None
+    await set_tenant_context(db, tenant.user_id, tenant.org_id, tenant.roles_string, tenant.clearance_level)
 
     try:
         result = await gateway.decide(
@@ -188,6 +191,10 @@ async def gateway_decide(
         )
     except PermissionError as exc:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
+
+    usage = UsageService(db, tenant.org_id)
+    await usage.increment(metric="cognitive_gateway_calls", value=1)
+    await db.commit()
 
     return {
         "decision": result.decision,
@@ -211,6 +218,7 @@ async def gateway_decide(
 async def gateway_plan(
     payload: dict[str, Any] = Body(...),
     tenant: TenantContext = Depends(require_org_admin()),
+    db: AsyncSession = Depends(get_db),
     gateway: CognitiveGatewayService = Depends(_get_gateway),
 ) -> dict[str, Any]:
     """Decompose a goal into ordered, actionable steps.
@@ -227,6 +235,7 @@ async def gateway_plan(
             detail="goal is required",
         )
     context_id = payload.get("context_id") or None
+    await set_tenant_context(db, tenant.user_id, tenant.org_id, tenant.roles_string, tenant.clearance_level)
 
     try:
         result = await gateway.plan(
@@ -237,6 +246,10 @@ async def gateway_plan(
         )
     except PermissionError as exc:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
+
+    usage = UsageService(db, tenant.org_id)
+    await usage.increment(metric="cognitive_gateway_calls", value=1)
+    await db.commit()
 
     return {
         "goal": result.goal,
