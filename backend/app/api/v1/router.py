@@ -91,6 +91,7 @@ from app.api.v1.endpoints import (
     onboarding,
     usage,
     data_residency,
+    feature_flags,
     benchmarks,
     a2a,
     openai_tool_schema,
@@ -622,6 +623,11 @@ api_router.include_router(
 api_router.include_router(
     data_residency.router,
     tags=["Data Residency"],
+)
+
+api_router.include_router(
+    feature_flags.router,
+    tags=["Feature Flags"],
 )
 
 api_router.include_router(
