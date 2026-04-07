@@ -187,6 +187,14 @@ _PARSERS = {
     "slack":       _parse_slack,
 }
 
+# Register chat parsers from Phase 82 (import deferred to avoid circular)
+def _register_chat_parsers() -> None:
+    from app.services.chat_ingest_normalizer import normalize_discord, normalize_telegram
+    _PARSERS.setdefault("discord", normalize_discord)
+    _PARSERS.setdefault("telegram", normalize_telegram)
+
+_register_chat_parsers()
+
 
 def validate_inbound_payload_contract(connector_type: str, payload: dict[str, Any]) -> None:
     """Validate minimal inbound payload contracts for known connector types.
