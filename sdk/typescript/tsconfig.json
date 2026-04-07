@@ -4,6 +4,7 @@
     "module": "ES2022",
     "moduleResolution": "Bundler",
     "declaration": true,
+    "resolveJsonModule": true,
     "outDir": "dist",
     "strict": true,
     "skipLibCheck": true,
