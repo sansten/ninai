@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ninai"
-version = "0.1.0"
+version = "1.0.0"
 description = "Python SDK for Ninai Cognitive OS"
 readme = "README.md"
 license = {text = "MIT"}
@@ -41,13 +41,14 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/your-org/ninai"
-Documentation = "https://docs.ninai.dev"
-Repository = "https://github.com/your-org/ninai"
-Changelog = "https://github.com/your-org/ninai/blob/main/CHANGELOG.md"
+Homepage = "https://sansten.com/ninai"
+Documentation = "https://sansten.com/ninai/docs"
+Repository = "https://github.com/sansten/ninai"
+Changelog = "https://github.com/sansten/ninai/blob/main/sdk/python/CHANGELOG.md"
 
 [tool.setuptools.packages.find]
 where = ["."]
+include = ["ninai*"]
 
 [tool.black]
 line-length = 100
