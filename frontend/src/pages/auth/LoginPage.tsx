@@ -206,11 +206,11 @@ export function LoginPage() {
         )}
       </button>
 
-      {/* Demo credentials hint */}
+      {/* Local seeded credentials hint */}
       <div className="mt-4 p-4 bg-gray-50 rounded-lg text-sm text-gray-600">
-        <p className="font-medium">Demo Credentials</p>
-        <p>Email: demo@ninai.dev</p>
-        <p>Password: demo1234</p>
+        <p className="font-medium">Local Seeded Credentials</p>
+        <p>Email: admin@ninai.dev</p>
+        <p>Password: admin123</p>
       </div>
     </form>
   );

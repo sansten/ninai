@@ -41,6 +41,7 @@ function Sidebar({ mobile = false, onClose }: { mobile?: boolean; onClose?: () =
 
   const roles = user?.roles ?? [];
   const isAdmin = roles.includes('org_admin') || roles.includes('system_admin');
+  const canEditSkills = roles.includes('developer') || isAdmin;
   const isReviewer = roles.includes('knowledge_reviewer') || isAdmin;
 
   const navigation: NavItem[] = [
@@ -50,6 +51,8 @@ function Sidebar({ mobile = false, onClose }: { mobile?: boolean; onClose?: () =
     ...(isReviewer ? [{ name: 'Review Queue', href: '/review', icon: ClipboardDocumentListIcon }] : []),
     { name: 'Teams', href: '/teams', icon: UserGroupIcon },
     ...(isAdmin ? [{ name: 'Users', href: '/users', icon: UsersIcon }] : []),
+    ...(canEditSkills ? [{ name: 'Skills Studio', href: '/settings/skills-studio', icon: Cog6ToothIcon }] : []),
+    ...(isAdmin ? [{ name: 'Benchmarks', href: '/admin/benchmarks', icon: ChartBarIcon }] : []),
     ...(isAdmin ? [{ name: 'Audit Log', href: '/audit', icon: ClipboardDocumentListIcon }] : []),
     { name: 'Settings', href: '/settings', icon: Cog6ToothIcon },
   ];
