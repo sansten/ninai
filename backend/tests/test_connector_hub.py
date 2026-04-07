@@ -733,3 +733,158 @@ class TestCognitiveLoopTrigger:
         event = parse_inbound_event("slack", payload)
         # Slack messages have no severity → should not trigger cognitive review
         assert event.severity not in _HIGH_SEVERITY_VALUES
+
+
+class TestChatConnectorTypes:
+    """Discord and Telegram as valid connector types (Phase 82)."""
+
+    def test_discord_in_valid_types(self):
+        from app.services.connector_registry_service import _VALID_TYPES
+        assert "discord" in _VALID_TYPES
+
+    def test_telegram_in_valid_types(self):
+        from app.services.connector_registry_service import _VALID_TYPES
+        assert "telegram" in _VALID_TYPES
+
+    def test_register_discord_connector(self):
+        from app.services.connector_registry_service import (
+            ConnectorRegistryService, ConnectorSpec,
+        )
+        svc = ConnectorRegistryService()
+        spec = ConnectorSpec(
+            id="dc-1",
+            organization_id="org-1",
+            name="Discord bot",
+            connector_type="discord",
+            target_url="https://discord.com/api/webhooks/123/abc",
+            credential_ref=None,
+            headers_template={},
+            event_types=["message"],
+        )
+        result = svc.register(spec)
+        assert result.connector_type == "discord"
+
+    def test_register_telegram_connector(self):
+        from app.services.connector_registry_service import (
+            ConnectorRegistryService, ConnectorSpec,
+        )
+        svc = ConnectorRegistryService()
+        spec = ConnectorSpec(
+            id="tg-1",
+            organization_id="org-1",
+            name="Telegram bot",
+            connector_type="telegram",
+            target_url="https://api.telegram.org/bot<TOKEN>/sendMessage",
+            credential_ref=None,
+            headers_template={},
+            event_types=["message"],
+        )
+        result = svc.register(spec)
+        assert result.connector_type == "telegram"
+
+    def test_discord_connector_roundtrip(self):
+        from app.services.connector_registry_service import (
+            ConnectorRegistryService, ConnectorSpec,
+        )
+        svc = ConnectorRegistryService()
+        spec = ConnectorSpec(
+            id="dc-rt",
+            organization_id="org-rt",
+            name="Discord rt",
+            connector_type="discord",
+            target_url="https://discord.com/api/webhooks/999/xyz",
+            credential_ref=None,
+            headers_template={},
+            event_types=["message"],
+        )
+        svc.register(spec)
+        found = svc.get_by_id(org_id="org-rt", connector_id="dc-rt")
+        assert found is not None
+        assert found.connector_type == "discord"
+
+    def test_telegram_connector_roundtrip(self):
+        from app.services.connector_registry_service import (
+            ConnectorRegistryService, ConnectorSpec,
+        )
+        svc = ConnectorRegistryService()
+        spec = ConnectorSpec(
+            id="tg-rt",
+            organization_id="org-rt",
+            name="Telegram rt",
+            connector_type="telegram",
+            target_url="https://api.telegram.org/bot<TOKEN>/sendMessage",
+            credential_ref=None,
+            headers_template={},
+            event_types=["message"],
+        )
+        svc.register(spec)
+        found = svc.get_by_id(org_id="org-rt", connector_id="tg-rt")
+        assert found is not None
+        assert found.connector_type == "telegram"
+
+    def test_parse_discord_via_inbound_service(self):
+        from app.services.inbound_event_service import parse_inbound_event
+        payload = {
+            "id": "111",
+            "content": "Critical outage in prod",
+            "author": {"username": "sre_bot", "id": "1"},
+            "channel": {"name": "incidents"},
+        }
+        event = parse_inbound_event("discord", payload)
+        assert event.connector_type == "discord"
+        assert event.severity == "critical"
+
+    def test_parse_telegram_via_inbound_service(self):
+        from app.services.inbound_event_service import parse_inbound_event
+        payload = {
+            "update_id": 1,
+            "message": {
+                "message_id": 1,
+                "from": {"username": "alert_bot", "id": 1},
+                "chat": {"id": -1, "title": "Alerts"},
+                "text": "P2 error on payment service",
+            },
+        }
+        event = parse_inbound_event("telegram", payload)
+        assert event.connector_type == "telegram"
+        assert event.severity in {"high", "critical"}
+
+    def test_discord_get_for_action(self):
+        from app.services.connector_registry_service import (
+            ConnectorRegistryService, ConnectorSpec,
+        )
+        svc = ConnectorRegistryService()
+        spec = ConnectorSpec(
+            id="dc-act",
+            organization_id="org-act",
+            name="Discord action",
+            connector_type="discord",
+            target_url="https://discord.com/api/webhooks/act/token",
+            credential_ref=None,
+            headers_template={},
+            event_types=["message"],
+        )
+        svc.register(spec)
+        found = svc.get_for_action(org_id="org-act", connector_type="discord")
+        assert found is not None
+        assert found.id == "dc-act"
+
+    def test_telegram_get_for_action(self):
+        from app.services.connector_registry_service import (
+            ConnectorRegistryService, ConnectorSpec,
+        )
+        svc = ConnectorRegistryService()
+        spec = ConnectorSpec(
+            id="tg-act",
+            organization_id="org-act2",
+            name="Telegram action",
+            connector_type="telegram",
+            target_url="https://api.telegram.org/bot<TOKEN>/sendMessage",
+            credential_ref=None,
+            headers_template={},
+            event_types=["message"],
+        )
+        svc.register(spec)
+        found = svc.get_for_action(org_id="org-act2", connector_type="telegram")
+        assert found is not None
+        assert found.id == "tg-act"
