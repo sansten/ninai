@@ -87,6 +87,7 @@ from app.api.v1.endpoints import (
     provenance,
     explainability,
     scim,
+    billing,
     benchmarks,
     a2a,
     openai_tool_schema,
@@ -598,6 +599,11 @@ api_router.include_router(
 api_router.include_router(
     openai_tool_schema.router,
     tags=["OpenAI Tool Schema"],
+)
+
+api_router.include_router(
+    billing.router,
+    tags=["Billing"],
 )
 
 api_router.include_router(
