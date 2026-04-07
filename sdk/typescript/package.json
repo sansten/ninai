@@ -1,7 +1,19 @@
 {
   "name": "@ninai/sdk",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "JavaScript SDK for Ninai Cognitive OS",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sansten/ninai.git",
+    "directory": "sdk/typescript"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "engines": {
+    "node": ">=18"
+  },
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
