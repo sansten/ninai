@@ -89,6 +89,7 @@ from app.api.v1.endpoints import (
     scim,
     billing,
     onboarding,
+    usage,
     benchmarks,
     a2a,
     openai_tool_schema,
@@ -610,6 +611,11 @@ api_router.include_router(
 api_router.include_router(
     onboarding.router,
     tags=["Onboarding"],
+)
+
+api_router.include_router(
+    usage.router,
+    tags=["Usage"],
 )
 
 api_router.include_router(
