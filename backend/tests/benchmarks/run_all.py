@@ -13,20 +13,28 @@ from app.core.config import settings
 from tests.benchmarks import (
     bench_conflict,
     bench_credibility,
+    bench_decide,
+    bench_explain,
     bench_goal,
     bench_latency,
+    bench_plan,
     bench_recall,
     bench_temporal,
+    bench_uncertainty_loop,
 )
 
 
 BENCHMARKS = [
     bench_conflict.run,
     bench_credibility.run,
+    bench_decide.run,
+    bench_explain.run,
     bench_goal.run,
     bench_latency.run,
+    bench_plan.run,
     bench_recall.run,
     bench_temporal.run,
+    bench_uncertainty_loop.run,
 ]
 
 
