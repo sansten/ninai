@@ -1,0 +1,28 @@
+name: Publish OpenAPI spec to docs branch
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+        working-directory: backend
+      - name: Generate spec
+        working-directory: backend
+        env:
+          ENVIRONMENT: test
+          JWT_SECRET: ci-secret
+          DATABASE_URL: sqlite+aiosqlite:///./test.db
+        run: |
+          python -c "import json; from app.main import app; open('../docs/openapi.json','w', encoding='utf-8').write(json.dumps(app.openapi(), indent=2))"
+      - uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "docs: update openapi.json"
+          file_pattern: "docs/openapi.json"
