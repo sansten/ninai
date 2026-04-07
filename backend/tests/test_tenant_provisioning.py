@@ -7,6 +7,7 @@ import pytest
 from fastapi import HTTPException
 
 from app.api.v1.endpoints.onboarding import SignupRequest, signup
+from app.models.dpa_acceptance import DpaAcceptance
 from app.services.tenant_provisioning_service import ProvisionResult, TenantProvisioningService
 
 
@@ -78,6 +79,49 @@ async def test_provision_enterprise_calls_subscription_when_customer_present():
         )
 
     assert result.subscription_id == "sub-123"
+
+
+@pytest.mark.asyncio
+async def test_provision_eu_creates_pending_dpa_row():
+    session = _session()
+    session.execute.return_value = _exec_result(None)
+    svc = TenantProvisioningService(session)
+
+    await svc.provision(
+        org_name="Acme EU",
+        admin_email="admin@acme.eu",
+        admin_password="supersecure",
+        region="eu",
+    )
+
+    dpa_rows = [
+        call.args[0]
+        for call in session.add.call_args_list
+        if call.args and isinstance(call.args[0], DpaAcceptance)
+    ]
+    assert len(dpa_rows) == 1
+    assert dpa_rows[0].accepted is False
+
+
+@pytest.mark.asyncio
+async def test_provision_non_eu_does_not_create_dpa_row():
+    session = _session()
+    session.execute.return_value = _exec_result(None)
+    svc = TenantProvisioningService(session)
+
+    await svc.provision(
+        org_name="Acme US",
+        admin_email="admin@acme.com",
+        admin_password="supersecure",
+        region="us-central1",
+    )
+
+    dpa_rows = [
+        call.args[0]
+        for call in session.add.call_args_list
+        if call.args and isinstance(call.args[0], DpaAcceptance)
+    ]
+    assert dpa_rows == []
 
 
 @pytest.mark.asyncio
