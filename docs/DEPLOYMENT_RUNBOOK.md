@@ -443,3 +443,111 @@ docker exec ninai-backend env | grep NINAI
 # Test license validation
 python repos/ninai-enterprise/verify_implementation.py
 """
+
+
+## CognitiveOS Operational Runbook (G1 Gate Evidence)
+
+### Heartbeat Failure
+
+**Symptom**: `CognitiveHeartbeatStale` or `CognitiveHeartbeatMissed` alert fires.
+
+**Diagnosis**:
+```bash
+# Check Celery beat is scheduling the heartbeat
+docker exec ninai-celery celery -A app.tasks.celery_app inspect scheduled | grep cognitive_heartbeat
+
+# Check recent heartbeat runs (last 10 tasks)
+docker exec ninai-celery celery -A app.tasks.celery_app events --camera djcelery.snapshot:Camera
+
+# Query last heartbeat timestamp for all orgs
+psql $DATABASE_URL -c "SELECT organization_id, last_heartbeat_at, cognitive_load FROM system_cognition_states ORDER BY last_heartbeat_at ASC LIMIT 10;"
+```
+
+**Recovery**:
+1. Restart Celery beat: `docker-compose restart celery-beat`
+2. Manually trigger heartbeat for a specific org via API (system_admin token):
+    `POST /api/v1/admin/cognitive-autonomy` — re-enable if accidentally disabled
+3. Check Redis connectivity — heartbeat lock uses Redis; if Redis is down, heartbeat skips all orgs
+
+**Escalate if**: heartbeat still not running 10 minutes after restart.
+
+---
+
+### Cognitive Queue Saturation (C2)
+
+**Symptom**: `CognitiveReviewQueueDeep` alert fires or `CognitiveAutonomyRatioLow` persists.
+
+**Diagnosis**:
+```bash
+# Check review queue depth
+curl -H "Authorization: Bearer $ADMIN_TOKEN" "$API_URL/api/v1/review/queue?limit=1" | jq '.total'
+
+# Check cognitive session queue depth in Celery
+docker exec ninai-celery celery -A app.tasks.celery_app inspect active_queues | grep q.cognitive_loop
+```
+
+**Recovery**:
+1. Scale Celery workers: `docker-compose up --scale celery-worker=4`
+2. If queue is clogged with failed tasks: check DLQ via `GET /api/v1/dlq`
+3. For review queue backlog: assign reviewers via `POST /api/v1/review/claim`
+
+---
+
+### Policy Misconfiguration (B1)
+
+**Symptom**: `CognitivePolicyDenialSpike` alert fires; legitimate actions being denied.
+
+**Diagnosis**:
+```bash
+# Check recent policy denial audit events
+curl -H "Authorization: Bearer $ADMIN_TOKEN" "$API_URL/api/v1/audit?event_type=policy.autonomous_action.denied&limit=20"
+```
+
+**Recovery**:
+1. Review the policy version in effect: `GET /api/v1/admin/policy-versions/current`
+2. Roll back to previous policy if misconfigured: `POST /api/v1/admin/policy-versions/{id}/activate`
+3. If emergency: disable autonomous mode via `PUT /api/v1/admin/cognitive-autonomy` with `{"enabled": false}`
+
+---
+
+### Emergency Kill Switch (B4)
+
+To immediately halt all autonomous cognitive activity across all orgs:
+
+```bash
+# Disable globally (system_admin required)
+curl -X PUT -H "Authorization: Bearer $SYSTEM_ADMIN_TOKEN" \
+   -H "Content-Type: application/json" \
+   -d '{"enabled": false, "global": true, "reason": "emergency halt"}' \
+   "$API_URL/api/v1/admin/cognitive-autonomy"
+```
+
+This stops:
+- New autonomous session spawning by the heartbeat
+- `cognitive_loop_task` execution for all orgs (returns `blocked_by_autonomy_control`)
+- `POST /api/v1/cognitive/sessions/{id}/run` (returns 403)
+
+Re-enable per-org once root cause is resolved:
+```bash
+curl -X PUT -H "Authorization: Bearer $ORG_ADMIN_TOKEN" \
+   -H "Content-Type: application/json" \
+   -d '{"enabled": true}' \
+   "$API_URL/api/v1/admin/cognitive-autonomy"
+```
+
+---
+
+### Capacity Planning (G3)
+
+**Normal load envelope** (baseline single-instance deployment):
+- Heartbeat: 1 Celery worker running 1 task per org every 5 minutes
+- Cognitive sessions: up to 20 concurrent sessions per worker
+- Review queue: 10 items/minute per org without additional workers
+- Redis: ~1 KB per org context (1-hour TTL), ~10 MB for 10K active orgs
+
+**Scaling thresholds**:
+- Cognitive load > 0.7 across > 20% of orgs: add 1 Celery worker
+- Review queue depth > 50 for > 10 minutes: add reviewer capacity or scale workers
+- Heartbeat p99 latency > 30s: check DB index health on `system_cognition_states`
+
+**Autoscaling hint** (Kubernetes): HPA on `ninai_cognitive_sessions_total` rate > 5/s per minute.
