@@ -693,7 +693,7 @@ export function SettingsPage() {
         {!isAdmin && (
           <div className="mt-3 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-3">
             Admin settings are only visible to <span className="font-medium">org_admin</span> or <span className="font-medium">system_admin</span>.
-            In the seeded demo DB, try <span className="font-medium">admin@ninai.dev</span> / <span className="font-medium">admin1234</span>.
+            In the seeded demo DB, try <span className="font-medium">admin@ninai.dev</span> / <span className="font-medium">admin123</span>.
           </div>
         )}
       </div>
