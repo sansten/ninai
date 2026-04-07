@@ -55,6 +55,7 @@ from app.models.org_feedback_learning_config import OrgFeedbackLearningConfig
 from app.models.org_logseq_export_config import OrgLogseqExportConfig
 from app.models.org_subscription import OrgSubscription
 from app.models.org_data_residency import OrgDataResidency
+from app.models.org_feature_flag import OrgFeatureFlag
 from app.models.usage_event import UsageEvent
 from app.models.knowledge_item import KnowledgeItem
 from app.models.knowledge_item_version import KnowledgeItemVersion
@@ -216,6 +217,7 @@ __all__ = [
     "OrgLogseqExportConfig",
     "OrgSubscription",
     "OrgDataResidency",
+    "OrgFeatureFlag",
     "UsageEvent",
     # Feedback learning config
     "OrgFeedbackLearningConfig",
