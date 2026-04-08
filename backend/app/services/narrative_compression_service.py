@@ -10,7 +10,7 @@ from uuid import uuid4
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.agents.narrative_compression_agent import NarrativeCompressionAgent
+from app.agents.narrative_compression_agent import NarrativeCompressionAgent, run_heuristic
 from app.models.memory import MemoryMetadata
 
 
@@ -43,8 +43,23 @@ class NarrativeCompressionService:
         )
 
         outputs = result.outputs or {}
+        fallback_outputs = run_heuristic(
+            episodes=episodes,
+            topic=topic,
+            max_sentences=max_sentences,
+        )
+
         narrative = str(outputs.get("compressed_narrative") or "")
-        archived_ids = [str(i) for i in (outputs.get("archived_ids") or []) if i]
+        archived_ids = sorted(
+            {
+                str(item_id)
+                for item_id in [
+                    *(outputs.get("archived_ids") or []),
+                    *(fallback_outputs.get("archived_ids") or []),
+                ]
+                if item_id
+            }
+        )
 
         new_memory_id: str | None = None
         if narrative.strip():
