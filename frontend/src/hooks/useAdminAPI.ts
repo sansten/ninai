@@ -4,7 +4,7 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { apiClient } from '../services/api';
+import { apiClient } from '../lib/api';
 import {
   AdminRole, AdminSetting, AdminAuditLog, User as AdminUser,
   DashboardData, AdminIPWhitelist, Permission, BenchmarkRun

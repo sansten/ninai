@@ -241,3 +241,5 @@ const KPICard: React.FC<{ kpi: any }> = ({ kpi }) => (
     )}
   </div>
 );
+
+export default Dashboard;

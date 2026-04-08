@@ -8,6 +8,7 @@ import { AdminOperationsTab } from '@/pages/settings/AdminOperationsTab';
 import { BackupTab } from '@/pages/settings/BackupTab';
 import { LicenseTab } from '@/pages/settings/LicenseTab';
 import { useEnterpriseFeatures } from '@/hooks/useEnterpriseFeatures';
+import { useAuthStore } from '@/stores/auth';
 
 type AuthMode = 'password' | 'oidc' | 'both';
 
@@ -147,6 +148,14 @@ type FeedbackConfig = {
 export function AdminSettingsTab() {
   const [subtab, setSubtab] = useState<'auth' | 'env' | 'knowledge' | 'operations' | 'backups' | 'license' | 'logseq' | 'feedback'>('auth');
   const { hasAdminOperations } = useEnterpriseFeatures();
+  const accessToken = useAuthStore((state) => state.accessToken);
+  const refreshToken = useAuthStore((state) => state.refreshToken);
+  const setTokens = useAuthStore((state) => state.setTokens);
+  const [benchmarkToken, setBenchmarkToken] = useState('');
+
+  useEffect(() => {
+    setBenchmarkToken(accessToken ?? '');
+  }, [accessToken]);
 
   const authQuery = useQuery<AuthConfigResponse>({
     queryKey: ['admin', 'settings', 'auth'],
@@ -290,6 +299,28 @@ export function AdminSettingsTab() {
     onError: (err: unknown) => toast.error(getErrorMessage(err)),
   });
 
+  const refreshBenchmarkTokenMutation = useMutation({
+    mutationFn: async () => {
+      if (!refreshToken) {
+        throw new Error('No refresh token found. Please sign in again.');
+      }
+
+      const res = await apiClient.post('/auth/refresh', {
+        refresh_token: refreshToken,
+      });
+
+      return res.data as { access_token: string; refresh_token: string };
+    },
+    onSuccess: (data) => {
+      setTokens(data.access_token, data.refresh_token);
+      setBenchmarkToken(data.access_token);
+      toast.success('New benchmark token generated');
+    },
+    onError: (error) => {
+      toast.error(getErrorMessage(error));
+    },
+  });
+
   return (
     <div className="space-y-6">
       <div>
@@ -369,6 +400,53 @@ export function AdminSettingsTab() {
 
       {subtab === 'auth' && (
         <div className="space-y-4">
+          <div className="card border border-blue-200 bg-blue-50">
+            <h4 className="font-medium text-gray-900">Benchmark API Token</h4>
+            <p className="text-sm text-gray-600 mt-1">
+              Use this bearer token with <span className="font-mono">tests.benchmarks.run_all --api-token</span>.
+            </p>
+
+            <div className="mt-4 space-y-3">
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => setBenchmarkToken(accessToken ?? '')}
+                  disabled={!accessToken}
+                >
+                  Use current token
+                </button>
+                <button
+                  type="button"
+                  className="btn-primary"
+                  onClick={() => refreshBenchmarkTokenMutation.mutate()}
+                  disabled={refreshBenchmarkTokenMutation.isPending || !refreshToken}
+                >
+                  {refreshBenchmarkTokenMutation.isPending ? 'Generating…' : 'Generate new token'}
+                </button>
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => copyToClipboard(benchmarkToken)}
+                  disabled={!benchmarkToken}
+                >
+                  Copy token
+                </button>
+              </div>
+
+              <textarea
+                className="input w-full h-28 font-mono text-xs"
+                value={benchmarkToken}
+                readOnly
+                placeholder="Token will appear here"
+              />
+
+              <p className="text-xs text-gray-500">
+                Example: <span className="font-mono">python -m tests.benchmarks.run_all --mode unit --strategy heuristic --dataset kaggle --json --save-to-api http://localhost:8000/api/v1 --api-token &lt;paste-token&gt;</span>
+              </p>
+            </div>
+          </div>
+
           {authQuery.isLoading && <div className="text-sm text-gray-500">Loading…</div>}
           {authQuery.isError && <div className="text-sm text-red-600">Failed to load settings</div>}
 
