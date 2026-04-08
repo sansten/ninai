@@ -27,6 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.middleware.tenant_context import TenantContext, get_tenant_context
 from app.services.compliance_service import ComplianceService
+from app.services.tenant_offboarding_service import TenantOffboardingService
 
 logger = logging.getLogger(__name__)
 
@@ -95,6 +96,12 @@ class ConsentResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class ExportRequest(BaseModel):
+    request_type: str = Field("data_export", pattern="^(data_export|full_deletion)$")
+    user_id: Optional[str] = None
+    export_first: bool = True
 
 
 # ---------------------------------------------------------------------------
@@ -240,8 +247,13 @@ async def request_data_export(
     if user_id and user_id != ctx.user_id:
         _require_admin(ctx)
 
+    return await _create_gdpr_export_job(db=db, ctx=ctx, target_user=target_user)
+
+
+async def _create_gdpr_export_job(db: AsyncSession, ctx: TenantContext, target_user: str) -> dict:
     try:
         from app.services.export_job_service import ExportJobService
+
         export_svc = ExportJobService(db)
         job = await export_svc.create_snapshot_job(
             org_id=ctx.organization_id,
@@ -254,12 +266,47 @@ async def request_data_export(
             "status": job.status,
             "message": "Export job created. Poll /exports/jobs/{job_id} for status.",
         }
-    except Exception as exc:
+    except Exception:
         logger.exception("Failed to create GDPR export job")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to initiate export",
         )
+
+
+@router.post("/export/request")
+async def request_export_or_deletion(
+    body: ExportRequest,
+    db: AsyncSession = Depends(get_db),
+    ctx: TenantContext = Depends(get_tenant_context),
+) -> dict:
+    """Request GDPR export or full deletion for the current organization."""
+    _require_admin(ctx)
+
+    if body.request_type == "full_deletion":
+        offboarding = TenantOffboardingService(db)
+        report = await offboarding.offboard(
+            ctx.organization_id,
+            export_first=body.export_first,
+        )
+        await db.commit()
+        return {
+            "request_type": body.request_type,
+            "status": "completed",
+            "offboarding": {
+                "org_id": report.org_id,
+                "subscription_canceled": report.subscription_canceled,
+                "memories_deleted": report.memories_deleted,
+                "users_anonymized": report.users_anonymized,
+                "export_path": report.export_path,
+                "completed_at": report.completed_at,
+            },
+        }
+
+    target_user = body.user_id or ctx.user_id
+    if body.user_id and body.user_id != ctx.user_id:
+        _require_admin(ctx)
+    return await _create_gdpr_export_job(db=db, ctx=ctx, target_user=target_user)
 
 
 # ---------------------------------------------------------------------------
