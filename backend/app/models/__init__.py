@@ -58,6 +58,7 @@ from app.models.org_data_residency import OrgDataResidency
 from app.models.org_feature_flag import OrgFeatureFlag
 from app.models.dpa_acceptance import DpaAcceptance
 from app.models.usage_event import UsageEvent
+from app.models.org_llm_config import OrgLlmConfig
 from app.models.knowledge_item import KnowledgeItem
 from app.models.knowledge_item_version import KnowledgeItemVersion
 from app.models.knowledge_review_request import KnowledgeReviewRequest
@@ -221,6 +222,7 @@ __all__ = [
     "OrgFeatureFlag",
     "DpaAcceptance",
     "UsageEvent",
+    "OrgLlmConfig",
     # Feedback learning config
     "OrgFeedbackLearningConfig",
     "PersonaProfile",
