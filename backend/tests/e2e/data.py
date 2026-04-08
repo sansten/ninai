@@ -107,7 +107,7 @@ def _load_customer_support(n: int = 25) -> list[dict[str, Any]]:
     # Sample across all priority x type combos for coverage
     sampled = (
         df.groupby(["Ticket Priority", "Ticket Type"], group_keys=False)
-        .apply(lambda g: g.sample(min(len(g), 2), random_state=42))
+        .apply(lambda g: g.sample(min(len(g), 2), random_state=42), include_groups=False)
         .reset_index(drop=True)
         .head(n)
     )
@@ -161,7 +161,7 @@ def _load_it_service_tickets(n: int = 20) -> list[dict[str, Any]]:
     # Two samples per topic group for coverage
     sampled = (
         df.groupby("Topic_group", group_keys=False)
-        .apply(lambda g: g.sample(min(len(g), 3), random_state=42))
+        .apply(lambda g: g.sample(min(len(g), 3), random_state=42), include_groups=False)
         .reset_index(drop=True)
         .head(n)
     )
@@ -224,7 +224,7 @@ def _load_incident_log(n: int = 15) -> list[dict[str, Any]]:
     # Sample across all priority levels
     sampled = (
         incidents.groupby("priority", group_keys=False)
-        .apply(lambda g: g.sample(min(len(g), 4), random_state=42))
+        .apply(lambda g: g.sample(min(len(g), 4), random_state=42), include_groups=False)
         .reset_index(drop=True)
         .head(n)
     )

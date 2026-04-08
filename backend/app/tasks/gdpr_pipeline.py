@@ -36,7 +36,9 @@ def _broker_enabled() -> bool:
     return bool(broker) and not str(broker).startswith("memory://")
 
 
-def _run_async(coro):
+def _run_async(async_fn, *args, **kwargs):
+    coro = async_fn(*args, **kwargs)
+
     try:
         loop = asyncio.get_event_loop()
     except RuntimeError:
@@ -198,7 +200,7 @@ def process_deletion_task(self, deletion_request_id: str) -> dict[str, Any]:
 
     logger.info("Starting deletion task", extra={"request_id": deletion_request_id})
     try:
-        return _run_async(_process_deletion(deletion_request_id))
+        return _run_async(_process_deletion, deletion_request_id)
     except Exception as exc:
         logger.exception("process_deletion_task raised", extra={"request_id": deletion_request_id})
         raise exc
