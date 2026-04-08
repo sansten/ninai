@@ -40,15 +40,16 @@ dev = [
     "mypy>=1.0.0",
 ]
 
-[project.urls]
-Homepage = "https://sansten.com/ninai"
-Documentation = "https://sansten.com/ninai/docs"
-Repository = "https://github.com/sansten/ninai"
-Changelog = "https://github.com/sansten/ninai/blob/main/sdk/python/CHANGELOG.md"
+
+
+
 
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["ninai*"]
+
+[tool.setuptools]
+package-data = {ninai = ["py.typed"]}
 
 [tool.black]
 line-length = 100
@@ -61,3 +62,15 @@ select = ["E", "F", "I", "N", "W"]
 [tool.mypy]
 python_version = "3.10"
 strict = true
+
+[project.urls]
+Homepage = "https://ninai.dev"
+Documentation = "https://docs.ninai.dev/python-sdk"
+Repository = "https://github.com/sansten/ninai"
+Issues = "https://github.com/sansten/ninai/issues"
+Changelog = "https://github.com/sansten/ninai/blob/main/sdk/python/CHANGELOG.md"
+
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
