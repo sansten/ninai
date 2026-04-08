@@ -11,6 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import get_password_hash
+from app.models.dpa_acceptance import DpaAcceptance
 from app.models.organization import Organization
 from app.models.org_subscription import OrgSubscription
 from app.models.user import Role, User, UserRole
@@ -62,6 +63,17 @@ class TenantProvisioningService:
         await self.session.flush()
 
         await self._assign_org_admin_role(user_id, org_id)
+
+        if region == "eu":
+            self.session.add(
+                DpaAcceptance(
+                    id=str(uuid4()),
+                    organization_id=org_id,
+                    dpa_version="2026-04-01",
+                    accepted=False,
+                )
+            )
+            await self.session.flush()
 
         sub_id: str | None = None
         if plan != "community" and stripe_customer_id:

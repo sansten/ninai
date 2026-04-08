@@ -91,6 +91,7 @@ from app.api.v1.endpoints import (
     onboarding,
     usage,
     data_residency,
+    dpa,
     feature_flags,
     benchmarks,
     a2a,
@@ -623,6 +624,11 @@ api_router.include_router(
 api_router.include_router(
     data_residency.router,
     tags=["Data Residency"],
+)
+
+api_router.include_router(
+    dpa.router,
+    tags=["DPA"],
 )
 
 api_router.include_router(
