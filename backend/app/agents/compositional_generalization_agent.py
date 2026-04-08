@@ -201,6 +201,32 @@ def _extract_subtasks_from_content(content: str) -> list[str]:
     return result[:10]
 
 
+def _normalize_llm_outputs(resp: dict[str, Any], subtasks: list[str]) -> dict[str, Any]:
+    """Normalize LLM output shape for deterministic downstream behavior.
+
+    When subtasks are provided, enforce a 1:1 cardinality between subtasks and
+    composed_procedure to avoid model-specific expansion/contraction.
+    """
+    normalized = dict(resp)
+    composed = normalized.get("composed_procedure")
+    if not isinstance(composed, list):
+        return normalized
+
+    cleaned = [str(step).strip() for step in composed if str(step).strip()]
+
+    if subtasks:
+        target_len = len(subtasks)
+        if len(cleaned) > target_len:
+            cleaned = cleaned[:target_len]
+        elif len(cleaned) < target_len:
+            fallback_subtasks = [str(s).strip() for s in subtasks if str(s).strip()]
+            for i in range(len(cleaned), target_len):
+                cleaned.append(fallback_subtasks[i] if i < len(fallback_subtasks) else "")
+
+    normalized["composed_procedure"] = cleaned
+    return normalized
+
+
 # ---------------------------------------------------------------------------
 # Agent
 # ---------------------------------------------------------------------------
@@ -336,7 +362,7 @@ class CompositionalGeneralizationAgent(BaseAgent):
                 and isinstance(resp.get("composed_procedure"), list)
                 and isinstance(resp.get("adaptation_confidence"), (int, float))
             ):
-                outputs = resp
+                outputs = _normalize_llm_outputs(resp, subtasks)
             else:
                 outputs = self._heuristic(
                     content=content,

@@ -205,6 +205,21 @@ def build_compression_summary(
     return f"[{prefix}] {excerpt}" if excerpt else f"[{prefix}]"
 
 
+def _normalize_llm_outputs(resp: dict[str, Any], heuristic_outputs: dict[str, Any]) -> dict[str, Any]:
+    """Normalize LLM consolidation output to preserve safe deterministic bounds."""
+    normalized = dict(resp)
+    merge_candidates = normalized.get("merge_candidates")
+    if not isinstance(merge_candidates, list):
+        merge_candidates = []
+    normalized["merge_candidates"] = merge_candidates
+    normalized["candidate_count"] = len(merge_candidates)
+
+    heuristic_conf = float(heuristic_outputs.get("confidence", 0.0) or 0.0)
+    normalized["confidence"] = heuristic_conf
+
+    return normalized
+
+
 class MemoryConsolidationAgent(BaseAgent):
     """Phase 16: Per-memory consolidation decision engine.
 
@@ -321,6 +336,14 @@ class MemoryConsolidationAgent(BaseAgent):
                 similar_memories=similar_memories,
             )
         else:
+            heuristic_outputs = self._heuristic(
+                content=content,
+                domain=domain,
+                entities=entities,
+                is_stale=is_stale,
+                reference_count=reference_count,
+                similar_memories=similar_memories,
+            )
             sim_json = similar_memories[:5]
             prompt = (
                 "You are a memory consolidation engine for an enterprise Cognitive OS. "
@@ -359,16 +382,9 @@ class MemoryConsolidationAgent(BaseAgent):
                 and isinstance(resp.get("redundancy_score"), (int, float))
                 and isinstance(resp.get("candidate_count"), int)
             ):
-                outputs = resp
+                outputs = _normalize_llm_outputs(resp, heuristic_outputs)
             else:
-                outputs = self._heuristic(
-                    content=content,
-                    domain=domain,
-                    entities=entities,
-                    is_stale=is_stale,
-                    reference_count=reference_count,
-                    similar_memories=similar_memories,
-                )
+                outputs = heuristic_outputs
 
         finished_at = datetime.now(timezone.utc)
 
