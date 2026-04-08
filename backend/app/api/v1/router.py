@@ -93,6 +93,7 @@ from app.api.v1.endpoints import (
     data_residency,
     dpa,
     feature_flags,
+    llm_config,
     benchmarks,
     a2a,
     openai_tool_schema,
@@ -634,6 +635,11 @@ api_router.include_router(
 api_router.include_router(
     feature_flags.router,
     tags=["Feature Flags"],
+)
+
+api_router.include_router(
+    llm_config.router,
+    tags=["LLM Config"],
 )
 
 api_router.include_router(
