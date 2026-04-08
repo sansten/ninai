@@ -46,10 +46,10 @@ export function AuthLayout() {
             </svg>
           </div>
         </div>
-        <h2 className="mt-6 text-center text-3xl font-bold tracking-tight text-gray-900">
+        <h2 className="font-robotic mt-6 text-center text-3xl font-bold tracking-tight text-gray-900">
           Ninai
         </h2>
-        <p className="mt-2 text-center text-sm text-gray-600">
+        <p className="font-robotic mt-2 text-center text-sm text-gray-600">
           Agentic AI Cognitive Operating System
         </p>
       </div>

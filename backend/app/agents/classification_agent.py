@@ -68,6 +68,15 @@ class ClassificationAgent(BaseAgent):
             prompt = (
                 "You are a classification engine for an enterprise memory system. Output JSON only.\n\n"
                 "Classify the memory. Consider sensitivity and classification. Do not hallucinate.\n\n"
+                "Allowed classification values: public, internal, confidential, restricted.\n"
+                "Sensitivity policy (fail safe):\n"
+                "- If payment card data (card number/PAN/CVV), passwords, API keys, secrets, government IDs (SSN/passport), or authentication credentials are present, set is_sensitive=true and classification to confidential or restricted (never public/internal).\n"
+                "- If credentials can grant account/system access, prefer restricted.\n"
+                "- If content contains direct personal identifiers with financial, health, legal, or security context, classification must be at least confidential.\n"
+                "- If unsure between two levels, choose the more restrictive level.\n\n"
+                "Examples:\n"
+                "- 'Customer credit card 4111 ... and password reset': is_sensitive=true, classification=confidential or restricted.\n"
+                "- 'Internal sprint update without sensitive data': is_sensitive=false, classification=internal.\n\n"
                 f"CONTENT:\n{content}\n\n"
                 "Return JSON with keys: memory_type_suggestion, importance_score, is_sensitive, classification, domain_signals, confidence, rationale"
             )
