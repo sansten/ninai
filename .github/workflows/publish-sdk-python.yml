@@ -3,6 +3,7 @@ name: Publish Python SDK to PyPI
 on:
   push:
     tags: ["sdk-python-v*"]
+  workflow_dispatch:
 
 jobs:
   publish:
