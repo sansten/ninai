@@ -1,0 +1,159 @@
+# Gitpod Workspace Configuration
+# Enables one-click cloud development environment for Ninai2
+
+version: '0.2'
+
+phases:
+  # Phase 1: Install system dependencies
+  init:
+    - echo "Installing system dependencies..."
+    - sudo apt-get update
+    - sudo apt-get install -y python3.12 python3.12-venv python3-pip postgresql-client redis-tools curl git
+    
+    # Install Node.js for frontend
+    - curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+    - sudo apt-get install -y nodejs
+    
+    # Install Docker CLI (for docker-compose)
+    - curl -fsSL https://get.docker.com -o get-docker.sh
+    - sudo sh get-docker.sh
+    - sudo usermod -aG docker gitpod
+    - rm get-docker.sh
+    
+    # Clone and setup Ninai2
+    - echo "Cloning Ninai2 repository..."
+    - cd /workspace && git clone https://github.com/sansten/ninai.git
+
+  # Phase 2: Setup backend environment
+  onStart:
+    - echo "Setting up backend Python environment..."
+    - cd /workspace/ninai/repos/ninai/backend
+    - python3.12 -m venv venv
+    - source venv/bin/activate
+    - pip install --upgrade pip poetry
+    - poetry install
+    
+    # Setup frontend
+    - echo "Setting up frontend environment..."
+    - cd /workspace/ninai/frontend
+    - npm install
+    
+    # Start services in background
+    - echo "Starting database and cache services..."
+    - cd /workspace/ninai && docker-compose -f docker-compose.yml up -d postgres redis qdrant ollama
+    - sleep 10  # Wait for services to be ready
+    
+    # Initialize database
+    - echo "Initializing database..."
+    - cd /workspace/ninai/repos/ninai/backend
+    - source venv/bin/activate
+    - alembic upgrade head
+    
+    # Create dev user and org
+    - echo "Creating development user and organization..."
+    - python scripts/setup_dev_user.py
+
+# VS Code Extensions to auto-install
+vscode:
+  extensions:
+    - ms-python.python
+    - ms-python.vscode-pylance
+    - ms-python.debugpy
+    - ms-python.black-formatter
+    - charliermarsh.ruff
+    - ms-python.pylint
+    - eamodio.gitlens
+    - github.copilot
+    - github.copilot-chat
+    - esbenp.prettier-vscode
+    - bradlc.vscode-tailwindcss
+    - dbaeumer.vscode-eslint
+    - dsznajder.es7-react-js-snippets
+    - ms-vscode.makefile-tools
+    - ms-vscode-remote.remote-containers
+    - ms-vscode.docker
+    - ms-azuretools.vscode-docker
+    - postman.postman-for-vscode
+
+# Ports to expose
+ports:
+  - port: 8000
+    onOpen: open-preview
+    visibility: public
+    description: FastAPI Backend
+  - port: 3000
+    onOpen: open-preview
+    visibility: public
+    description: React Frontend
+  - port: 5432
+    visibility: private
+    description: PostgreSQL
+  - port: 6379
+    visibility: private
+    description: Redis
+  - port: 6333
+    visibility: private
+    description: Qdrant
+  - port: 11434
+    visibility: private
+    description: Ollama
+  - port: 9090
+    onOpen: open-preview
+    visibility: public
+    description: Prometheus
+  - port: 3100
+    onOpen: open-preview
+    visibility: public
+    description: Grafana
+
+# GitHub integration
+github:
+  prebuilds:
+    main: true      # Prebuild on main branch pushes
+    branches: true  # Prebuild on all branches
+    addBadge: true  # Add Gitpod badge to README
+    addComment: false
+
+# Startup tasks
+tasks:
+  - name: Backend
+    init: |
+      cd /workspace/ninai/repos/ninai/backend
+      source venv/bin/activate
+      echo "Backend ready! Run: python -m uvicorn app.main:app --reload"
+    command: |
+      cd /workspace/ninai/repos/ninai/backend
+      source venv/bin/activate
+      python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+  
+  - name: Frontend
+    init: |
+      cd /workspace/ninai/frontend
+      echo "Frontend ready! Run: npm start"
+    command: |
+      cd /workspace/ninai/frontend
+      npm start
+  
+  - name: Tests
+    init: |
+      cd /workspace/ninai/repos/ninai/backend
+      source venv/bin/activate
+      echo "Test environment ready! Run: python -m pytest tests/ -v"
+    command: |
+      cd /workspace/ninai/repos/ninai/backend
+      source venv/bin/activate
+      python -m pytest tests/ -x -q
+
+# Workspace customization
+workspaceLocation: /workspace/ninai
+
+# Environment variables for development
+env:
+  DATABASE_URL: postgresql+asyncpg://ninai:ninai@localhost:5432/ninai_dev
+  REDIS_URL: redis://localhost:6379
+  QDRANT_URL: http://localhost:6333
+  OLLAMA_BASE_URL: http://localhost:11434
+  OLLAMA_MODEL: qwen2.5:7b
+  SECRET_KEY: dev-secret-key-change-in-production
+  LOG_LEVEL: debug
+  AGENT_STRATEGY: heuristic
