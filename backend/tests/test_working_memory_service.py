@@ -198,27 +198,27 @@ class TestWorkingMemoryService:
         await _seed_session(db_session, session_id=sid, org_id=test_org_id, user_id=test_user_id)
         assert await svc.flush(db=db_session, session_id=sid) == 0
 
-    def test_eviction_score_higher_activation_higher_score(self):
+    async def test_eviction_score_higher_activation_higher_score(self):
         svc = WorkingMemoryService()
         now = datetime.now(timezone.utc)
         a = WorkingMemoryItem(activation=0.9, last_accessed_at=now)
         b = WorkingMemoryItem(activation=0.2, last_accessed_at=now)
         assert svc.eviction_score(a, now) > svc.eviction_score(b, now)
 
-    def test_eviction_score_recent_item_higher(self):
+    async def test_eviction_score_recent_item_higher(self):
         svc = WorkingMemoryService()
         now = datetime.now(timezone.utc)
         recent = WorkingMemoryItem(activation=0.5, last_accessed_at=now)
         old = WorkingMemoryItem(activation=0.5, last_accessed_at=now - timedelta(hours=2))
         assert svc.eviction_score(recent, now) > svc.eviction_score(old, now)
 
-    def test_eviction_score_old_item_near_zero(self):
+    async def test_eviction_score_old_item_near_zero(self):
         svc = WorkingMemoryService()
         now = datetime.now(timezone.utc)
         old = WorkingMemoryItem(activation=1.0, last_accessed_at=now - timedelta(days=2))
         assert svc.eviction_score(old, now) < 0.001
 
-    def test_eviction_score_non_negative(self):
+    async def test_eviction_score_non_negative(self):
         svc = WorkingMemoryService()
         now = datetime.now(timezone.utc)
         item = WorkingMemoryItem(activation=0.5, last_accessed_at=now)

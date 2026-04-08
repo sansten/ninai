@@ -29,7 +29,9 @@ def _broker_enabled() -> bool:
     return bool(broker) and not str(broker).startswith("memory://")
 
 
-def _run_async(coro):
+def _run_async(async_fn, *args, **kwargs):
+    coro = async_fn(*args, **kwargs)
+
     try:
         loop = asyncio.get_event_loop()
     except RuntimeError:
@@ -131,7 +133,7 @@ def digest_task(self, digest_type: str = "daily"):
         }
 
     try:
-        return _run_async(_run_digest_async(digest_type=digest_type))
+        return _run_async(_run_digest_async, digest_type=digest_type)
     except Exception as e:
         logger.exception("Digest pipeline task failed")
         raise e
