@@ -17,7 +17,7 @@ The goal is to keep **(2)** and **(3)** on the **same Enterprise codebase** (sam
 | Who operates | You | Client SRE/IT | Sansten AI |
 | Updates & patches | Community cadence | Contracted release channel + upgrade guidance | Managed rolling upgrades (maintenance windows / zero-downtime plan) |
 | Support | Community / best-effort | Paid support (optional tiers) | Included support with SLA |
-| SLA | None | Optional | Yes (tiered) |
+| SLA | None | 99.5% uptime | 99.9% uptime |
 | Backups & DR | DIY | Client-run (guidance + runbooks) | Included (automated backups + DR posture) |
 | Monitoring/Observability | Basic | Advanced (Enterprise) | Advanced (Enterprise) + managed dashboards/alerting |
 | Security/Compliance extras | Baseline | Enterprise controls (e.g., SSO/SCIM, advanced audit/export, policy controls) | Same Enterprise controls + managed compliance artifacts/process |

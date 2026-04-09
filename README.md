@@ -445,11 +445,11 @@ backend/
 
 ## Support
 
-| Edition | Support | Cost |
-|---------|---------|------|
-| OSS | Community | Free (MIT) |
-| Enterprise Managed | Sansten, SLA 99.99% | Contact sales |
-| Enterprise Self-Managed | Commercial license | Contact sales |
+| Edition | Support | SLA | Cost |
+|---------|---------|-----|------|
+| Community | Community forums | None | Free (MIT) |
+| Enterprise Self-Managed | 24/7 email + Slack | 99.5% uptime | $50/user/month |
+| Enterprise Managed | Dedicated CSM + 24/7 | 99.9% uptime | $75/user/month |
 
 **sales@sansten.com** — [docs/EDITIONS.md](docs/EDITIONS.md)
 
