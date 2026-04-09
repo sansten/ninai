@@ -468,7 +468,24 @@ backend/
 5. Open a PR with a plain description and test plan
 
 ### Code style
-- Python: Black, isort, ruff
+
+```bash
+# Install dev tools
+pip install black isort ruff
+
+# Format before committing
+black backend/
+isort backend/
+ruff check backend/ --fix
+```
+
+Pre-commit hook (optional but recommended):
+
+```bash
+pip install pre-commit
+pre-commit install
+```
+
 - Commits: [Conventional Commits](https://www.conventionalcommits.org/)
 
 ### Getting help
