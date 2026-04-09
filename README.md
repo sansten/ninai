@@ -192,10 +192,12 @@ docker compose up -d --build
 
 Open **http://localhost:3000**.
 
-Demo credentials (change in production):
-- `dev@ninai.dev` / `dev12345` — submit, search, view
-- `reviewer@ninai.dev` / `review1234` — approve/reject submissions
-- `admin@ninai.dev` / `admin1234` — full access
+Local development users are seeded for convenience, but passwords are intentionally not documented here.
+
+Before sharing any environment beyond localhost:
+- rotate all seeded user passwords immediately
+- disable or remove demo users not required for your deployment
+- enforce SSO or strong password policy for production tenants
 
 ### Write a memory
 
