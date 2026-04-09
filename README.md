@@ -232,52 +232,33 @@ See [docs/SECURITY.md](docs/SECURITY.md) for full threat model.
 
 ## Cognitive Capabilities (Phase Status)
 
-| Phase | Capability | Status |
-|-------|-----------|--------|
-| 1–3 | Uncertainty gating, adaptive strategy, cognitive context bus | Done |
-| 4 | Unified World Model Graph | Done |
-| 5 | Predictive World State Monitor | Done |
-| 6 | Semantic Normalization | Done |
-| 7 | Entity Resolution | Done |
-| 8 | Expert Context Amplifier | Done |
-| 9 | Cross-Silo Signal Propagation | Done |
-| 10 | Organizational Attention Model | Done |
-| 11 | Proactive Memory Push | Done |
-| 12 | Causal Reasoning Engine | Done |
-| 13 | Cross-Silo Conflict Detection | Done |
-| 14 | Adaptive Conflict Resolution | Done |
-| 15 | Memory Decay & Relevance Aging | Done |
-| 16 | Memory Consolidation Engine | Done |
-| 17 | Temporal Reasoning Engine | Done |
-| 18 | Episodic Memory Grouping | Done |
-| 19 | Credibility Scoring | Done |
-| 20 | Playbook / Skill Memory | Done |
-| 21 | Goal Decomposition | Done |
-| 22 | Uncertainty Reporting | Done |
-| 23 | Narrative Synthesis | Done |
-| 24 | Feedback Integration & Self-Correction | Done |
-| 25 | Anomaly Detection | Done |
-| 26 | Enrichment API Surface | Done |
-| 27 | Query Intelligence Layer | Done |
-| 28 | Feature Readiness Engine | Done |
-| 29 | Cross-Agent Orchestration Bus | Done |
-| 30 | Tenant-Scoped Knowledge Graph API | Done |
-| 31 | Audit & Explainability Trail | Done |
-| 32 | Human Review Queue | Done |
-| 33 | Playbook Execution Tracker | Done |
-| 34 | Multi-Turn Goal Tracking | Done |
-| 35 | Adaptive Enrichment Budget | Done |
-| 36 | Meta-Cognitive Planning | Done |
-| 37 | Autonomous Goal Generation & Intrinsic Motivation | Done |
-| 38 | Theory of Mind & Multi-Agent Modeling | Done |
-| 39 | Causal API Surface | Planned |
-| 40 | Memory Sleep Cycle | Planned |
-| 41 | Compositional Generalization Engine | Planned |
-| 42 | Emotional & Affective Memory | Planned |
-| 43 | Multimodal Deep Memory | Planned |
-| 44 | Federated Memory & Collective Intelligence | Planned |
+80 phases shipped. Summary by capability group:
 
-**3,252 tests passing** across the full agent suite.
+| Group | Phases | Capability Area | Status |
+|-------|--------|----------------|--------|
+| Foundation | 1–3 | Uncertainty gating, adaptive strategy, cognitive context bus | Done |
+| World Model | 4–5 | Unified world model graph, predictive state monitor | Done |
+| Data Quality | 6–7 | Semantic normalization, entity resolution | Done |
+| Context Assembly | 8–11 | Expert amplifier, silo propagation, attention model, proactive push | Done |
+| Reasoning | 12–14 | Causal reasoning, conflict detection, adaptive resolution | Done |
+| Memory Lifecycle | 15–16 | Memory decay, consolidation engine | Done |
+| Temporal & Episodic | 17–18 | Temporal reasoning, episodic grouping | Done |
+| Knowledge Quality | 19–20 | Credibility scoring, playbook/skill memory | Done |
+| Goal & Meta | 21–23 | Goal decomposition, uncertainty reporting, narrative synthesis | Done |
+| Feedback & Anomaly | 24–25 | Feedback integration, anomaly detection | Done |
+| API & Query | 26–27 | Enrichment API surface, query intelligence layer | Done |
+| Platform | 28–30 | Feature readiness, orchestration bus, knowledge graph API | Done |
+| Governance | 31–32 | Audit trail, human review queue | Done |
+| Multi-Turn | 33–35 | Playbook tracking, goal tracking, enrichment budget | Done |
+| Autonomous | 36–38 | Meta-cognitive planning, autonomous goal generation, theory of mind | Done |
+| Causal API | 39 | Causal API surface (edges, explain, predict, counterfactual) | Done |
+| Memory Advanced | 40–44 | Sleep cycle, compositional generalization, affective memory, multimodal, federated | Done |
+| Platform Infrastructure | 45–50 | WebSocket stream, GDPR/digest, action engine, connector hub, cognitive gateway, learning pipeline | Done |
+| CognitiveOS Layer | 51–60 | Checkpoint service, dynamic policy, context propagation, goal prioritization, capability tokens, framework adapters, SSE, strategy export, multi-org admin, autonomy gateway | Done |
+| Autonomous Operations | 61–70 | Heartbeat, review queue v2, kill switch, drift detection, SLO monitors, admin ops, auto-eval, observability, benchmark runner, anomaly v2 | Done |
+| Advanced Reasoning | 71–80 | Uncertainty closure, composable context, playbook synthesis v2, inbound normalizer, error remediation, cognitive schedules, checkpoint restore, memory snapshot, license gate, meta-monitoring | Done |
+
+**6,157 tests passing** across the full agent suite.
 
 ---
 
@@ -431,13 +412,13 @@ docker compose up -d --build
 ```
 backend/
 ├── app/
-│   ├── agents/          # 38+ cognitive agents (one file per agent)
+│   ├── agents/          # 80+ cognitive agents (one file per agent)
 │   ├── api/             # REST endpoints
 │   ├── services/        # Cognitive loop, strategy learning, world model
 │   ├── models/          # SQLAlchemy models + RLS
 │   ├── middleware/       # Auth, tenant context, rate limiting
 │   └── core/            # Config, database, bootstrap
-├── tests/               # 3,252 passing tests
+├── tests/               # 6,157 passing tests
 └── alembic/             # Schema migrations
 ```
 
