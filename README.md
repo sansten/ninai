@@ -108,56 +108,46 @@ Ninai treats agents as first-class entities:
 
 ## Architecture
 
+```mermaid
+flowchart TD
+    A[Your Application] -->|write memory| B[Enrichment Pipeline]
+    B --> B1[SemanticNormalizationAgent]
+    B --> B2[EntityResolutionAgent]
+    B --> B3[CredibilityAgent]
+    B --> B4[ConflictDetectionAgent]
+    B --> B5[SiloPropagationAgent]
+    B1 --> C[(Storage)]
+    B2 --> C
+    B3 --> C
+    B4 --> C
+    B5 --> C
+
+    C --> C1[(PostgreSQL\nRLS-enforced)]
+    C --> C2[(Qdrant\nVector Store)]
+    C --> C3[(Redis\nCache/Broker)]
+
+    A -->|query| D[Query Path]
+    D --> D1[QueryIntelligenceAgent]
+    D1 --> D2[ContextAmplifierAgent]
+    D2 --> D3[CausalReasoningAgent]
+    D3 --> D4[NarrativeSynthesisAgent]
+    D4 -->|assembled context| A
+
+    E[Celery Background] --> E1[MemoryDecayAgent]
+    E --> E2[AnomalyDetectionAgent]
+    E --> E3[CognitiveHeartbeat]
+    E --> E4[AutonomousGoalAgent]
+    E1 --> C
+    E2 --> C
+    E3 --> C
+    E4 --> C
+
+    F[Cognitive Gateway\n/api/v1/cognitive] -->|decide / plan / read| D
+    F --> G[HumanReviewQueue]
+    F --> H[AuditTrail]
 ```
-Applications
-    │  write raw data
-    ▼
-Enrichment Pipeline (per write)
-    ├── SemanticNormalizationAgent
-    ├── EntityResolutionAgent
-    ├── WorldModelAgent          → World Model Graph (Qdrant + Postgres)
-    ├── CredibilityAgent
-    ├── ConflictDetectionAgent
-    ├── AdaptiveConflictResolutionAgent
-    └── SiloPropagationAgent     → other silos
 
-Storage Layer
-    ├── PostgreSQL (RLS-enforced, per-tenant)   — facts, entities, audit, review queue
-    ├── Qdrant                                  — vector embeddings
-    └── Redis                                   — cache, Celery broker
-
-Background Processes (Celery)
-    ├── PredictiveMonitorAgent
-    ├── AnomalyDetectionAgent
-    ├── MemoryDecayAgent
-    ├── MemoryConsolidationAgent
-    ├── ProactiveMemoryPushAgent
-    └── AutonomousGoalGenerationAgent
-
-Query Path (per read)
-    ├── QueryIntelligenceAgent   — intent classification, query expansion
-    ├── ContextAmplifierAgent    — expert context from silos
-    ├── OrgAttentionAgent        — attention-weighted relevance
-    ├── CausalReasoningAgent     — causal chain assembly
-    ├── EpisodicGroupingAgent    — episode reconstruction
-    ├── TemporalReasoningAgent   — time-aware context ordering
-    ├── NarrativeSynthesisAgent  — structured summary with confidence
-    └── UncertaintyReportingAgent — what we don't know
-
-Cognitive Layer
-    ├── GoalDecompositionAgent
-    ├── MetaCognitivePlanningAgent
-    ├── TheoryOfMindAgent        — user + peer agent belief models
-    ├── PlaybookAgent + PlaybookExecutionTrackerAgent
-    ├── MultiTurnGoalTrackingAgent
-    ├── AuditTrailAgent
-    ├── HumanReviewQueueAgent
-    └── OrchestrationBusAgent
-
-LLM Backend
-    └── Ollama (local, default: qwen2.5:0.5b)
-        └── heuristic fallback on every agent (AGENT_STRATEGY=heuristic|llm)
-```
+Plain-text fallback summary: applications write to enrichment agents, persisted state lives in PostgreSQL/Qdrant/Redis, query reads assemble causality and narrative context, and Celery background agents continuously maintain memory quality and autonomous operations.
 
 **Key architectural rules across all agents:**
 - Every agent has a heuristic path that requires no LLM — the system degrades gracefully when Ollama is unavailable
