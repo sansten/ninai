@@ -4,9 +4,11 @@
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-green.svg)](https://fastapi.tiangolo.com/)
 
-**Apps write raw data. Ninai makes sense of it.**
+**The cognitive layer between your AI agents and their knowledge.**
 
-Ninai is not a memory cache or a vector search wrapper. It is a Cognitive OS: a reasoning layer that sits between your enterprise AI agents and their stored knowledge, continuously enriching what comes in, linking entities across silos, assembling full context on read, and reasoning proactively — without any of that logic living in your agent or application code.
+Ninai is an open-source Cognitive OS: a multi-tenant reasoning platform that makes enterprise AI agents share knowledge, resolve conflicts, reason causally, and operate autonomously, with full audit trail and human oversight built in.
+
+-> **[5-minute quickstart](QUICKSTART.md)** · **[Live demo](https://demo.ninai.ai)** · **[Enterprise pricing](docs/EDITIONS.md)**
 
 ---
 
