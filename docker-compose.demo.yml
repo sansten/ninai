@@ -1,0 +1,42 @@
+version: "3.9"
+
+services:
+  backend:
+    environment:
+      - APP_ENV=demo
+      - DEBUG=false
+
+  frontend:
+    environment:
+      - VITE_APP_NAME=Ninai Demo
+
+  seed:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: ninai-seed
+    command: python scripts/seed_data.py
+    environment:
+      - APP_ENV=demo
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=ninai
+      - POSTGRES_PASSWORD=ninai_dev_password
+      - POSTGRES_DB=ninai
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - QDRANT_HOST=qdrant
+      - QDRANT_PORT=6333
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+    networks:
+      - ninai-network
+
+networks:
+  ninai-network:
+    external: false
