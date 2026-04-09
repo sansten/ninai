@@ -234,6 +234,20 @@ curl -X POST http://localhost:8000/api/v1/memories/search \
   -d '{"query_text": "kubernetes deployment", "limit": 5}'
 ```
 
+## Who Uses Ninai
+
+### Platform Engineering Team
+You operate multiple AI agents across finance, operations, and support. Every agent has its own store, and cross-team questions stall because memory is fragmented. Ninai becomes the shared cognitive layer: entities resolved across silos, conflicts surfaced before they propagate, and retrieval assembled from all connected context.
+
+### AI Product Manager / Agent Developer
+You are shipping an AI product where agents need durable memory across sessions, feedback loops, and safe escalation paths. Ninai gives you multi-tenant persistent memory, review queues for high-risk decisions, and an end-to-end audit trail without rebuilding this infrastructure from scratch.
+
+### Enterprise Architecture / Security
+You need AI memory that is tenant-isolated at the database layer, auditable to each decision, and deployable in your own environment. Ninai enforces PostgreSQL RLS, provides full decision traceability, and supports self-managed deployment patterns for regulated workloads.
+
+### ML / AI Research Team
+You need measurable improvement loops for reasoning quality over time. Ninai includes benchmark surfaces for decision quality and explanation fidelity, plus deterministic heuristic fallback so large evaluation runs are possible even without live LLM dependency.
+
 ---
 
 ## Security
