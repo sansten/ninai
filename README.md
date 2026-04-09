@@ -5,6 +5,7 @@
 [![Tests](https://img.shields.io/badge/tests-6157%20passing-brightgreen)](backend/tests/)
 [![CI](https://github.com/sansten/ninai/actions/workflows/ci.yml/badge.svg)](https://github.com/sansten/ninai/actions/workflows/ci.yml)
 [![Last Commit](https://img.shields.io/github/last-commit/sansten/ninai)](https://github.com/sansten/ninai/commits/main)
+[![Live Demo](https://img.shields.io/badge/demo-coming%20soon-orange)](https://demo.ninai.ai)
 
 **The cognitive layer between your AI agents and their knowledge.**
 
@@ -437,6 +438,7 @@ docker compose up -d --build
 
 ### Production
 - [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) — self-managed runbook
+- [docs/DEMO_SETUP.md](docs/DEMO_SETUP.md) — hosted demo setup (Render/Railway/Fly.io)
 - [ninai-deploy/](../ninai-deploy/) — Kubernetes manifests and Helm charts
 - [ninai-enterprise/](../ninai-enterprise/) — enterprise editions
 
