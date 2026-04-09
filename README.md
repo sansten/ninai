@@ -334,16 +334,18 @@ python -m tests.benchmarks.run_all --mode unit --strategy heuristic --dataset ka
 
 ### Ninai Results (Current)
 
-| Metric | Heuristic | LLM (qwen2.5:7b) | Heuristic (3-run mean) |
+| Metric | Heuristic mode | LLM mode (qwen2.5:7b) | Heuristic (3-run mean) |
 |---|---:|---:|---:|
 | Duration (seconds) | 1.188 | 239.516 | 0.837 |
-| Composite score (quality x reliability) | 0.7952 | n/a | 0.7952 |
-| Conflict F1 | 0.6667 | 0.7273 | 0.6667 |
-| Goal accuracy | 0.8438 | 0.6875 | 0.8438 |
-| Goal scored accuracy | 0.8438 | 0.6825 | 0.8438 |
-| LLM success rate | 0.0 | 0.4922 | 0.0 |
-| Fallback rate | 0.0 | 0.5078 | 0.0 |
+| Composite score (quality x reliability) | 0.7952 | — | 0.7952 |
+| Conflict detection F1 | 0.6667 | 0.7273 | 0.6667 |
+| Goal decomposition accuracy | 0.8438 | 0.6875 | 0.8438 |
 | Recall@10 | 0.875 | 0.875 | 0.875 |
+| LLM calls made | 0 (heuristic) | 49% | 0 (heuristic) |
+| LLM fallback rate | 0 (heuristic) | 51% | 0 (heuristic) |
+
+> Heuristic mode makes zero LLM calls by design, so a 0% LLM rate is expected and not a failure.
+> LLM mode routes approximately 49% of decisions to Ollama and the remainder to the heuristic path.
 
 ### LLM Model Comparison (Kaggle, unit mode)
 
