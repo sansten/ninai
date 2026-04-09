@@ -81,6 +81,29 @@ Ninai treats agents as first-class entities:
 
 ---
 
+## How Ninai Compares
+
+| Capability | Mem0 | Zep | LangMem | MemGPT | **Ninai** |
+|-----------|------|-----|---------|--------|-----------|
+| Multi-tenant isolation (DB-layer RLS) | ❌ | ❌ | ❌ | ❌ | ✅ |
+| Cross-silo entity resolution | ❌ | ❌ | ❌ | ❌ | ✅ |
+| Causal reasoning across memories | ❌ | ❌ | ❌ | Partial | ✅ |
+| Autonomous goal generation | ❌ | ❌ | ❌ | Partial | ✅ |
+| Human review queue | ❌ | ❌ | ❌ | ❌ | ✅ |
+| Conflict detection + resolution | ❌ | Partial | ❌ | ❌ | ✅ |
+| Memory sleep cycle (consolidation) | ❌ | ❌ | ❌ | Partial | ✅ |
+| Theory of mind agent modeling | ❌ | ❌ | ❌ | ❌ | ✅ |
+| Audit + explainability trail | ❌ | Partial | ❌ | ❌ | ✅ |
+| Heuristic fallback (no LLM required) | ❌ | ❌ | ❌ | ❌ | ✅ |
+| On-premises / self-hosted | ✅ | ✅ | Partial | ✅ | ✅ |
+| Open source (MIT) | ✅ | Partial | ✅ | ✅ | ✅ |
+
+> Comparison reflects publicly documented capabilities as of 2026-04. Corrections welcome via PR.
+
+**Ninai is the only open-source memory system built for multi-tenant enterprise deployments with full governance, auditability, and autonomous reasoning built in.**
+
+---
+
 ## Architecture
 
 ```
