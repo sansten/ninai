@@ -24,7 +24,20 @@ jobs:
           ENVIRONMENT: test
           JWT_SECRET: test-secret
           DATABASE_URL: sqlite+aiosqlite:///./test.db
-        run: python -m pytest tests/ -q
+        run: |
+          set -o pipefail
+          python -m pytest tests/ -q | tee pytest-output.txt
+      - name: Update test badge artifact
+        run: |
+          mkdir -p docs/badges
+          COUNT=$(grep -oE "[0-9]+ passed" backend/pytest-output.txt | tail -1 | grep -oE "[0-9]+" || echo "0")
+          echo "{\"schemaVersion\":1,\"label\":\"tests\",\"message\":\"${COUNT} passing\",\"color\":\"brightgreen\"}" > docs/badges/tests.json
+      - name: Upload test badge artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-badge-${{ github.sha }}
+          path: docs/badges/tests.json
+          retention-days: 30
       - name: Export OpenAPI spec
         working-directory: backend
         env:
