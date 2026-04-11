@@ -84,6 +84,7 @@ class Organization(Base, UUIDMixin, TimestampMixin):
     status: Mapped[str] = mapped_column(
         String(30),
         default="active",
+        server_default="active",
         nullable=False,
         index=True,
         doc="pending_verification | active | suspended | deleted",
