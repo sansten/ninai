@@ -90,7 +90,10 @@ class DatabaseBackupService:
         self.db_url = db_url
         self.backup_dir = backup_dir
         self.s3_storage = s3_storage
-        self.backup_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            self.backup_dir.mkdir(parents=True, exist_ok=True)
+        except OSError:
+            pass  # read-only filesystem in containers; directory created at runtime
     
     def create_full_backup(self, db: Session, db_name: str = "ninai") -> Optional[BackupTask]:
         """Create full database backup"""
