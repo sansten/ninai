@@ -23,7 +23,8 @@ COPY . .
 
 # Copy and set permissions for entrypoint script (must be done as root)
 COPY entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh && \
+RUN sed -i 's/\r//' /entrypoint.sh && \
+    chmod +x /entrypoint.sh && \
     adduser --disabled-password --gecos '' appuser && \
     chown -R appuser:appuser /app && \
     chown appuser:appuser /entrypoint.sh

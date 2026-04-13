@@ -160,7 +160,7 @@ async def find_shortest_path(
 @router.get("/nodes/{node_id}/degree", response_model=GraphDegreeResponse)
 async def get_node_degree(
     node_id: str,
-    direction: str = Query("both", regex="^(in|out|both)$"),
+    direction: str = Query("both", pattern="^(in|out|both)$"),
     tenant: TenantContext = Depends(get_tenant_context),
     db: AsyncSession = Depends(get_db),
 ):

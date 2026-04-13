@@ -47,6 +47,24 @@ TENANT_TABLES = [
 ]
 
 
+def _has_org_column(conn, table: str) -> bool:
+    return bool(
+        conn.execute(
+            sa.text(
+                """
+                SELECT 1
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = :table
+                  AND column_name = 'organization_id'
+                LIMIT 1
+                """
+            ),
+            {"table": table},
+        ).scalar()
+    )
+
+
 def upgrade() -> None:
     conn = op.get_bind()
     for table in TENANT_TABLES:
@@ -56,6 +74,9 @@ def upgrade() -> None:
             {"tname": f"public.{table}"},
         ).scalar()
         if result is None:
+            continue
+
+        if not _has_org_column(conn, table):
             continue
 
         conn.execute(sa.text(f"ALTER TABLE {table} ENABLE ROW LEVEL SECURITY"))
@@ -69,7 +90,7 @@ def upgrade() -> None:
             sa.text(f"""
                 CREATE POLICY tenant_isolation ON {table}
                   USING (
-                    organization_id = current_setting('app.current_org_id', TRUE)::uuid
+                                        organization_id::text = current_setting('app.current_org_id', TRUE)
                   )
             """)
         )
@@ -82,6 +103,8 @@ def downgrade() -> None:
             sa.text("SELECT to_regclass(:tname)"), {"tname": f"public.{table}"}
         ).scalar()
         if result is None:
+            continue
+        if not _has_org_column(conn, table):
             continue
         conn.execute(sa.text(f"DROP POLICY IF EXISTS tenant_isolation ON {table}"))
         conn.execute(sa.text(f"ALTER TABLE {table} DISABLE ROW LEVEL SECURITY"))

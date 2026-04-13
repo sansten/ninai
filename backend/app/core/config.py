@@ -174,6 +174,10 @@ class Settings(BaseSettings):
             return f"redis://:{self.REDIS_PASSWORD}@{self.REDIS_HOST}:{self.REDIS_PORT}/{self.REDIS_DB}"
         return f"redis://{self.REDIS_HOST}:{self.REDIS_PORT}/{self.REDIS_DB}"
 
+    # Dedicated Redis endpoint for FalkorDB graph queries.
+    # Falls back to REDIS_URL when not provided.
+    GRAPH_REDIS_URL: str | None = None
+
     # -------------------------------------------------------------------------
     # Qdrant
     # -------------------------------------------------------------------------
