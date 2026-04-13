@@ -24,9 +24,9 @@ jobs:
           python -m pip install build twine
           python -m build
           python -m twine check dist/*
-        working-directory: repos/ninai/sdk/python
+        working-directory: sdk/python
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          packages-dir: repos/ninai/sdk/python/dist/
+          packages-dir: sdk/python/dist/
