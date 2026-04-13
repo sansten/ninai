@@ -8,6 +8,7 @@ Also includes external system sync adapters for Obsidian, Notion, and Roam Resea
 from .langchain_adapter import NinaiLangChainMemory
 from .llamaindex_adapter import NinaiLlamaIndexVectorStore
 from .langgraph_adapter import NinaiLangGraphCheckpointSaver, create_checkpoint_saver
+from .google_adk_adapter import NinaiADKToolset, NinaiADKSessionHook, NinaiADKEventBridge, NinaiADKAgent
 from .external_sync import (
     ExternalSyncAdapter,
     ObsidianVaultAdapter,
@@ -37,6 +38,10 @@ __all__ = [
     "create_crew_memory",
     "NinaiLangGraphCheckpointSaver",
     "create_checkpoint_saver",
+    "NinaiADKToolset",
+    "NinaiADKSessionHook",
+    "NinaiADKEventBridge",
+    "NinaiADKAgent",
     "ExternalSyncAdapter",
     "ObsidianVaultAdapter",
     "NotionDatabaseAdapter",
