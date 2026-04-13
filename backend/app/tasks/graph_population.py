@@ -74,11 +74,11 @@ async def _populate_relationships_async(
     """Async implementation of relationship population."""
     
     async with AsyncSessionLocal() as session:
-        redis_client = redis.Redis(
-            host=settings.REDIS_HOST,
-            port=settings.REDIS_PORT,
-            decode_responses=True
+        graph_redis_url = (
+            getattr(settings, "GRAPH_REDIS_URL", None)
+            or getattr(settings, "REDIS_URL", "redis://localhost:6379/0")
         )
+        redis_client = redis.from_url(graph_redis_url, decode_responses=True)
         
         service = GraphRelationshipService(session, redis_client)
         
@@ -214,11 +214,11 @@ async def _recalculate_similarities_async(
     """Async implementation of similarity recalculation."""
     
     async with AsyncSessionLocal() as session:
-        redis_client = redis.Redis(
-            host=settings.REDIS_HOST,
-            port=settings.REDIS_PORT,
-            decode_responses=True
+        graph_redis_url = (
+            getattr(settings, "GRAPH_REDIS_URL", None)
+            or getattr(settings, "REDIS_URL", "redis://localhost:6379/0")
         )
+        redis_client = redis.from_url(graph_redis_url, decode_responses=True)
         
         service = GraphRelationshipService(session, redis_client)
         

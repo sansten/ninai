@@ -29,28 +29,11 @@ export function AuthLayout() {
     <div className="min-h-screen flex flex-col justify-center py-12 sm:px-6 lg:px-8 bg-gray-50">
       {/* Logo / Brand */}
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="flex justify-center">
-          <div className="w-12 h-12 bg-primary-600 rounded-xl flex items-center justify-center">
-            <svg
-              className="w-8 h-8 text-white"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
-              />
-            </svg>
-          </div>
-        </div>
-        <h2 className="font-robotic mt-6 text-center text-3xl font-bold tracking-tight text-gray-900">
-          Ninai
+        <h2 className="ninai mt-6 text-center">
+          NINAI
         </h2>
-        <p className="font-robotic mt-2 text-center text-sm text-gray-600">
-          Agentic AI Cognitive Operating System
+        <p className="cos text-center">
+          Cognitive Operating System
         </p>
       </div>
 
@@ -63,7 +46,7 @@ export function AuthLayout() {
 
       {/* Footer */}
       <div className="mt-8 text-center text-sm text-gray-500">
-        <p>&copy; {new Date().getFullYear()} Ninai. All rights reserved.</p>
+        <p>&copy; {new Date().getFullYear()} <span className="font-semibold text-black">NINAI</span>. All rights reserved.</p>
       </div>
     </div>
   );

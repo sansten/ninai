@@ -10,8 +10,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import {
   CloudArrowUpIcon,
-  CloudArrowDownIcon,
-  ClockIcon,
   ChartBarIcon,
   InformationCircleIcon,
   CheckCircleIcon,
@@ -209,7 +207,7 @@ export function BackupTab() {
             <div>
               <p className="text-sm text-gray-500">Success Rate</p>
               <p className="text-2xl font-semibold text-gray-900">
-                {statsLoading ? '...' : `${(stats?.success_rate * 100).toFixed(1) || 0}%`}
+                {statsLoading ? '...' : `${((stats?.success_rate ?? 0) * 100).toFixed(1)}%`}
               </p>
             </div>
             <CheckCircleIcon className="h-8 w-8 text-green-600" />

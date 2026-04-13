@@ -114,7 +114,7 @@ function MiniLineChart({ data, dataKey, label, color, domain = [0, 1] }: MiniLin
           <YAxis domain={domain} tick={{ fontSize: 10 }} />
           <Tooltip
             contentStyle={{ fontSize: 12 }}
-            formatter={(v: number) => [typeof v === 'number' ? v.toFixed(4) : v, label]}
+            formatter={(v: number | undefined) => [typeof v === 'number' ? v.toFixed(4) : v, label]}
           />
           {dataKey === 'composite' && (
             <ReferenceLine y={0.5} stroke="#d1d5db" strokeDasharray="4 4" />
@@ -264,8 +264,8 @@ export default function BenchmarkDashboardPage() {
                   <YAxis domain={[0, 1]} tick={{ fontSize: 11 }} />
                   <Tooltip
                     contentStyle={{ fontSize: 12 }}
-                    formatter={(v: number, _: string, props: any) => [
-                      v.toFixed(4),
+                    formatter={(v: number | undefined, _: string | undefined, props: any) => [
+                      (v ?? 0).toFixed(4),
                       `${props.payload.strategy}${props.payload.model !== 'heuristic' ? ' / ' + props.payload.model : ''}`,
                     ]}
                   />

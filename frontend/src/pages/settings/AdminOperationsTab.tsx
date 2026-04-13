@@ -771,39 +771,6 @@ export function AdminOperationsTab() {
     );
   }
 
-  function renderObservability() {
-    return (
-      <div className="space-y-4">
-        <div className="card">
-          <h3 className="text-lg font-semibold text-gray-900 mb-2 inline-flex items-center">
-            Observability
-            <InfoTooltip
-              title="Observability & Metrics"
-              description="Expose system metrics in Prometheus format for external monitoring tools (Grafana, Datadog, etc.)."
-              whenToUse="When setting up production monitoring dashboards or integrating with existing observability stack."
-              example="Connect Prometheus to /metrics endpoint → build Grafana dashboard → set up alerts for high latency or error rates."
-              recommended="This is typically one-time setup during deployment. Point your monitoring tool to /metrics and configure scraping interval."
-            />
-          </h3>
-          <p className="text-sm text-gray-500 mb-3">Surface metrics and export in Prometheus format.</p>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div className="p-3 bg-gray-50 rounded">
-              <p className="text-sm text-gray-600">Metrics endpoint</p>
-              <p className="text-xl font-semibold text-gray-900">/metrics</p>
-              <p className="text-xs text-gray-500">Expose observability_service.get_prometheus_format()</p>
-            </div>
-            <div className="p-3 bg-gray-50 rounded">
-              <p className="text-sm text-gray-600">App metrics</p>
-              <p className="text-xl font-semibold text-gray-900">http_requests_total</p>
-              <p className="text-xs text-gray-500">Track request volume and latency histograms.</p>
-            </div>
-          </div>
-          <p className="text-xs text-gray-500 mt-3">Wire this panel once metrics endpoints are exposed; keep using /health for probes.</p>
-        </div>
-      </div>
-    );
-  }
-
   function renderAlerts() {
     return (
       <div className="space-y-4">

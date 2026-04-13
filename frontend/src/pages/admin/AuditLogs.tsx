@@ -6,7 +6,7 @@
 import React, { useState } from 'react';
 import { useAdmin } from '../../hooks/useAdmin';
 import { useAuditLogs } from '../../hooks/useAdminAPI';
-import { Search, Filter, Loader, AlertCircle, Eye, ChevronDown } from 'lucide-react';
+import { Filter, Loader, AlertCircle, Eye, ChevronDown } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
 const AuditLogs: React.FC = () => {

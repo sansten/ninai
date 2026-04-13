@@ -220,10 +220,10 @@ export function PipelineMonitor() {
               <YAxis yAxisId="right" orientation="right" />
               <Tooltip 
                 labelFormatter={(val) => new Date(val).toLocaleString()}
-                formatter={(value: number, name: string) => {
-                  if (name === 'sla_compliance_rate') return [`${value.toFixed(1)}%`, 'SLA Compliance'];
-                  if (name === 'completed_tasks') return [value, 'Completed'];
-                  if (name === 'avg_duration_ms') return [`${value.toFixed(0)}ms`, 'Avg Duration'];
+                formatter={(value: number | undefined, name: string | undefined) => {
+                  if (name === 'sla_compliance_rate') return [`${(value ?? 0).toFixed(1)}%`, 'SLA Compliance'];
+                  if (name === 'completed_tasks') return [value ?? 0, 'Completed'];
+                  if (name === 'avg_duration_ms') return [`${(value ?? 0).toFixed(0)}ms`, 'Avg Duration'];
                   return [value, name];
                 }}
               />

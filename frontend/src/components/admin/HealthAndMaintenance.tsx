@@ -8,7 +8,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { ExclamationTriangleIcon, CheckCircleIcon, XCircleIcon, InformationCircleIcon } from '@heroicons/react/24/solid';
+import { InformationCircleIcon } from '@heroicons/react/24/solid';
 import clsx from 'clsx';
 import { apiClient, getErrorMessage } from '@/lib/api';
 
@@ -117,7 +117,7 @@ export function HealthAndMaintenance() {
           </label>
         </div>
 
-        {config.maintenance_mode_enabled && (
+        {config.maintenance_mode && (
           <div className="space-y-3">
             <textarea
               placeholder="Maintenance message (shown to users)"

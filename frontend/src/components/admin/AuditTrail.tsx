@@ -16,6 +16,9 @@ interface AuditEvent {
   timestamp: string;
   category: string;
   user_email?: string;
+  user_id?: string;
+  resource_type?: string;
+  details?: string;
   before?: Record<string, unknown>;
   after?: Record<string, unknown>;
   status?: 'success' | 'failed';
@@ -194,7 +197,7 @@ export function AuditTrail() {
 
         {auditQuery.data && (
           <div className="mt-4 text-xs text-gray-500">
-            Showing {auditQuery.data.items?.length ?? 0} of {auditQuery.data.total} events
+            Showing {auditQuery.data.events?.length ?? 0} of {auditQuery.data.total} events
           </div>
         )}
       </div>

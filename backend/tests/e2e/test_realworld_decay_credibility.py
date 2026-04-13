@@ -14,6 +14,8 @@ import pytest
 
 os.environ.setdefault("AGENT_STRATEGY", "heuristic")
 
+pytest.importorskip("ninai_enterprise", reason="Enterprise-only agent validation lives in ninai-enterprise")
+
 from app.agents.memory_decay_agent import MemoryDecayAgent
 from app.agents.credibility_agent import CredibilityAgent
 from tests.e2e.data import (

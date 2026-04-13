@@ -6,6 +6,7 @@ python_functions = "test_*"
 filterwarnings = [
     "ignore::DeprecationWarning",
 ]
+addopts = "-p no:faker"
 
 [tool.black]
 line-length = 100

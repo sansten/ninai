@@ -4,7 +4,7 @@
  */
 
 import { createContext, useContext } from 'react';
-import { User } from '../types/auth';
+import { User } from '../types/admin';
 
 interface AdminContextType {
   adminUser: User | null;

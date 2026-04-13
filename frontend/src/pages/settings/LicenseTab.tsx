@@ -41,7 +41,7 @@ export function LicenseTab() {
       const res = await apiClient.post<LicenseTokenInfo>('/admin/license', { token });
       return res.data;
     },
-    onSuccess: (data) => {
+    onSuccess: () => {
       toast.success('License token updated successfully');
       setTokenInput('');
       setShowInput(false);

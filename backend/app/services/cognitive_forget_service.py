@@ -18,18 +18,16 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.agents.credibility_agent import (
-    classify_source_tier,
-    compute_credibility_score,
-)
-from app.agents.memory_decay_agent import (
-    compute_base_freshness,
-    compute_decay_rate,
-    domain_half_life,
-)
 from app.models.causal_edge import CausalEdge
 from app.models.memory import MemoryMetadata
 from app.models.user import User
+from app.services.enterprise_fallbacks import (
+    classify_source_tier,
+    compute_base_freshness,
+    compute_credibility_score,
+    compute_decay_rate,
+    domain_half_life,
+)
 from app.services.webhook_service import WebhookService
 
 

@@ -13,6 +13,8 @@ import pytest
 
 os.environ.setdefault("AGENT_STRATEGY", "heuristic")
 
+pytest.importorskip("ninai_enterprise", reason="Enterprise-only agent validation lives in ninai-enterprise")
+
 from app.agents.anomaly_detection_agent import AnomalyDetectionAgent
 from app.agents.conflict_detection_agent import ConflictDetectionAgent
 from tests.e2e.data import (

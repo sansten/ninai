@@ -33,5 +33,6 @@
     }
   },
   "include": ["src"],
+  "exclude": ["src/AppRouter.example.tsx"],
   "references": [{ "path": "./tsconfig.node.json" }]
 }

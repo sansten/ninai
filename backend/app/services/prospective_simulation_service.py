@@ -21,7 +21,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from app.agents.episodic_future_simulation_agent import run_heuristic as _run_simulation
+from app.services.enterprise_fallbacks import future_run_heuristic as _run_simulation
 
 
 # ---------------------------------------------------------------------------

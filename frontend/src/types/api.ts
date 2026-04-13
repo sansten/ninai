@@ -71,6 +71,32 @@ export interface TokenResponse {
 }
 
 // =============================================================================
+// Signup
+// =============================================================================
+
+export interface SignupRequest {
+  email: string;
+  password: string;
+  full_name: string;
+  org_name: string;
+  org_slug?: string;
+  ref?: string;
+}
+
+export interface SignupResponse {
+  message: string;
+  org_id: string;
+}
+
+export interface VerifyResponse {
+  access_token: string;
+  refresh_token: string;
+  token_type: string;
+  org_id: string;
+  user_id: string;
+}
+
+// =============================================================================
 // Organization
 // =============================================================================
 
@@ -311,6 +337,7 @@ export interface ApiKeySummary {
   id: string;
   name: string;
   prefix: string;
+  api_key?: string;
   user_id?: string;
   created_at: string;
   last_used_at?: string;

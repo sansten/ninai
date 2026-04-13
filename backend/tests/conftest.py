@@ -6,6 +6,7 @@ we set minimal dev defaults here before importing the app.
 """
 
 import os
+import platform
 
 
 os.environ.setdefault("SECRET_KEY", "dev-test-secret")
@@ -52,6 +53,19 @@ os.environ.setdefault(
     "TEST_DATABASE_URL_SYNC",
     f"postgresql://{_pg_user}:{_pg_password}@{_pg_host}:{_pg_port}/{_test_db_name_early}",
 )
+
+# On some Windows hosts, platform.machine() can block on WMI lookups during
+# SQLAlchemy import. Keep test startup deterministic by using env architecture.
+if os.name == "nt":
+    _proc_arch = os.environ.get("PROCESSOR_ARCHITECTURE", "")
+    platform.machine = lambda: _proc_arch  # type: ignore[assignment]
+    platform.uname = lambda: platform.uname_result(  # type: ignore[assignment]
+        "Windows",
+        "localhost",
+        "10",
+        "10.0.19045",
+        _proc_arch or "AMD64",
+    )
 
 import asyncio
 from typing import AsyncGenerator
