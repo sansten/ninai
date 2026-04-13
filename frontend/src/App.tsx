@@ -10,6 +10,8 @@ import { AuthLayout } from '@/components/layouts/AuthLayout';
 // Critical pages (loaded immediately)
 import { LoginPage } from '@/pages/auth/LoginPage';
 import { OidcCallbackPage } from '@/pages/auth/OidcCallbackPage';
+import { SignupPage } from '@/pages/auth/SignupPage';
+import { VerifyEmailPage } from '@/pages/auth/VerifyEmailPage';
 import { DashboardPage } from '@/pages/dashboard/DashboardPage';
 
 // Lazy-loaded pages (code splitting for better performance)
@@ -106,6 +108,8 @@ export default function App() {
       {/* Auth routes */}
       <Route element={<AuthLayout />}>
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/signup" element={<SignupPage />} />
+        <Route path="/signup/verify" element={<VerifyEmailPage />} />
         <Route path="/auth/oidc/callback" element={<OidcCallbackPage />} />
       </Route>
 

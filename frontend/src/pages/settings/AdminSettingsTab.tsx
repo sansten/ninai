@@ -3,7 +3,6 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 
 import { apiClient, getErrorMessage } from '@/lib/api';
-import { AdminKnowledgeReviewTab } from '@/pages/settings/AdminKnowledgeReviewTab';
 import { AdminOperationsTab } from '@/pages/settings/AdminOperationsTab';
 import { BackupTab } from '@/pages/settings/BackupTab';
 import { LicenseTab } from '@/pages/settings/LicenseTab';

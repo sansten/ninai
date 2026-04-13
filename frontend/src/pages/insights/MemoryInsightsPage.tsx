@@ -20,7 +20,6 @@ import {
   Tooltip as RechartsTooltip,
   ResponsiveContainer,
   Cell,
-  type TooltipProps,
 } from 'recharts';
 import { InformationCircleIcon, ArrowPathIcon } from '@heroicons/react/24/outline';
 import { apiClient } from '@/lib/api';
@@ -198,7 +197,14 @@ function LegendDot({ color, label, description, count, total }: LegendDotProps) 
 // Custom Recharts tooltip
 // ---------------------------------------------------------------------------
 
-function ChartTooltip({ active, payload, label, unit = '' }: TooltipProps<number, string> & { unit?: string }) {
+interface ChartTooltipProps {
+  active?: boolean;
+  payload?: Array<{ name?: string; value?: number | string; color?: string }>;
+  label?: string;
+  unit?: string;
+}
+
+function ChartTooltip({ active, payload, label, unit = '' }: ChartTooltipProps) {
   if (!active || !payload?.length) return null;
   return (
     <div className="rounded-lg border border-gray-200 bg-white px-3 py-2 shadow-lg text-xs">

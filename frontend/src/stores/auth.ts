@@ -88,6 +88,38 @@ interface AuthState {
   switchOrg: (org: Organization) => void;
 }
 
+function buildHydratedAuthState(state: Pick<
+  AuthState,
+  'accessToken' | 'refreshToken' | 'user' | 'currentOrg' | 'availableOrgs'
+>): Pick<
+  AuthState,
+  'user' | 'accessToken' | 'refreshToken' | 'currentOrg' | 'availableOrgs' | 'isAuthenticated' | 'isLoading'
+> {
+  const hasSession = !!state.accessToken && !!state.currentOrg && !!state.user;
+
+  if (!hasSession) {
+    return {
+      user: null,
+      accessToken: null,
+      refreshToken: null,
+      currentOrg: null,
+      availableOrgs: [],
+      isAuthenticated: false,
+      isLoading: false,
+    };
+  }
+
+  return {
+    user: state.user,
+    accessToken: state.accessToken,
+    refreshToken: state.refreshToken,
+    currentOrg: state.currentOrg,
+    availableOrgs: state.availableOrgs,
+    isAuthenticated: true,
+    isLoading: false,
+  };
+}
+
 /**
  * Auth store with persistence
  */
@@ -148,25 +180,21 @@ export const useAuthStore = create<AuthState>()(
         currentOrg: state.currentOrg,
         availableOrgs: state.availableOrgs,
       }),
-      onRehydrateStorage: () => (state) => {
-        // Set isAuthenticated based on stored token
-        if (state) {
-          const hasSession = !!state.accessToken && !!state.currentOrg && !!state.user;
-          state.isAuthenticated = hasSession;
-          state.isLoading = false;
-
-          if (!hasSession) {
-            state.user = null;
-            state.accessToken = null;
-            state.refreshToken = null;
-            state.currentOrg = null;
-            state.availableOrgs = [];
-          }
-        }
-      },
     }
   )
 );
+
+useAuthStore.persist.onHydrate(() => {
+  useAuthStore.setState({ isLoading: true });
+});
+
+useAuthStore.persist.onFinishHydration(() => {
+  useAuthStore.setState(buildHydratedAuthState(useAuthStore.getState()));
+});
+
+if (useAuthStore.persist.hasHydrated()) {
+  useAuthStore.setState(buildHydratedAuthState(useAuthStore.getState()));
+}
 
 /**
  * Get current user or throw

@@ -33,16 +33,16 @@ from datetime import datetime, timezone
 from typing import Any, Callable
 
 from app.agents.anomaly_detection_agent import run_heuristic as _anomaly_detect
-from app.agents.goal_decomposition_agent import (
-    extract_subtasks,
-    detect_blocking_subtask,
-    detect_goal,
-)
 from app.agents.debate_ensemble_agent import DebateEnsembleAgent
 from app.agents.memory_tier_manager_agent import MemoryTierManagerAgent
 from app.services.cognitive_fingerprint_service import CognitiveFingerprintService
 from app.services.context_compression_service import ContextCompressionService
 from app.services.corrective_rag_service import CorrectiveRagService
+from app.services.enterprise_fallbacks import (
+    detect_blocking_subtask,
+    detect_goal,
+    extract_subtasks,
+)
 from app.services.self_rag_service import SelfRagService
 
 

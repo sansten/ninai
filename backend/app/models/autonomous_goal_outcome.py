@@ -12,7 +12,7 @@ from sqlalchemy import Column, String, DateTime, Boolean, ForeignKey, JSON
 from sqlalchemy.dialects.postgresql import UUID
 import uuid
 
-from app.database import Base
+from app.models.base import Base
 
 
 class AutonomousGoalOutcome(Base):

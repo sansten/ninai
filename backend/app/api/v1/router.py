@@ -13,6 +13,7 @@ from app.api.v1.endpoints import (
     agent_runs,
     admin_settings,
     admin_knowledge,
+    auto_research_admin,
     review_knowledge,
     knowledge,
     memories,
@@ -131,6 +132,12 @@ api_router.include_router(
 api_router.include_router(
     admin_settings.router,
     prefix="/admin",
+    tags=["Admin"],
+)
+
+api_router.include_router(
+    auto_research_admin.router,
+    prefix="/api/v1",
     tags=["Admin"],
 )
 
@@ -648,5 +655,15 @@ api_router.include_router(
     tags=["Cognitive Schedules"],
 )
 
+from app.api.v1.endpoints import signup as signup_endpoint
+from app.api.v1.admin import saas_tenants
 
+api_router.include_router(
+    signup_endpoint.router,
+    tags=["Signup"],
+)
+
+api_router.include_router(
+    saas_tenants.router,
+)
 

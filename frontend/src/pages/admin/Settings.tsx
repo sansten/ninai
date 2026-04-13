@@ -6,7 +6,7 @@
 import React, { useState } from 'react';
 import { useAdmin } from '../../hooks/useAdmin';
 import { useSettings, useCreateSetting, useUpdateSetting, useDeleteSetting } from '../../hooks/useAdminAPI';
-import { Plus, Loader, AlertCircle, Trash2, Edit, Save, X } from 'lucide-react';
+import { Plus, Loader, Trash2, Edit, Save } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
 interface SettingInput {

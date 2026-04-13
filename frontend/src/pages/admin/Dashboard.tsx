@@ -7,7 +7,7 @@ import React from 'react';
 import { useAdmin } from '../../hooks/useAdmin';
 import { useDashboard } from '../../hooks/useAdminAPI';
 import {
-  BarChart3, AlertTriangle, TrendingUp, Activity, Loader, AlertCircle
+  AlertTriangle, TrendingUp, Activity, Loader, AlertCircle
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 

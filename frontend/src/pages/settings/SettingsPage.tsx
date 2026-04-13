@@ -594,7 +594,7 @@ function NotificationSettings() {
     },
   });
 
-  const savedPrefs = meData?.preferences?.notifications ?? {};
+  const savedPrefs: Partial<Record<NotificationKey, boolean>> = meData?.preferences?.notifications ?? {};
   const getChecked = (id: NotificationKey) => savedPrefs[id] !== false; // default on
 
   const saveMutation = useMutation({

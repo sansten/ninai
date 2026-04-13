@@ -5,7 +5,17 @@ deterministic heuristic paths rather than live LLM calls (which vary by
 Ollama availability/version).
 """
 
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+
 import pytest
+
+# Make ninai_enterprise importable when running e2e tests from the OSS backend root.
+_enterprise_src = Path(__file__).resolve().parents[4] / "ninai-enterprise" / "src"
+if _enterprise_src.exists() and str(_enterprise_src) not in sys.path:
+    sys.path.insert(0, str(_enterprise_src))
 
 
 @pytest.fixture(autouse=True)

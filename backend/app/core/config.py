@@ -174,6 +174,10 @@ class Settings(BaseSettings):
             return f"redis://:{self.REDIS_PASSWORD}@{self.REDIS_HOST}:{self.REDIS_PORT}/{self.REDIS_DB}"
         return f"redis://{self.REDIS_HOST}:{self.REDIS_PORT}/{self.REDIS_DB}"
 
+    # Dedicated Redis endpoint for FalkorDB graph queries.
+    # Falls back to REDIS_URL when not provided.
+    GRAPH_REDIS_URL: str | None = None
+
     # -------------------------------------------------------------------------
     # Qdrant
     # -------------------------------------------------------------------------
@@ -218,6 +222,22 @@ class Settings(BaseSettings):
     SMTP_FROM_EMAIL: str | None = None
     # slack fallback webhook; per-alert webhooks are preferred
     SLACK_DEFAULT_WEBHOOK: str | None = None
+
+    # -------------------------------------------------------------------------
+    # SaaS / Signup
+    # -------------------------------------------------------------------------
+    CURRENT_API_VERSION: str = "v1"
+    SENDGRID_API_KEY: str | None = None
+    EMAIL_FROM: str = "noreply@ninai.app"
+    EMAIL_FROM_NAME: str = "Ninai"
+    # Used in email links (verification URL, upgrade CTA)
+    FRONTEND_URL: str = "https://ninai.app"
+
+    # Trial defaults — individual org limits come from OrgSubscription.seat_limit
+    TRIAL_DAYS: int = 14
+    TRIAL_MAX_MEMORIES: int = 1_000
+    TRIAL_MAX_USERS: int = 3
+    TRIAL_MAX_API_CALLS_PER_DAY: int = 500
 
     # -------------------------------------------------------------------------
     # LLM (Optional)

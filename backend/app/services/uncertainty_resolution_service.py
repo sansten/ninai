@@ -27,12 +27,12 @@ import inspect
 from dataclasses import dataclass, field
 from typing import Any
 
-from app.agents.uncertainty_reporting_agent import (
-    run_heuristic as _uncertainty_heuristic,
+from app.services.cognitive_gateway_service import CognitiveGatewayService
+from app.services.enterprise_fallbacks import (
     collect_low_confidence_fields,
     collect_unresolved_conflicts,
+    uncertainty_run_heuristic as _uncertainty_heuristic,
 )
-from app.services.cognitive_gateway_service import CognitiveGatewayService
 
 
 # ---------------------------------------------------------------------------

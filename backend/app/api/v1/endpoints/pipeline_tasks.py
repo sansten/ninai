@@ -684,7 +684,7 @@ async def get_pipeline_stats_history(
 @router.get("/pipelines/export")
 @require_capability(Capabilities.PIPELINES_VIEW)
 async def export_pipeline_tasks(
-    format: str = Query("csv", regex="^(csv|json)$", description="Export format"),
+    format: str = Query("csv", pattern="^(csv|json)$", description="Export format"),
     status_filter: Optional[str] = Query(None, description="Filter by status"),
     hours: int = Query(24, ge=1, le=720, description="Hours of history"),
     current_user: User = Depends(get_current_user),

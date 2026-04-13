@@ -28,14 +28,14 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from app.agents.anomaly_detection_agent import run_heuristic as _anomaly_heuristic
-from app.agents.causal_reasoning_agent import (
+from app.services.cognitive_gateway_service import CognitiveGatewayService
+from app.services.enterprise_fallbacks import (
     build_adjacency,
     extract_root_causes,
-    trace_causal_chain,
     generate_counterfactual_hint,
     identify_effect_candidates,
+    trace_causal_chain,
 )
-from app.services.cognitive_gateway_service import CognitiveGatewayService
 
 
 # ---------------------------------------------------------------------------

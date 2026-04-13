@@ -8,7 +8,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { XMarkIcon, InformationCircleIcon } from '@heroicons/react/24/solid';
+import { InformationCircleIcon } from '@heroicons/react/24/solid';
 import { apiClient, getErrorMessage } from '@/lib/api';
 
 interface LogConfig {
@@ -19,6 +19,8 @@ interface LogConfig {
 
 interface WebhookConfig {
   id: string;
+  name?: string;
+  url?: string;
   channel: 'email' | 'slack' | 'webhook' | string;
   event_types?: string[];
   enabled: boolean;
@@ -260,7 +262,7 @@ export function ObservabilitySettings() {
               max="100"
               step="5"
               value={Math.round(((configQuery.data?.tracing?.sample_rate ?? 0) as number) * 100)}
-              onChange={(e) => {
+              onChange={(_e) => {
                 // Could add mutation here
               }}
               className="flex-1"

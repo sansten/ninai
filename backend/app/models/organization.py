@@ -75,7 +75,37 @@ class Organization(Base, UUIDMixin, TimestampMixin):
         nullable=True,
         doc="Parent organization ID (for subsidiaries)",
     )
-    
+
+    # Tenant lifecycle — set by signup flow and admin actions
+    # pending_verification: email not yet confirmed
+    # active: normal operation
+    # suspended: billing lapsed or admin action
+    # deleted: soft-deleted, all API calls return 404
+    status: Mapped[str] = mapped_column(
+        String(30),
+        default="active",
+        server_default="active",
+        nullable=False,
+        index=True,
+        doc="pending_verification | active | suspended | deleted",
+    )
+
+    # API version pinning — NULL means track the current stable version.
+    # Set automatically when a breaking v2 ships, so existing tenants keep working on v1.
+    pinned_api_version: Mapped[Optional[str]] = mapped_column(
+        String(10),
+        nullable=True,
+        default=None,
+        doc="If set, all requests for this org are served from this API version",
+    )
+
+    # Referral attribution — stored from ?ref= query param at signup
+    signup_ref: Mapped[Optional[str]] = mapped_column(
+        String(100),
+        nullable=True,
+        doc="Referral source (e.g. 'sansten')",
+    )
+
     # Relationships
     hierarchy_nodes: Mapped[List["OrganizationHierarchy"]] = relationship(
         "OrganizationHierarchy",

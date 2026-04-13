@@ -16,7 +16,6 @@ import {
   Shield,
   Sliders,
   FileText,
-  AlertTriangle,
   FlaskConical,
 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
@@ -32,7 +31,7 @@ interface NavItem {
 
 const AdminLayout: React.FC = () => {
   const { user, logout } = useAuth();
-  const { adminUser } = useAdmin();
+  const { hasPermission } = useAdmin();
   const navigate = useNavigate();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -87,12 +86,6 @@ const AdminLayout: React.FC = () => {
     navigate('/login');
   };
 
-  const hasPermission = (permission: string): boolean => {
-    // Check if adminUser has the required permission
-    if (!adminUser?.permissions) return false;
-    return adminUser.permissions.includes(permission);
-  };
-
   return (
     <div className="flex h-screen bg-gray-100">
       {/* Sidebar */}
@@ -104,7 +97,11 @@ const AdminLayout: React.FC = () => {
       >
         {/* Logo */}
         <div className="flex items-center justify-between h-16 px-4 border-b border-gray-800">
-          {sidebarOpen && <h1 className="text-xl font-bold">NINAI Admin</h1>}
+          {sidebarOpen && (
+            <h1 className="ninai !text-lg !leading-none !tracking-[0.14em] !text-black rounded-md bg-white px-2 py-1">
+              NINAI
+            </h1>
+          )}
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
             className="p-2 hover:bg-gray-800 rounded-lg"
@@ -136,7 +133,7 @@ const AdminLayout: React.FC = () => {
         {/* Version Info */}
         {sidebarOpen && (
           <div className="px-4 py-4 border-t border-gray-800 text-xs text-gray-500">
-            <div>NINAI v1.0</div>
+            <div className="ninai !text-sm !leading-none !tracking-[0.14em] !text-black rounded-md bg-white px-2 py-1 inline-block">NINAI</div>
             <div>Admin UI</div>
           </div>
         )}
@@ -157,7 +154,7 @@ const AdminLayout: React.FC = () => {
               className="flex items-center space-x-2 px-4 py-2 rounded-lg hover:bg-gray-100"
             >
               <UserIcon className="w-5 h-5" />
-              <span className="text-sm font-medium">{user?.full_name}</span>
+              <span className="text-sm font-medium">{user?.display_name}</span>
               <ChevronDown className="w-4 h-4" />
             </button>
 

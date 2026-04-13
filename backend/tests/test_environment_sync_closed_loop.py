@@ -6,6 +6,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+pytest.importorskip("ninai_enterprise", reason="Enterprise-only autonomous action agent tests")
+
 from app.agents.autonomous_action_agent import AutonomousActionAgent
 from app.agents.types import AgentContext
 from app.services.environment_sync_service import EnvironmentSyncService

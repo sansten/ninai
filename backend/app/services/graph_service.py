@@ -53,7 +53,11 @@ class FalkorDBGraphService:
             self.graph_name = graph_name
             return
         
-        self.redis_url = redis_url or getattr(settings, "REDIS_URL", "redis://localhost:6379/0")
+        self.redis_url = (
+            redis_url
+            or getattr(settings, "GRAPH_REDIS_URL", None)
+            or getattr(settings, "REDIS_URL", "redis://localhost:6379/0")
+        )
         self.graph_name = graph_name
         
         try:

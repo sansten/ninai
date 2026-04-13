@@ -8,7 +8,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { InformationCircleIcon, PauseIcon, PlayIcon, TrashIcon } from '@heroicons/react/24/solid';
+import { InformationCircleIcon } from '@heroicons/react/24/solid';
 import { apiClient, getErrorMessage } from '@/lib/api';
 
 interface QueueConfig {
@@ -39,7 +39,7 @@ export function QueueManagement() {
 
   const updateQueue = useMutation({
     mutationFn: async (data: QueueConfig) => {
-      const res = await apiClient.put(`/admin/ops/queues/${data.queue_name}`, data);
+      const res = await apiClient.put(`/admin/ops/queues/${data.name}`, data);
       return res.data;
     },
     onSuccess: () => {
@@ -192,17 +192,17 @@ export function QueueManagement() {
               <input
                 type="number"
                 className="input w-full"
-                value={formData.max_attempts || 0}
-                onChange={(e) => setFormData({ ...formData, max_attempts: parseInt(e.target.value) })}
+                value={formData.max_retries || 0}
+                onChange={(e) => setFormData({ ...formData, max_retries: parseInt(e.target.value) })}
               />
             </div>
             <div>
-              <label className="label">Backoff (seconds)</label>
+              <label className="label">Backoff (ms)</label>
               <input
                 type="number"
                 className="input w-full"
-                value={formData.backoff_seconds || 0}
-                onChange={(e) => setFormData({ ...formData, backoff_seconds: parseInt(e.target.value) })}
+                value={formData.retry_backoff_ms || 0}
+                onChange={(e) => setFormData({ ...formData, retry_backoff_ms: parseInt(e.target.value) })}
               />
             </div>
             <div>
@@ -210,8 +210,8 @@ export function QueueManagement() {
               <input
                 type="number"
                 className="input w-full"
-                value={formData.concurrency_limit || 0}
-                onChange={(e) => setFormData({ ...formData, concurrency_limit: parseInt(e.target.value) })}
+                value={formData.concurrency || 0}
+                onChange={(e) => setFormData({ ...formData, concurrency: parseInt(e.target.value) })}
               />
             </div>
           </div>

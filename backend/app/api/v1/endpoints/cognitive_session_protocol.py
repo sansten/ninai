@@ -22,8 +22,8 @@ from app.models.cognitive_session import CognitiveSession
 from app.services.cognitive_gateway_service import (
     CognitiveGatewayCapabilities,
     CognitiveGatewayService,
+    detect_goal,
 )
-from app.agents.goal_decomposition_agent import detect_goal
 
 router = APIRouter()
 

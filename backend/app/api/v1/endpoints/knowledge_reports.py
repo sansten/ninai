@@ -199,7 +199,7 @@ async def create_synthesis_report(
 @router.get("/synthesis/export")
 async def export_synthesis(
     report_id: str = Query(...),
-    format: str = Query("markdown", regex="^(markdown|json|pdf)$"),
+    format: str = Query("markdown", pattern="^(markdown|json|pdf)$"),
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):

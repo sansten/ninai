@@ -1,5 +1,4 @@
 import { defineConfig } from 'vite';
-import react from '@vitejs/plugin-react';
 import path from 'path';
 
 // https://vitejs.dev/config/
@@ -18,9 +17,15 @@ export default defineConfig(() => {
   const hmrHost = process.env.VITE_HMR_HOST?.trim();
   const hmrPortRaw = process.env.VITE_HMR_PORT?.trim();
   const hmrPort = hmrPortRaw ? Number(hmrPortRaw) : undefined;
+  const allowedHosts = (
+    process.env.VITE_ALLOWED_HOSTS?.split(',').map((host) => host.trim()).filter(Boolean) ||
+    []
+  );
 
   return {
-    plugins: [react()],
+    // Intentionally avoid React Fast Refresh plugin in this deployment path.
+    // It injects a preamble guard that can prevent app mount behind some L7 proxies.
+    plugins: [],
     resolve: {
       alias: {
         '@': path.resolve(__dirname, './src'),
@@ -28,6 +33,8 @@ export default defineConfig(() => {
     },
     server: {
       port: devPort,
+      // Needed for ingress/LB probes and custom domains in containerized deployments.
+      allowedHosts: allowedHosts.length > 0 ? allowedHosts : true,
       proxy: {
         '/api': {
           target: apiProxyTarget,
@@ -49,38 +56,13 @@ export default defineConfig(() => {
         output: {
           // Manual chunk splitting for better caching
           manualChunks: {
-            // Vendor chunks
             'vendor-react': ['react', 'react-dom', 'react-router-dom'],
-            'vendor-ui': ['@radix-ui/react-dialog', '@radix-ui/react-dropdown-menu', '@radix-ui/react-navigation-menu'],
             'vendor-utils': ['axios', 'date-fns', 'zustand', 'clsx'],
-            // Feature-based chunks
-            'admin': [
-              './src/pages/admin',
-              './src/components/admin',
-              './src/hooks/useAdmin',
-              './src/services/admin'
-            ],
-            'memories': [
-              './src/pages/memories',
-              './src/components/memory',
-              './src/hooks/useMemory',
-            ],
-            'auth': [
-              './src/pages/auth',
-              './src/services/auth',
-              './src/hooks/useAuth',
-            ],
           },
         },
       },
       // Minification and compression
-      minify: 'terser',
-      terserOptions: {
-        compress: {
-          drop_console: true,
-          drop_debugger: true,
-        },
-      },
+      minify: 'esbuild',
       // Output directory
       outDir: 'dist',
       // Source maps for production debugging

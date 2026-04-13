@@ -17,7 +17,6 @@ const Users: React.FC = () => {
   const { hasPermission } = useAdmin();
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
-  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
 
   const { data, isLoading, error } = useUsers(search, undefined, page, 50);
   const disableUserMutation = useDisableUser();

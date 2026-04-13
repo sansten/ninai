@@ -6,7 +6,7 @@
  */
 
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import toast from 'react-hot-toast';
 import { apiClient, getErrorMessage } from '@/lib/api';
@@ -206,12 +206,12 @@ export function LoginPage() {
         )}
       </button>
 
-      {/* Local seeded credentials hint */}
-      <div className="mt-4 p-4 bg-gray-50 rounded-lg text-sm text-gray-600">
-        <p className="font-medium">Local Seeded Credentials</p>
-        <p>Email: admin@ninai.dev</p>
-        <p>Password: admin123</p>
-      </div>
+      <p className="text-center text-sm text-gray-500">
+        Don&apos;t have an account?{' '}
+        <Link to="/signup" className="font-medium text-primary-600 hover:text-primary-500">
+          Start free trial
+        </Link>
+      </p>
     </form>
   );
 }

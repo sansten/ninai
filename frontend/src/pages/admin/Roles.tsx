@@ -4,16 +4,13 @@
  */
 
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useAdmin } from '../../hooks/useAdmin';
 import { useRoles, useCreateRole, useDeleteRole, usePermissions } from '../../hooks/useAdminAPI';
-import { Plus, Loader, AlertCircle, Trash2, Edit, Check } from 'lucide-react';
-import { cn } from '../../lib/utils';
+import { Plus, Loader, Trash2, Edit } from 'lucide-react';
 
 const Roles: React.FC = () => {
-  const navigate = useNavigate();
   const { hasPermission } = useAdmin();
-  const [page, setPage] = useState(1);
+  const [page] = useState(1);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
