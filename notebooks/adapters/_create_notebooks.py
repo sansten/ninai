@@ -26,18 +26,8 @@ def code(src):
 
 
 # ---------------------------------------------------------------------------
-# langchain_adapter_sample.ipynb
+# Shared mock helper (used by all three notebooks)
 # ---------------------------------------------------------------------------
-
-SETUP = """\
-import sys, os
-SDK_PATH = os.path.abspath(os.path.join(os.getcwd(), '..', '..', 'sdk', 'python'))
-if SDK_PATH not in sys.path:
-    sys.path.insert(0, SDK_PATH)
-import langchain_core, ninai
-print('langchain_core:', langchain_core.__version__)
-print('ninai SDK:', ninai.__version__)
-"""
 
 MOCK = """\
 from unittest.mock import MagicMock
@@ -46,115 +36,63 @@ from types import SimpleNamespace
 _STORE: dict = {}
 _CTR = [0]
 
-def _mem(id, content, title='', tags=None):
-    return SimpleNamespace(id=id, content=content, title=title, tags=tags or [])
-
 def _mock_create(**kwargs):
     _CTR[0] += 1
-    m = _mem(str(_CTR[0]), kwargs.get('content', ''), kwargs.get('title', ''), kwargs.get('tags', []))
+    m = SimpleNamespace(
+        id=str(_CTR[0]), content=kwargs.get('content', ''),
+        title=kwargs.get('title', ''), tags=kwargs.get('tags', []),
+    )
     _STORE[m.id] = m
     return m
 
 def _mock_search(query, **kwargs):
-    items = [SimpleNamespace(memory_id=m.id, content=m.content, score=0.9, title=m.title)
-             for m in list(_STORE.values())[-5:]]
+    items = [
+        SimpleNamespace(memory_id=m.id, content=m.content, score=0.9, title=m.title)
+        for m in list(_STORE.values())[-5:]
+    ]
     return SimpleNamespace(items=items[:3], total=len(items))
 
-# Use a plain MagicMock so .memories auto-creates child mocks
 client = MagicMock()
 client.memories.create.side_effect = _mock_create
 client.memories.search.side_effect = _mock_search
 print('Mock client ready')
 """
 
-HISTORY = """\
-from typing import List, Sequence
-from langchain_core.chat_history import BaseChatMessageHistory
-from langchain_core.messages import BaseMessage, HumanMessage, AIMessage
+# ---------------------------------------------------------------------------
+# langchain_adapter_sample.ipynb
+# ---------------------------------------------------------------------------
 
+LC_SETUP = """\
+import sys, os
+SDK_PATH = os.path.abspath(os.path.join(os.getcwd(), '..', '..', 'sdk', 'python'))
+if SDK_PATH not in sys.path:
+    sys.path.insert(0, SDK_PATH)
 
-class NinaiChatMessageHistory(BaseChatMessageHistory):
-    \"\"\"Persists LangChain conversation turns in Ninai memory.\"\"\"
+import langchain_core
+import ninai
+from ninai.adapters.langchain import (
+    NinaiChatMessageHistory,
+    NinaiSearchTool,
+    NinaiMemoryTool,
+    get_ninai_toolkit,
+)
 
-    def __init__(self, session_id: str, ninai_client):
-        self.session_id = session_id
-        self._client = ninai_client
-        self._messages: List[BaseMessage] = []
+print('langchain_core :', langchain_core.__version__)
+print('ninai SDK      :', ninai.__version__)
+print('Adapter imports OK.')
+"""
 
-    @property
-    def messages(self) -> List[BaseMessage]:
-        return list(self._messages)
-
-    def add_messages(self, messages: Sequence[BaseMessage]) -> None:
-        for msg in messages:
-            role = 'user' if isinstance(msg, HumanMessage) else 'assistant'
-            self._client.memories.create(
-                content=msg.content,
-                title=f'[{role}] session:{self.session_id}',
-                tags=['conversation', f'session:{self.session_id}', role],
-            )
-            self._messages.append(msg)
-
-    def clear(self) -> None:
-        self._messages.clear()
-
+LC_HISTORY = """\
+from langchain_core.messages import HumanMessage, AIMessage
 
 history = NinaiChatMessageHistory(session_id='demo-001', ninai_client=client)
 history.add_messages([HumanMessage(content='What is Ninai?')])
 history.add_messages([AIMessage(content='Ninai is a Cognitive OS for enterprise.')])
-print(f'Messages: {len(history.messages)}, Ninai writes: {client.memories.create.call_count}')
+print(f'Messages in history : {len(history.messages)}')
+print(f'Ninai writes        : {client.memories.create.call_count}')
 """
 
-TOOLS = """\
-from typing import Optional, Type
-from langchain_core.tools import BaseTool
-from langchain_core.callbacks import CallbackManagerForToolRun
-from pydantic import BaseModel, Field
-
-
-class _SearchInput(BaseModel):
-    query: str = Field(description='Semantic search query')
-    top_k: int = Field(default=5)
-
-
-class NinaiSearchTool(BaseTool):
-    name: str = 'ninai_search'
-    description: str = 'Search organisational memory for relevant context.'
-    args_schema: Type[BaseModel] = _SearchInput
-    ninai_client: object = None
-
-    class Config:
-        arbitrary_types_allowed = True
-
-    def _run(self, query: str, top_k: int = 5,
-             run_manager: Optional[CallbackManagerForToolRun] = None) -> str:
-        res = self.ninai_client.memories.search(query, limit=top_k)
-        if not res.items:
-            return 'No relevant memories found.'
-        return '\\n'.join(f'- [{r.score:.2f}] {r.content}' for r in res.items)
-
-
-class _StoreInput(BaseModel):
-    content: str = Field(description='Content to store')
-    tags: str = Field(default='')
-
-
-class NinaiMemoryTool(BaseTool):
-    name: str = 'ninai_remember'
-    description: str = 'Store an important fact in Ninai organisational memory.'
-    args_schema: Type[BaseModel] = _StoreInput
-    ninai_client: object = None
-
-    class Config:
-        arbitrary_types_allowed = True
-
-    def _run(self, content: str, tags: str = '',
-             run_manager: Optional[CallbackManagerForToolRun] = None) -> str:
-        tag_list = [t.strip() for t in tags.split(',') if t.strip()]
-        mem = self.ninai_client.memories.create(content=content, tags=tag_list)
-        return f'Stored memory {mem.id}: {content[:80]}'
-
-
+LC_TOOLS = """\
 search_tool = NinaiSearchTool(ninai_client=client)
 remember_tool = NinaiMemoryTool(ninai_client=client)
 
@@ -165,10 +103,11 @@ print('Search results:')
 print(search_tool._run('revenue target'))
 """
 
-CHAIN = """\
+LC_CHAIN = """\
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.runnables import RunnableLambda
 from langchain_core.runnables.history import RunnableWithMessageHistory
+from langchain_core.messages import HumanMessage, AIMessage
 
 
 def stub_llm(prompt_value):
@@ -196,33 +135,53 @@ print('Turn 2:', r2.content)
 print('\\nLangChain + Ninai adapter verified.')
 """
 
-TOOLKIT = """\
-def get_ninai_toolkit(ninai_client):
-    \"\"\"Return all Ninai tools ready for a LangChain agent executor.\"\"\"
-    return [NinaiSearchTool(ninai_client=ninai_client), NinaiMemoryTool(ninai_client=ninai_client)]
-
+LC_TOOLKIT = """\
+print('Full toolkit:')
 for t in get_ninai_toolkit(client):
-    print(f'{t.name:22s} {t.description}')
+    print(f'  {t.name:22s} {t.description}')
+"""
+
+LC_ENTERPRISE = """\
+# Enterprise feature gating example.
+# If your org does not have an Enterprise license, the server returns 403
+# and the SDK raises EnterpriseFeatureRequired with a clear upgrade message.
+from ninai.exceptions import EnterpriseFeatureRequired
+
+try:
+    # Simulated: calling an enterprise-only endpoint
+    raise EnterpriseFeatureRequired(
+        'This feature requires an Enterprise license.',
+        feature='enterprise.advanced_observability',
+    )
+except EnterpriseFeatureRequired as e:
+    print(f'Caught: {e}')
+    print(f'Feature flag: {e.feature}')
 """
 
 lc_nb = nb([
     md("# Ninai \u00d7 LangChain Adapter\n\n"
-       "Wires the **Ninai Python SDK** into a LangChain pipeline:\n\n"
-       "1. `NinaiChatMessageHistory` \u2014 persists conversation turns in Ninai memory\n"
-       "2. `NinaiSearchTool` \u2014 semantic search as a LangChain `BaseTool`\n"
-       "3. `NinaiMemoryTool` \u2014 store facts from within a LangChain agent\n\n"
+       "Demonstrates `ninai.adapters.langchain` — the official LangChain integration\n"
+       "shipped **inside the Ninai SDK** (`pip install \"ninai[langchain]\"`):\n\n"
+       "- `NinaiChatMessageHistory` — persists conversation turns in Ninai memory\n"
+       "- `NinaiSearchTool` / `NinaiMemoryTool` — LangChain `BaseTool` wrappers\n"
+       "- `get_ninai_toolkit` — convenience factory for agent executors\n\n"
        "All API calls are **mocked** \u2014 runs offline without a live Ninai server."),
-    code(SETUP),
-    md("## Mock Ninai client"),
+    code(LC_SETUP),
+    md("## Mock Ninai client\n\nIn production replace `client` with "
+       "`NinaiClient(api_key=os.environ['NINAI_API_KEY'])`."),
     code(MOCK),
     md("## 1. NinaiChatMessageHistory"),
-    code(HISTORY),
-    md("## 2. LangChain Tools"),
-    code(TOOLS),
+    code(LC_HISTORY),
+    md("## 2. Search & Memory tools"),
+    code(LC_TOOLS),
     md("## 3. RunnableWithMessageHistory chain"),
-    code(CHAIN),
-    md("## 4. Toolkit factory"),
-    code(TOOLKIT),
+    code(LC_CHAIN),
+    md("## 4. Full toolkit"),
+    code(LC_TOOLKIT),
+    md("## 5. Enterprise feature gating\n\n"
+       "Community users get a clear `EnterpriseFeatureRequired` exception — "
+       "not a raw 403 — when they hit an enterprise-only endpoint."),
+    code(LC_ENTERPRISE),
 ])
 
 # ---------------------------------------------------------------------------
@@ -235,170 +194,102 @@ warnings.filterwarnings('ignore')
 SDK_PATH = os.path.abspath(os.path.join(os.getcwd(), '..', '..', 'sdk', 'python'))
 if SDK_PATH not in sys.path:
     sys.path.insert(0, SDK_PATH)
-import google.adk, ninai
-print('google-adk:', google.adk.__version__)
-print('ninai SDK:', ninai.__version__)
-"""
 
-ADK_MOCK = """\
-from unittest.mock import MagicMock
-from types import SimpleNamespace
+import google.adk
+import ninai
+from ninai.adapters.adk import (
+    get_ninai_adk_tools,
+    NinaiADKMemoryService,
+)
 
-_STORE: dict = {}
-_CTR = [0]
-
-def _mock_create(**kwargs):
-    _CTR[0] += 1
-    m = SimpleNamespace(id=str(_CTR[0]), content=kwargs.get('content', ''),
-                        title=kwargs.get('title', ''), tags=kwargs.get('tags', []))
-    _STORE[m.id] = m
-    return m
-
-def _mock_search(query, **kwargs):
-    items = [SimpleNamespace(memory_id=m.id, content=m.content, score=0.9, title=m.title)
-             for m in list(_STORE.values())[-5:]]
-    return SimpleNamespace(items=items[:3], total=len(items))
-
-ninai_client = MagicMock()
-ninai_client.memories.create.side_effect = _mock_create
-ninai_client.memories.search.side_effect = _mock_search
-print('Mock Ninai client ready')
+print('google-adk :', google.adk.__version__)
+print('ninai SDK  :', ninai.__version__)
+print('Adapter imports OK.')
 """
 
 ADK_TOOLS = """\
-from google.adk.tools import FunctionTool
-
-
-def ninai_search_memory(query: str, top_k: int = 5) -> dict:
-    \"\"\"Search Ninai organisational memory and return relevant context.
-
-    Args:
-        query: Natural-language search query.
-        top_k: Maximum number of results.
-
-    Returns:
-        dict with 'results' (list of content strings) and 'count'.
-    \"\"\"
-    res = ninai_client.memories.search(query, limit=top_k)
-    return {
-        'results': [r.content for r in res.items],
-        'count': len(res.items),
-    }
-
-
-def ninai_store_memory(content: str, tags: str = '') -> dict:
-    \"\"\"Store a fact or decision in Ninai organisational memory.
-
-    Args:
-        content: The text to remember.
-        tags: Comma-separated tag list.
-
-    Returns:
-        dict with 'memory_id' and 'status'.
-    \"\"\"
-    tag_list = [t.strip() for t in tags.split(',') if t.strip()]
-    mem = ninai_client.memories.create(content=content, tags=tag_list)
-    return {'memory_id': mem.id, 'status': 'stored'}
-
-
-# Wrap as ADK FunctionTool
-search_tool = FunctionTool(ninai_search_memory)
-remember_tool = FunctionTool(ninai_store_memory)
-
-print(f'ADK tools created: {search_tool.name}, {remember_tool.name}')
+tools = get_ninai_adk_tools(client)
+print(f'ADK tools created: {[t.name for t in tools]}')
 """
 
 ADK_AGENT = """\
 from google.adk import Agent
-from google.adk.sessions import InMemorySessionService
 
-# Build an ADK agent with Ninai tools
 agent = Agent(
     name='ninai_enterprise_agent',
-    model='gemini-2.0-flash',          # replace with your deployed model
+    model='gemini-2.0-flash',
     description='Enterprise assistant with Ninai memory',
     instruction=(
         'You are an enterprise assistant. '
         'Use ninai_store_memory to remember important facts. '
         'Use ninai_search_memory to retrieve context before answering.'
     ),
-    tools=[search_tool, remember_tool],
+    tools=tools,
 )
 
-print(f'Agent: {agent.name}')
-print(f'Tools: {[t.name for t in agent.tools]}')
+print(f'Agent : {agent.name}')
+print(f'Tools : {[t.name for t in agent.tools]}')
 """
 
-ADK_SESSION = """\
-# Demonstrate tool invocations directly (no live LLM call needed)
-store_result = ninai_store_memory('Board approved $10M Series A on 2026-04-01', tags='finance,funding')
-print('Stored:', store_result)
+ADK_DIRECT = """\
+# Direct tool invocations — no live LLM call needed
+search_fn, store_fn = tools[0].func, tools[1].func
 
-store_result2 = ninai_store_memory('Engineering headcount target: 25 by Q4', tags='hr,headcount')
-print('Stored:', store_result2)
+store_fn('Board approved $10M Series A on 2026-04-01', tags='finance,funding')
+store_fn('Engineering headcount target: 25 by Q4', tags='hr,headcount')
 
-search_result = ninai_search_memory('funding round')
-print('Search hits:', search_result['count'])
-for r in search_result['results']:
+hits = search_fn('funding round')
+print(f'Search hits: {hits["count"]}')
+for r in hits['results']:
     print(f'  - {r}')
 
 print('\\nADK + Ninai adapter verified.')
 """
 
 ADK_SERVICE = """\
-# Optional: NinaiADKMemoryService — stores ADK session events in Ninai
-# Useful for cross-session recall across agents.
-
-class NinaiADKMemoryService:
-    \"\"\"
-    Thin adapter: persist ADK session events into Ninai memory so that
-    a future ADK agent can search prior sessions via ninai_search_memory.
-    \"\"\"
-
-    def __init__(self, ninai_client):
-        self._client = ninai_client
-
-    def save_session_event(self, session_id: str, event: dict) -> None:
-        content = event.get('content') or str(event)
-        self._client.memories.create(
-            content=content,
-            title=f'ADK event [{event.get("role", "?")}, session:{session_id}]',
-            tags=['adk', f'session:{session_id}', event.get('role', 'unknown')],
-        )
-
-    def search(self, query: str, limit: int = 5) -> list:
-        res = self._client.memories.search(query, limit=limit)
-        return [r.content for r in res.items]
-
-
-svc = NinaiADKMemoryService(ninai_client=ninai_client)
-svc.save_session_event('sess-99', {'role': 'user', 'content': 'Schedule Q3 planning call'})
+svc = NinaiADKMemoryService(ninai_client=client)
+svc.save_session_event('sess-99', {'role': 'user',  'content': 'Schedule Q3 planning call'})
 svc.save_session_event('sess-99', {'role': 'agent', 'content': 'Q3 planning call scheduled for 2026-06-01'})
 
 hits = svc.search('Q3 planning')
-print(f'Recalled {len(hits)} events for "Q3 planning":')
+print(f'Recalled {len(hits)} events:')
 for h in hits:
     print(f'  {h}')
 """
 
+ADK_ENTERPRISE = """\
+from ninai.exceptions import EnterpriseFeatureRequired
+
+try:
+    raise EnterpriseFeatureRequired(
+        'Advanced federated memory requires an Enterprise license.',
+        feature='enterprise.federated_memory',
+    )
+except EnterpriseFeatureRequired as e:
+    print(f'Caught: {e}')
+    print(f'Feature: {e.feature}')
+"""
+
 adk_nb = nb([
     md("# Ninai \u00d7 Google ADK Adapter\n\n"
-       "Integrates the **Ninai Python SDK** with **Google Agent Development Kit (ADK)**:\n\n"
-       "1. Ninai tools wrapped as `FunctionTool` for ADK agents\n"
-       "2. `NinaiADKMemoryService` \u2014 persists ADK session events in Ninai\n"
-       "3. End-to-end tool invocation smoke test\n\n"
+       "Demonstrates `ninai.adapters.adk` — the official Google ADK integration\n"
+       "shipped **inside the Ninai SDK** (`pip install \"ninai[adk]\"`):\n\n"
+       "- `get_ninai_adk_tools` — returns search + store as ADK `FunctionTool` instances\n"
+       "- `NinaiADKMemoryService` — persists ADK session events in Ninai\n\n"
        "All API calls are **mocked** \u2014 runs offline without a live Ninai server."),
     code(ADK_SETUP),
     md("## Mock Ninai client"),
-    code(ADK_MOCK),
-    md("## 1. Wrap Ninai as ADK FunctionTools"),
+    code(MOCK),
+    md("## 1. Create ADK tools from Ninai SDK"),
     code(ADK_TOOLS),
-    md("## 2. Build an ADK Agent with Ninai tools"),
+    md("## 2. Build an ADK Agent"),
     code(ADK_AGENT),
-    md("## 3. Tool invocation smoke test"),
-    code(ADK_SESSION),
-    md("## 4. NinaiADKMemoryService"),
+    md("## 3. Direct tool invocation smoke test"),
+    code(ADK_DIRECT),
+    md("## 4. NinaiADKMemoryService — cross-session recall"),
     code(ADK_SERVICE),
+    md("## 5. Enterprise feature gating"),
+    code(ADK_ENTERPRISE),
 ])
 
 # ---------------------------------------------------------------------------
@@ -415,155 +306,77 @@ if SDK_PATH not in sys.path:
 import langchain_core
 import google.adk
 import ninai
-from ninai import NinaiClient
+from ninai import NinaiClient, EnterpriseFeatureRequired
+from ninai.adapters.langchain import NinaiChatMessageHistory, NinaiSearchTool, NinaiMemoryTool, get_ninai_toolkit
+from ninai.adapters.adk import get_ninai_adk_tools, NinaiADKMemoryService
 
 print(f'langchain_core : {langchain_core.__version__}')
 print(f'google-adk     : {google.adk.__version__}')
 print(f'ninai SDK      : {ninai.__version__}')
 print()
-print('All framework imports OK.')
-"""
-
-SMOKE_CLIENT = """\
-from unittest.mock import MagicMock
-from types import SimpleNamespace
-
-_STORE: dict = {}
-_CTR = [0]
-
-def _mock_create(**kwargs):
-    _CTR[0] += 1
-    m = SimpleNamespace(id=str(_CTR[0]), content=kwargs.get('content', ''),
-                        title=kwargs.get('title', ''), tags=kwargs.get('tags', []))
-    _STORE[m.id] = m
-    return m
-
-def _mock_search(query, **kwargs):
-    items = [SimpleNamespace(memory_id=m.id, content=m.content, score=0.9, title=m.title)
-             for m in list(_STORE.values())[-5:]]
-    return SimpleNamespace(items=items[:3], total=len(items))
-
-client = MagicMock()
-client.memories.create.side_effect = _mock_create
-client.memories.search.side_effect = _mock_search
-print('Shared mock client ready')
+print('All imports OK.')
 """
 
 SMOKE_LC = """\
-# --- LangChain adapter smoke ---
-from langchain_core.chat_history import BaseChatMessageHistory
 from langchain_core.messages import HumanMessage, AIMessage
-from langchain_core.tools import BaseTool
-from typing import List, Sequence, Optional, Type
-from pydantic import BaseModel, Field
-from langchain_core.callbacks import CallbackManagerForToolRun
 
-
-class NinaiChatMessageHistory(BaseChatMessageHistory):
-    def __init__(self, session_id, ninai_client):
-        self.session_id = session_id
-        self._client = ninai_client
-        self._messages: List = []
-    @property
-    def messages(self): return list(self._messages)
-    def add_messages(self, messages):
-        for m in messages:
-            self._client.memories.create(content=m.content, title='lc', tags=[])
-            self._messages.append(m)
-    def clear(self): self._messages.clear()
-
-class _SI(BaseModel):
-    query: str
-    top_k: int = 5
-
-class NinaiSearchTool(BaseTool):
-    name: str = 'ninai_search'
-    description: str = 'Search Ninai memory.'
-    args_schema: Type[BaseModel] = _SI
-    ninai_client: object = None
-    class Config: arbitrary_types_allowed = True
-    def _run(self, query, top_k=5, run_manager=None):
-        res = self.ninai_client.memories.search(query)
-        return '\\n'.join(r.content for r in res.items) or 'none'
-
-# Assertions
 hist = NinaiChatMessageHistory('s1', client)
 hist.add_messages([HumanMessage(content='hello'), AIMessage(content='hi')])
-assert len(hist.messages) == 2
+assert len(hist.messages) == 2, 'history length'
 
 tool = NinaiSearchTool(ninai_client=client)
 out = tool._run('hello')
-assert isinstance(out, str)
+assert isinstance(out, str), 'search returns str'
+
+mem_tool = NinaiMemoryTool(ninai_client=client)
+result = mem_tool._run('important decision', tags='eng,arch')
+assert 'Stored' in result, 'store returns confirmation'
+
+toolkit = get_ninai_toolkit(client)
+assert len(toolkit) == 2, 'toolkit has 2 tools'
 
 print('LangChain adapter smoke: PASS')
 """
 
 SMOKE_ADK = """\
-# --- ADK adapter smoke ---
-from google.adk.tools import FunctionTool
+tools = get_ninai_adk_tools(client)
+assert len(tools) == 2, 'adk tools count'
+assert tools[0].name == 'ninai_search_memory'
+assert tools[1].name == 'ninai_store_memory'
 
-
-def ninai_search_memory(query: str, top_k: int = 5) -> dict:
-    \"\"\"Search Ninai memory.
-
-    Args:
-        query: Search query string.
-        top_k: Maximum results.
-
-    Returns:
-        dict with results and count.
-    \"\"\"
-    res = client.memories.search(query, limit=top_k)
-    return {'results': [r.content for r in res.items], 'count': len(res.items)}
-
-
-def ninai_store_memory(content: str, tags: str = '') -> dict:
-    \"\"\"Store a memory in Ninai.
-
-    Args:
-        content: Content to store.
-        tags: Comma-separated tags.
-
-    Returns:
-        dict with memory_id and status.
-    \"\"\"
-    tag_list = [t.strip() for t in tags.split(',') if t.strip()]
-    mem = client.memories.create(content=content, tags=tag_list)
-    return {'memory_id': mem.id, 'status': 'stored'}
-
-
-search_ft = FunctionTool(ninai_search_memory)
-store_ft = FunctionTool(ninai_store_memory)
-
-# Assertions
-res = ninai_store_memory('test fact for ADK smoke', tags='test')
+store_fn = tools[1].func
+search_fn = tools[0].func
+res = store_fn('adk smoke test fact', tags='test')
 assert res['status'] == 'stored'
 
-hits = ninai_search_memory('test fact')
+hits = search_fn('smoke test')
 assert isinstance(hits['results'], list)
 
-assert search_ft.name == 'ninai_search_memory'
-assert store_ft.name == 'ninai_store_memory'
+svc = NinaiADKMemoryService(ninai_client=client)
+svc.save_session_event('s2', {'role': 'user', 'content': 'test event'})
+recalled = svc.search('test event')
+assert isinstance(recalled, list)
 
 print('ADK adapter smoke: PASS')
 """
 
+SMOKE_EXCEPTIONS = """\
+try:
+    raise EnterpriseFeatureRequired('needs license', feature='enterprise.scim')
+except EnterpriseFeatureRequired as e:
+    assert e.feature == 'enterprise.scim'
+    assert 'sansten.com' in str(e)
+
+print('EnterpriseFeatureRequired smoke: PASS')
+"""
+
 SMOKE_SDK = """\
-# --- SDK core smoke ---
 from ninai import (
     NinaiClient, GoalPlannerAgent, GoalLinkingAgent,
     MetaAgent, ToolInvoker, InMemoryEventSink,
 )
 
-# Structural checks
 assert issubclass(NinaiClient, object)
-assert hasattr(NinaiClient, '__init__')
-
-from types import SimpleNamespace
-m = SimpleNamespace(id='x', content='test', title='t', tags=[])
-assert m.id == 'x'
-assert m.content == 'test'
-
 sink = InMemoryEventSink()
 assert hasattr(sink, 'events')
 
@@ -571,27 +384,30 @@ print('Ninai SDK core smoke: PASS')
 """
 
 SMOKE_SUMMARY = """\
-print('=' * 40)
+print('=' * 42)
 print('All adapter smoke tests PASSED')
-print('  LangChain adapter : OK')
-print('  Google ADK adapter : OK')
-print('  Ninai SDK core     : OK')
-print('=' * 40)
+print('  ninai.adapters.langchain : OK')
+print('  ninai.adapters.adk       : OK')
+print('  EnterpriseFeatureRequired: OK')
+print('  Ninai SDK core           : OK')
+print('=' * 42)
 """
 
 smoke_nb = nb([
     md("# Ninai Adapter Smoke Tests\n\n"
-       "Verifies that all three framework adapters (LangChain, Google ADK, Ninai SDK core)\n"
-       "are importable, structurally correct, and execute without errors.\n\n"
-       "Run this notebook after any SDK or adapter change as a sanity check."),
+       "Validates all components of `ninai.adapters` in one shot.\n"
+       "Run this after any SDK change as a quick sanity check.\n\n"
+       "Install: `pip install \"ninai[all]\"`"),
     code(SMOKE_SETUP),
     md("## Shared mock client"),
-    code(SMOKE_CLIENT),
+    code(MOCK),
     md("## LangChain adapter"),
     code(SMOKE_LC),
     md("## Google ADK adapter"),
     code(SMOKE_ADK),
-    md("## Ninai SDK core"),
+    md("## EnterpriseFeatureRequired exception"),
+    code(SMOKE_EXCEPTIONS),
+    md("## SDK core"),
     code(SMOKE_SDK),
     md("## Summary"),
     code(SMOKE_SUMMARY),

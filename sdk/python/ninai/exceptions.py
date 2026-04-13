@@ -26,6 +26,27 @@ class AuthorizationError(NinaiError):
     pass
 
 
+class EnterpriseFeatureRequired(AuthorizationError):
+    """Raised when an endpoint requires an Enterprise license.
+
+    The server returned 403 with ``{"error": "feature_not_enabled"}``.
+    Upgrade at https://sansten.com/ninai/pricing or contact sales@sansten.com.
+
+    Attributes:
+        feature: The feature flag that was not enabled (e.g. ``"enterprise.scim"``).
+    """
+
+    def __init__(self, message: str, feature: str | None = None, **kwargs):
+        super().__init__(message, **kwargs)
+        self.feature = feature
+
+    def __str__(self) -> str:
+        base = self.message
+        if self.feature:
+            base = f"{base} (feature={self.feature})"
+        return f"{base} — upgrade at https://sansten.com/ninai/pricing"
+
+
 class NotFoundError(NinaiError):
     """Raised when a resource is not found (404)."""
     pass

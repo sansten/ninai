@@ -16,6 +16,7 @@ from ninai.exceptions import (
     NinaiError,
     AuthenticationError,
     AuthorizationError,
+    EnterpriseFeatureRequired,
     NotFoundError,
     ValidationError,
     RateLimitError,
@@ -255,6 +256,15 @@ class NinaiClient:
         if response.status_code == 401:
             raise AuthenticationError(message, response.status_code, error_data)
         elif response.status_code == 403:
+            # Distinguish enterprise feature gate from a plain permission denial.
+            detail = error_data.get("detail", {})
+            if isinstance(detail, dict) and detail.get("error") == "feature_not_enabled":
+                raise EnterpriseFeatureRequired(
+                    detail.get("message", message),
+                    feature=detail.get("feature"),
+                    status_code=response.status_code,
+                    response=error_data,
+                )
             raise AuthorizationError(message, response.status_code)
         elif response.status_code == 404:
             raise NotFoundError(message, response.status_code)

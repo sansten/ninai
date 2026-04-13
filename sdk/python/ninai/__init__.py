@@ -35,22 +35,35 @@ from ninai.observability import InMemoryEventSink
 from ninai.exceptions import (
     NinaiError,
     AuthenticationError,
+    AuthorizationError,
+    EnterpriseFeatureRequired,
     NotFoundError,
     ValidationError,
     RateLimitError,
+    ServerError,
 )
+from ninai import adapters  # noqa: F401 — makes `ninai.adapters` accessible
 
 __version__ = "0.0.1b1"
 __all__ = [
+    # Client
     "NinaiClient",
+    # Agents
     "GoalPlannerAgent",
     "GoalLinkingAgent",
     "MetaAgent",
+    # Tools / observability
     "ToolInvoker",
     "InMemoryEventSink",
+    # Exceptions
     "NinaiError",
-    "AuthenticationError", 
+    "AuthenticationError",
+    "AuthorizationError",
+    "EnterpriseFeatureRequired",
     "NotFoundError",
     "ValidationError",
     "RateLimitError",
+    "ServerError",
+    # Adapters sub-package (import from ninai.adapters.langchain / ninai.adapters.adk)
+    "adapters",
 ]

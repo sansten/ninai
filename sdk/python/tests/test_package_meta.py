@@ -16,9 +16,10 @@ def _pyproject() -> dict:
     return tomllib.loads(path.read_text(encoding="utf-8"))
 
 
-def test_version_is_semver() -> None:
+def test_version_is_pep440() -> None:
+    # Accepts semver (1.2.3) and pre-release forms (1.2.3a1, 1.2.3b1, 1.2.3rc1)
     version = ninai.__version__
-    assert re.fullmatch(r"\d+\.\d+\.\d+", version)
+    assert re.fullmatch(r"\d+\.\d+\.\d+(?:(?:a|b|rc)\d+)?", version), version
 
 
 def test_dunder_all_exports_ninai_client() -> None:
