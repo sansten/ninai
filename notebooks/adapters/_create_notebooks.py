@@ -1,8 +1,16 @@
-"""Generate the three adapter sample notebooks."""
+"""Generate the three adapter sample notebooks.
+
+Output goes to sdk/python/notebooks/ — the canonical home for SDK examples.
+The adapters/ folder keeps a copy for the monorepo notebooks tree.
+"""
 import json
 import os
 
-BASE = os.path.dirname(os.path.abspath(__file__))
+# Canonical output: sdk/python/notebooks/
+_HERE = os.path.dirname(os.path.abspath(__file__))
+SDK_NB_DIR = os.path.normpath(os.path.join(_HERE, "..", "..", "sdk", "python", "notebooks"))
+os.makedirs(SDK_NB_DIR, exist_ok=True)
+BASE = SDK_NB_DIR  # notebooks written here
 
 
 def nb(cells):
@@ -64,7 +72,7 @@ print('Mock client ready')
 
 LC_SETUP = """\
 import sys, os
-SDK_PATH = os.path.abspath(os.path.join(os.getcwd(), '..', '..', 'sdk', 'python'))
+SDK_PATH = os.path.abspath(os.path.join(os.getcwd(), '..'))
 if SDK_PATH not in sys.path:
     sys.path.insert(0, SDK_PATH)
 
@@ -191,7 +199,7 @@ lc_nb = nb([
 ADK_SETUP = """\
 import sys, os, warnings
 warnings.filterwarnings('ignore')
-SDK_PATH = os.path.abspath(os.path.join(os.getcwd(), '..', '..', 'sdk', 'python'))
+SDK_PATH = os.path.abspath(os.path.join(os.getcwd(), '..'))
 if SDK_PATH not in sys.path:
     sys.path.insert(0, SDK_PATH)
 
@@ -299,7 +307,7 @@ adk_nb = nb([
 SMOKE_SETUP = """\
 import sys, os, warnings
 warnings.filterwarnings('ignore')
-SDK_PATH = os.path.abspath(os.path.join(os.getcwd(), '..', '..', 'sdk', 'python'))
+SDK_PATH = os.path.abspath(os.path.join(os.getcwd(), '..'))
 if SDK_PATH not in sys.path:
     sys.path.insert(0, SDK_PATH)
 
