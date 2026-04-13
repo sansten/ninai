@@ -42,7 +42,8 @@ from ninai.exceptions import (
     RateLimitError,
     ServerError,
 )
-from ninai import adapters  # noqa: F401 — makes `ninai.adapters` accessible
+from ninai import adapters   # noqa: F401 — makes `ninai.adapters` accessible
+from ninai import streaming  # noqa: F401 — makes `ninai.streaming` accessible
 
 __version__ = "0.0.1b1"
 __all__ = [
@@ -66,4 +67,6 @@ __all__ = [
     "ServerError",
     # Adapters sub-package (import from ninai.adapters.langchain / ninai.adapters.adk)
     "adapters",
+    # Streaming sub-package (import from ninai.streaming)
+    "streaming",
 ]
