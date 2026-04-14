@@ -79,7 +79,7 @@ class NinaiClient:
             print(f"- {memory.title}: {memory.content_preview}")
     """
     
-    DEFAULT_BASE_URL = "http://localhost:8000/api/v1"
+    DEFAULT_BASE_URL = "https://admin.ninai.sansten.com/api/v1"
     
     def __init__(
         self,
@@ -95,7 +95,7 @@ class NinaiClient:
         Args:
             api_key: Ninai API key (starts with 'nai_')
             access_token: JWT access token (if already authenticated)
-            base_url: API base URL (default: http://localhost:8000/api/v1)
+            base_url: API base URL (default: https://admin.ninai.sansten.com/api/v1)
             organization_id: Organization ID for multi-tenant requests
             timeout: Request timeout in seconds
         """

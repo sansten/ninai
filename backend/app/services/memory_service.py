@@ -13,12 +13,14 @@ HYBRID MEMORY ARCHITECTURE:
 """
 
 import hashlib
+import logging
 import math
 from typing import Optional, List, Union
 from datetime import datetime, timezone, timedelta
 from uuid import uuid4
 
 from sqlalchemy import select, and_, or_, func, desc, text
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -35,6 +37,9 @@ from app.schemas.memory import (
     MemorySearchRequest,
     MemoryShareRequest,
 )
+
+
+logger = logging.getLogger(__name__)
 
 
 class MemoryService:
@@ -160,26 +165,35 @@ class MemoryService:
             content=data.content,
             tags=data.tags,
         )
-        await self.session.flush()  # Ensure search_vector UPDATE is persisted
+        await self.session.flush()  # Persist any optional search_vector UPDATE
         
         # Save to Qdrant
-        await QdrantService.upsert_memory(
-            memory_id=vector_id,
-            org_id=self.org_id,
-            vector=embedding,
-            payload={
-                "memory_id": memory_id,
-                "scope": data.scope,
-                "scope_id": data.scope_id,
-                # Denormalized for Qdrant filtering convenience
-                "team_id": data.scope_id if str(data.scope) == "team" else None,
-                "owner_id": self.user_id,
-                "tags": data.tags or [],
-                "classification": data.classification,
-                "memory_type": data.memory_type,
-                "created_at": datetime.now(timezone.utc).isoformat(),
-            },
-        )
+        try:
+            await QdrantService.upsert_memory(
+                memory_id=vector_id,
+                org_id=self.org_id,
+                vector=embedding,
+                payload={
+                    "memory_id": memory_id,
+                    "scope": data.scope,
+                    "scope_id": data.scope_id,
+                    # Denormalized for Qdrant filtering convenience
+                    "team_id": data.scope_id if str(data.scope) == "team" else None,
+                    "owner_id": self.user_id,
+                    "tags": data.tags or [],
+                    "classification": data.classification,
+                    "memory_type": data.memory_type,
+                    "created_at": datetime.now(timezone.utc).isoformat(),
+                },
+            )
+        except Exception as exc:
+            # Keep writes available even if vector infrastructure is degraded.
+            logger.warning(
+                "Qdrant upsert failed for memory_id=%s org_id=%s: %s",
+                memory_id,
+                self.org_id,
+                exc,
+            )
         
         # Audit log
         await self.audit_service.log_memory_operation(
@@ -214,16 +228,24 @@ class MemoryService:
         if not doc:
             return
 
-        await self.session.execute(
-            text(
-                """
-                UPDATE memory_metadata
-                SET search_vector = to_tsvector('simple', :doc)
-                WHERE id = :memory_id
-                """
-            ),
-            {"doc": doc, "memory_id": memory_id},
-        )
+        try:
+            await self.session.execute(
+                text(
+                    """
+                    UPDATE memory_metadata
+                    SET search_vector = to_tsvector('simple', :doc)
+                    WHERE id = :memory_id
+                    """
+                ),
+                {"doc": doc, "memory_id": memory_id},
+            )
+        except SQLAlchemyError as exc:
+            # Gracefully handle environments where the FTS migration is not applied yet.
+            logger.warning(
+                "Skipping search_vector update for memory_id=%s due to DB error: %s",
+                memory_id,
+                exc,
+            )
     
     async def create_memory_smart(
         self,
@@ -570,14 +592,24 @@ class MemoryService:
         # Vector leg (Qdrant)
         scope_val = request.scope.value if hasattr(request.scope, "value") else request.scope
 
-        qdrant_results = await QdrantService.search(
-            org_id=self.org_id,
-            query_vector=query_embedding,
-            limit=request.limit * 2,  # Over-fetch to account for RLS filtering
-            score_threshold=request.score_threshold or 0.0,
-            scope_filter=scope_val,
-            team_id=request.team_id,
-        )
+        try:
+            qdrant_results = await QdrantService.search(
+                org_id=self.org_id,
+                query_vector=query_embedding,
+                limit=request.limit * 2,  # Over-fetch to account for RLS filtering
+                score_threshold=request.score_threshold or 0.0,
+                scope_filter=scope_val,
+                team_id=request.team_id,
+            )
+        except Exception as exc:
+            # Keep search available during transient vector store outages.
+            logger.warning(
+                "Qdrant search failed for org_id=%s query=%r: %s",
+                self.org_id,
+                request.query,
+                exc,
+            )
+            qdrant_results = []
 
         # Lexical leg (Postgres FTS) - opt-in via request.hybrid
         if getattr(request, "hybrid", False):

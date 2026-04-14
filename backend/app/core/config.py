@@ -150,6 +150,10 @@ class Settings(BaseSettings):
     REDIS_PORT: int | None = None
     REDIS_PASSWORD: str | None = None
     REDIS_DB: int | None = None
+    REDIS_URL_OVERRIDE: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("REDIS_URL"),
+    )
     PERMISSION_CACHE_TTL: int | None = None
 
     # Short-term memory default TTL (in seconds)
@@ -170,9 +174,23 @@ class Settings(BaseSettings):
     @property
     def REDIS_URL(self) -> str:
         """Construct Redis URL."""
-        if self.REDIS_PASSWORD:
-            return f"redis://:{self.REDIS_PASSWORD}@{self.REDIS_HOST}:{self.REDIS_PORT}/{self.REDIS_DB}"
-        return f"redis://{self.REDIS_HOST}:{self.REDIS_PORT}/{self.REDIS_DB}"
+        if self.REDIS_URL_OVERRIDE:
+            return self.REDIS_URL_OVERRIDE
+
+        host = self.REDIS_HOST
+        port = self.REDIS_PORT
+        db = self.REDIS_DB if self.REDIS_DB is not None else 0
+
+        if host and port is not None:
+            if self.REDIS_PASSWORD:
+                return f"redis://:{self.REDIS_PASSWORD}@{host}:{port}/{db}"
+            return f"redis://{host}:{port}/{db}"
+
+        if self.CELERY_BROKER_URL:
+            return self.CELERY_BROKER_URL
+
+        # Last-resort local fallback for developer environments.
+        return "redis://localhost:6379/0"
 
     # Dedicated Redis endpoint for FalkorDB graph queries.
     # Falls back to REDIS_URL when not provided.
