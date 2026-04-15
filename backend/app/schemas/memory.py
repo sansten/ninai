@@ -85,6 +85,15 @@ class MemoryCreate(BaseSchema):
     extra_metadata: Optional[dict] = None
     source_type: Optional[str] = None
     source_id: Optional[str] = None
+    anonymous: bool = Field(
+        False,
+        description="Explicit opt-in to suppress identity attribution for this write. "
+                    "Ignored if the org mandates full identity.",
+    )
+    occurred_at: Optional[datetime] = Field(
+        None,
+        description="Event timestamp for temporal and time-series analysis (separate from content text)",
+    )
     retention_days: Optional[int] = Field(None, ge=1)
     ttl: Optional[int] = Field(None, ge=1, description="Short-term memory TTL in seconds (overrides default if set)")
     
@@ -126,6 +135,13 @@ class MemoryResponse(BaseSchema):
     extra_metadata: dict
     source_type: Optional[str]
     source_id: Optional[str]
+    write_actor_id: Optional[str] = None
+    write_actor_type: Optional[str] = None
+    write_role: Optional[str] = None
+    write_responsibility: Optional[str] = None
+    write_department: Optional[str] = None
+    write_identity_mode: Optional[str] = None
+    occurred_at: Optional[datetime] = None
     access_count: int
     last_accessed_at: Optional[datetime]
     is_promoted: bool

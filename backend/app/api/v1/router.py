@@ -102,6 +102,7 @@ from app.api.v1.endpoints import (
 from app.api.v1.endpoints import cognitive_schedules
 from app.api.v1.admin import routes as admin_routes
 from app.api.v1.endpoints import event_publishing_batch
+from app.api.v1.endpoints import identity_policy
 from app.api.v1 import features
 
 api_router = APIRouter()
@@ -121,6 +122,11 @@ api_router.include_router(
 
 api_router.include_router(
     admin_routes.router,
+)
+
+api_router.include_router(
+    identity_policy.router,
+    tags=["Admin - Identity Policy"],
 )
 
 api_router.include_router(

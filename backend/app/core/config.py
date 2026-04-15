@@ -282,8 +282,39 @@ class Settings(BaseSettings):
     # Limit concurrent Ollama requests per worker process.
     OLLAMA_MAX_CONCURRENCY: int = 4
 
-    # Global agent strategy (advanced): set to "heuristic" to disable LLM calls.
-    AGENT_STRATEGY: str = "llm"  # llm | heuristic
+    # Global agent strategy (advanced):
+    # - heuristic: disable LLM calls
+    # - llm: prefer LLM and fall back to heuristics on failure
+    # - hybrid: alias of llm (explicitly documented for deploy ergonomics)
+    AGENT_STRATEGY: str = "llm"  # llm | heuristic | hybrid(alias)
+
+    # -------------------------------------------------------------------------
+    # AD / SCIM Identity Enrichment (opt-in, fully optional)
+    # -------------------------------------------------------------------------
+    # When AD_SCIM_ENDPOINT is not set, IdentityResolverService falls back to
+    # JWT claims for role and uses no department/location enrichment.
+    AD_SCIM_ENDPOINT: Optional[str] = None
+    """e.g. https://graph.microsoft.com/v1.0  or  https://your-idp/scim/v2"""
+    AD_SCIM_TOKEN: Optional[str] = None
+    """Bearer token for the AD/SCIM endpoint."""
+    AD_SCIM_TENANT_ID: Optional[str] = None
+    """Azure AD tenant ID (Microsoft Graph only)."""
+
+    @field_validator("AGENT_STRATEGY", mode="before")
+    @classmethod
+    def normalize_agent_strategy(cls, v):
+        """Normalize global agent strategy to backend-supported runtime values.
+
+        We keep runtime branching binary (llm vs heuristic) to avoid touching all
+        agents/services, while allowing deploy configs to use a clearer "hybrid"
+        label for llm-with-fallback behavior.
+        """
+        strategy = str(v or "llm").strip().lower()
+        if strategy == "hybrid":
+            return "llm"
+        if strategy in {"llm", "heuristic"}:
+            return strategy
+        return "llm"
 
     # Enable LLM-based causal edge discovery (off by default to avoid slow Ollama calls).
     ENABLE_LLM_CAUSAL_DISCOVERY: bool = False

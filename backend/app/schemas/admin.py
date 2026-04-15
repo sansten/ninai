@@ -1,9 +1,30 @@
 """Admin UI Pydantic schemas for request/response validation"""
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, EmailStr, Field, validator
+
+
+# ==================== IDENTITY POLICY SCHEMAS ====================
+
+class OrgIdentityPolicyUpdate(BaseModel):
+    """Update the org-level identity attribution policy (org_admin only)."""
+
+    mandate_actor_identity: Optional[bool] = None
+    allowed_modes: Optional[List[Literal["full", "role_only", "anonymous"]]] = None
+    enrich_from_directory: Optional[bool] = None
+    audit_trail_always: Optional[bool] = None
+
+
+class OrgIdentityPolicyResponse(BaseModel):
+    """Current org identity attribution policy."""
+
+    org_id: str
+    mandate_actor_identity: bool
+    allowed_modes: List[str]
+    enrich_from_directory: bool
+    audit_trail_always: bool
 
 
 # ==================== ADMIN ROLE SCHEMAS ====================

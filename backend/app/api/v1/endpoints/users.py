@@ -20,8 +20,11 @@ from app.middleware.tenant_context import (
     require_roles,
 )
 from app.models.user import User, Role, UserRole
+from app.models.user_identity_preference import IdentityMode, UserIdentityPreference
+from app.models.org_identity_policy import OrgIdentityPolicy
 from app.schemas.base import PaginatedResponse
 from app.schemas.base import BaseSchema
+from app.schemas.user_settings import UserIdentityPreferenceUpdate, UserIdentityPreferenceResponse
 
 
 router = APIRouter()
@@ -527,3 +530,103 @@ async def revoke_role(
     user_role.revoked_by = tenant.user_id
     
     await db.commit()
+
+
+# =============================================================================
+# Identity Preference Endpoints
+# =============================================================================
+
+@router.get(
+    "/me/identity-preference",
+    response_model=UserIdentityPreferenceResponse,
+    tags=["Users - Identity"],
+)
+async def get_identity_preference(
+    tenant: TenantContext = Depends(get_tenant_context),
+    db: AsyncSession = Depends(get_db),
+) -> UserIdentityPreferenceResponse:
+    """Retrieve the caller's identity attribution preference and the org-level policy context."""
+    await set_tenant_context(
+        db, tenant.user_id, tenant.org_id, tenant.roles_string, tenant.clearance_level
+    )
+
+    pref_row = await db.scalar(
+        select(UserIdentityPreference).where(UserIdentityPreference.user_id == tenant.user_id)
+    )
+    policy_row = await db.scalar(
+        select(OrgIdentityPolicy).where(OrgIdentityPolicy.org_id == tenant.org_id)
+    )
+
+    mandate_active = policy_row.mandate_actor_identity if policy_row else False
+    allowed_modes = list(policy_row.allowed_modes or []) if policy_row else ["full", "role_only", "anonymous"]
+    preference = pref_row.preference if pref_row else IdentityMode.FULL.value
+
+    return UserIdentityPreferenceResponse(
+        user_id=tenant.user_id,
+        preference=preference,
+        mandate_active=mandate_active,
+        allowed_modes=allowed_modes,
+    )
+
+
+@router.patch(
+    "/me/identity-preference",
+    response_model=UserIdentityPreferenceResponse,
+    tags=["Users - Identity"],
+)
+async def update_identity_preference(
+    body: UserIdentityPreferenceUpdate,
+    tenant: TenantContext = Depends(get_tenant_context),
+    db: AsyncSession = Depends(get_db),
+) -> UserIdentityPreferenceResponse:
+    """Update the caller's identity attribution preference.
+
+    Returns 403 if the org mandates full identity (no opt-out allowed).
+    Returns 400 if the requested preference is not in the org's allowed_modes.
+    """
+    await set_tenant_context(
+        db, tenant.user_id, tenant.org_id, tenant.roles_string, tenant.clearance_level
+    )
+
+    policy_row = await db.scalar(
+        select(OrgIdentityPolicy).where(OrgIdentityPolicy.org_id == tenant.org_id)
+    )
+    mandate_active = policy_row.mandate_actor_identity if policy_row else False
+    allowed_modes = list(policy_row.allowed_modes or []) if policy_row else ["full", "role_only", "anonymous"]
+
+    if mandate_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Your organisation mandates full identity attribution. Preference changes are not permitted.",
+        )
+
+    if body.preference not in allowed_modes:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Preference '{body.preference}' is not in the organisation's allowed modes: {allowed_modes}",
+        )
+
+    pref_row = await db.scalar(
+        select(UserIdentityPreference).where(UserIdentityPreference.user_id == tenant.user_id)
+    )
+
+    if pref_row is None:
+        pref_row = UserIdentityPreference(
+            user_id=tenant.user_id,
+            org_id=tenant.org_id,
+            preference=body.preference,
+        )
+        db.add(pref_row)
+    else:
+        pref_row.preference = body.preference
+
+    pref_row.changed_at = datetime.now(timezone.utc)
+    pref_row.changed_by = tenant.user_id
+    await db.commit()
+
+    return UserIdentityPreferenceResponse(
+        user_id=tenant.user_id,
+        preference=pref_row.preference,
+        mandate_active=False,
+        allowed_modes=allowed_modes,
+    )
