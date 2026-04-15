@@ -14,9 +14,13 @@ from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.core.actor_context import normalize_actor_context
 from app.core.database import get_db, set_tenant_context
 from app.middleware.tenant_context import TenantContext, get_tenant_context
 from app.services.webhook_service import WebhookService
+from app.api.v1.dependencies import get_identity_resolver, get_identity_policy_service
+from app.services.identity_resolver_service import IdentityResolverService
+from app.services.identity_policy_service import IdentityPolicyService, get_org_policy, get_user_pref
 from app.schemas.memory import (
     MemoryCreate,
     MemoryUpdate,
@@ -71,6 +75,14 @@ from app.tasks.memory_pipeline import enqueue_feedback_learning
 router = APIRouter()
 
 
+def _memory_matches_reader_role(memory, reader_ctx: dict) -> bool:
+    """Apply role-specific filtering only when reader context is role-specific."""
+    if not reader_ctx.get("role_specific"):
+        return True
+    write_role = ((getattr(memory, "extra_metadata", {}) or {}).get("write_role") or "anonymous").strip().lower()
+    return write_role == str(reader_ctx.get("role", "anonymous")).strip().lower()
+
+
 class MemoryRelevanceFeedbackCreate(BaseSchema):
     relevant: bool
     query: Optional[str] = None
@@ -118,6 +130,8 @@ async def create_memory(
     tenant: TenantContext = Depends(get_tenant_context),
     db: AsyncSession = Depends(get_db),
     service: MemoryService = Depends(get_memory_service),
+    identity_resolver: IdentityResolverService = Depends(get_identity_resolver),
+    identity_policy_svc: IdentityPolicyService = Depends(get_identity_policy_service),
 ):
     """
     Create a new memory.
@@ -134,6 +148,23 @@ async def create_memory(
     
     request_id = getattr(request.state, "request_id", None)
 
+    # Resolve actor identity from JWT/AD/cache
+    resolved_identity = await identity_resolver.resolve(
+        user_id=tenant.user_id,
+        org_id=tenant.org_id,
+        roles_string=tenant.roles_string,
+    )
+
+    # Apply org mandate + user preference policy
+    org_policy = await get_org_policy(db, tenant.org_id)
+    user_pref = await get_user_pref(db, tenant.user_id)
+    actor_ctx = identity_policy_svc.resolve(
+        resolved_identity=resolved_identity,
+        org_policy=org_policy,
+        user_pref=user_pref,
+        call_anonymous=body.anonymous,
+    )
+
     embedding = await EmbeddingService.embed(body.content)
     
     try:
@@ -141,6 +172,7 @@ async def create_memory(
             data=body,
             embedding=embedding,
             request_id=request_id,
+            actor_ctx=actor_ctx,
         )
         usage = UsageService(db, tenant.org_id)
         await usage.increment(metric="memory_writes", value=1)

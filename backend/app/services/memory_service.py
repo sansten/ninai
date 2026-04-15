@@ -31,6 +31,8 @@ from app.services.permission_checker import PermissionChecker, AccessDecision
 from app.services.audit_service import AuditService
 from app.services.short_term_memory import ShortTermMemory, ShortTermMemoryService
 from app.services.memory_promoter import MemoryPromoter
+from app.core.actor_context import normalize_actor_context
+from app.services.identity_policy_service import ResolvedActorContext
 from app.schemas.memory import (
     MemoryCreate,
     MemoryUpdate,
@@ -79,6 +81,15 @@ class MemoryService:
         
         self.permission_checker = PermissionChecker(session)
         self.audit_service = AuditService(session)
+
+    @staticmethod
+    def _normalize_utc_timestamp(value: Optional[datetime]) -> Optional[datetime]:
+        """Normalize datetime values to timezone-aware UTC."""
+        if value is None:
+            return None
+        if value.tzinfo is None:
+            return value.replace(tzinfo=timezone.utc)
+        return value.astimezone(timezone.utc)
     
     # =========================================================================
     # Create
@@ -89,6 +100,7 @@ class MemoryService:
         data: MemoryCreate,
         embedding: List[float],
         request_id: Optional[str] = None,
+        actor_ctx: Optional[ResolvedActorContext] = None,
     ) -> MemoryMetadata:
         """
             # Determine TTL: query param > body.ttl > default
@@ -133,6 +145,38 @@ class MemoryService:
             data.content.encode("utf-8")
         ).hexdigest()
         
+        # Normalize temporal metadata for downstream time-series analysis.
+        write_ts = datetime.now(timezone.utc)
+        occurred_at = self._normalize_utc_timestamp(data.occurred_at)
+        if actor_ctx is not None:
+            writer_ctx = {
+                "actor_id": actor_ctx.actor_id or "anonymous",
+                "actor_type": actor_ctx.actor_type or "anonymous",
+                "role": actor_ctx.role or "anonymous",
+                "responsibility": "",
+            }
+        else:
+            writer_ctx = normalize_actor_context(
+                actor_id=None,
+                actor_type=None,
+                role=None,
+                responsibility=None,
+            )
+        extra_metadata = dict(data.extra_metadata or {})
+        extra_metadata.setdefault("written_at", write_ts.isoformat())
+        extra_metadata.setdefault("write_actor_id", writer_ctx["actor_id"])
+        extra_metadata.setdefault("write_actor_type", writer_ctx["actor_type"])
+        extra_metadata.setdefault("write_role", writer_ctx["role"])
+        extra_metadata.setdefault("write_responsibility", writer_ctx["responsibility"])
+        if actor_ctx is not None:
+            if actor_ctx.department:
+                extra_metadata["write_department"] = actor_ctx.department
+            if actor_ctx.mode_applied:
+                extra_metadata["write_identity_mode"] = actor_ctx.mode_applied
+        if occurred_at is not None:
+            extra_metadata.setdefault("event_time", occurred_at.isoformat())
+            extra_metadata.setdefault("event_date", occurred_at.date().isoformat())
+
         # Create metadata record
         memory = MemoryMetadata(
             id=memory_id,
@@ -148,7 +192,7 @@ class MemoryService:
             content_hash=content_hash,
             tags=data.tags or [],
             entities=data.entities or {},
-            extra_metadata=data.extra_metadata or {},
+            extra_metadata=extra_metadata,
             source_type=data.source_type,
             source_id=data.source_id,
             vector_id=vector_id,
@@ -183,7 +227,11 @@ class MemoryService:
                     "tags": data.tags or [],
                     "classification": data.classification,
                     "memory_type": data.memory_type,
-                    "created_at": datetime.now(timezone.utc).isoformat(),
+                    "created_at": write_ts.isoformat(),
+                    "event_time": occurred_at.isoformat() if occurred_at else None,
+                    "write_actor_id": writer_ctx["actor_id"],
+                    "write_actor_type": writer_ctx["actor_type"],
+                    "write_role": writer_ctx["role"],
                 },
             )
         except Exception as exc:
@@ -254,6 +302,7 @@ class MemoryService:
         request_id: Optional[str] = None,
         force_long_term: bool = False,
         ttl: Optional[int] = None,
+        actor_ctx: Optional[ResolvedActorContext] = None,
     ) -> Union[ShortTermMemory, MemoryMetadata]:
         """
         Create a memory using the hybrid architecture.
@@ -293,10 +342,35 @@ class MemoryService:
         if force_long_term:
             if embedding is None:
                 embedding = [0.0] * settings.EMBEDDING_DIMENSIONS
-            return await self.create_memory(data, embedding, request_id)
+            return await self.create_memory(data, embedding, request_id, actor_ctx=actor_ctx)
         
         # Create short-term memory in Redis
         stm_service = ShortTermMemoryService(self.user_id, self.org_id)
+        if actor_ctx is not None:
+            writer_ctx = {
+                "actor_id": actor_ctx.actor_id or "anonymous",
+                "actor_type": actor_ctx.actor_type or "anonymous",
+                "role": actor_ctx.role or "anonymous",
+                "responsibility": "",
+            }
+        else:
+            writer_ctx = normalize_actor_context(
+                actor_id=None,
+                actor_type=None,
+                role=None,
+                responsibility=None,
+            )
+        smart_metadata = dict(data.extra_metadata or {})
+        write_ts = datetime.now(timezone.utc)
+        occurred_at = self._normalize_utc_timestamp(data.occurred_at)
+        smart_metadata.setdefault("written_at", write_ts.isoformat())
+        smart_metadata.setdefault("write_actor_id", writer_ctx["actor_id"])
+        smart_metadata.setdefault("write_actor_type", writer_ctx["actor_type"])
+        smart_metadata.setdefault("write_role", writer_ctx["role"])
+        smart_metadata.setdefault("write_responsibility", writer_ctx["responsibility"])
+        if occurred_at is not None:
+            smart_metadata.setdefault("event_time", occurred_at.isoformat())
+            smart_metadata.setdefault("event_date", occurred_at.date().isoformat())
         
         stm = await stm_service.store(
             content=data.content,
@@ -304,7 +378,7 @@ class MemoryService:
             scope=data.scope,
             tags=data.tags,
             entities=data.entities,
-            metadata=data.extra_metadata,
+            metadata=smart_metadata,
             ttl=ttl if ttl is not None else getattr(data, "ttl", None),
         )
         
