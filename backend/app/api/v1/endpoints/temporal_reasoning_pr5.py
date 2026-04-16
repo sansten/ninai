@@ -1,4 +1,4 @@
-"""
+﻿"""
 PR-5: Temporal Reasoning REST API Endpoints
 
 Time-aware query endpoints for facts, sequences, trajectories, and forecasting.
@@ -6,9 +6,8 @@ Time-aware query endpoints for facts, sequences, trajectories, and forecasting.
 
 from datetime import datetime
 from typing import List, Optional, Any, Dict
-from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -19,14 +18,7 @@ from app.schemas.temporal_reasoning_pr5 import (
     TemporalSequenceRequest,
     TrajectoryRequest,
     ForecastRequest,
-    TemporalQueryRequest,
     ActionTimingRequest,
-    TemporalFactResponse,
-    TemporalSequenceResponse,
-    TrajectoryResponse,
-    ForecastResponse,
-    InflectionPointResponse,
-    ActionTimingResponse,
 )
 
 router = APIRouter()
@@ -38,26 +30,24 @@ async def tag_fact_validity(
     session: AsyncSession = Depends(get_db),
     tenant: TenantContext = Depends(get_tenant_context),
 ) -> Dict[str, Any]:
-    """
-    Tag a fact with temporal validity interval.
-    
-    Args:
-        request: Temporal fact request with:
-            - fact_id: Fact being tagged
-            - onset_timestamp: When fact becomes true
-            - offset_timestamp: When fact stops being true (optional)
-            - confidence: How sure? (0-1)
-            - change_type: onset | offset | stable | transient
-    
-    Returns:
-        Temporal fact metadata with ID
-    """
+    """Tag a fact with temporal validity interval."""
     org_id = tenant.org_id
-    
-    svc = TemporalReasoningService(db_session=session, org_id=org_id)
-    
-    result = await svc.tag_facts_with_temporal_validity([request])
-    
+    svc = TemporalReasoningService(session=session)
+
+    valid_from = request.onset_timestamp if hasattr(request, "onset_timestamp") else datetime.utcnow()
+    valid_to = getattr(request, "offset_timestamp", None)
+    fact_id = str(getattr(request, "fact_id", "unknown"))
+    change_type = getattr(request, "change_type", "stable")
+    confidence = float(getattr(request, "confidence", 0.8))
+
+    result = await svc.tag_facts_with_temporal_validity(
+        org_id=org_id,
+        fact_id=fact_id,
+        valid_from=valid_from,
+        valid_to=valid_to,
+        change_type=change_type,
+        confidence=confidence,
+    )
     return result
 
 
@@ -67,26 +57,22 @@ async def detect_sequences(
     session: AsyncSession = Depends(get_db),
     tenant: TenantContext = Depends(get_tenant_context),
 ) -> Dict[str, Any]:
-    """
-    Detect recurring event sequences.
-    
-    Args:
-        requests: List of sequence detection requests with:
-            - entities: Ordered list of entity IDs
-            - min_gap_seconds: Minimum gap between events
-            - max_gap_seconds: Maximum gap between events
-            - min_strength: Minimum pattern strength (0-1)
-    
-    Returns:
-        List of detected sequences with pattern metadata
-    """
+    """Detect recurring event sequences."""
     org_id = tenant.org_id
-    
-    svc = TemporalReasoningService(db_session=session, org_id=org_id)
-    
-    result = await svc.detect_sequences(requests)
-    
-    return result
+    svc = TemporalReasoningService(session=session)
+
+    all_sequences = []
+    for req in requests:
+        entities = getattr(req, "entities", [])
+        timeline = [(str(e), datetime.utcnow()) for e in entities]
+        seqs = await svc.detect_sequences(
+            org_id=org_id,
+            entity_timeline=timeline,
+            min_occurrences=3,
+        )
+        all_sequences.extend(seqs)
+
+    return {"sequences": all_sequences, "count": len(all_sequences)}
 
 
 @router.post("/v1/temporal/trajectories/compute", response_model=Dict[str, Any])
@@ -95,25 +81,30 @@ async def compute_trajectory(
     session: AsyncSession = Depends(get_db),
     tenant: TenantContext = Depends(get_tenant_context),
 ) -> Dict[str, Any]:
-    """
-    Analyze how quantities change over time.
-    
-    Args:
-        requests: List of trajectory requests with:
-            - entity_id: What entity (user, problem, metric)
-            - quantity: What metric (sentiment, strength, rate)
-            - measurements: List of {timestamp, value} measurements
-    
-    Returns:
-        Trajectory analysis with trend, inflection points, forecast
-    """
+    """Analyze how quantities change over time."""
     org_id = tenant.org_id
-    
-    svc = TemporalReasoningService(db_session=session, org_id=org_id)
-    
-    result = await svc.compute_trajectories(requests)
-    
-    return result
+    svc = TemporalReasoningService(session=session)
+
+    trajectories = []
+    for req in requests:
+        measurements = []
+        for m in req.measurements:
+            ts = m.get("timestamp") or m.get("time")
+            val = m.get("value", m.get("v", 0.0))
+            if isinstance(ts, str):
+                ts = datetime.fromisoformat(ts)
+            measurements.append((ts, float(val)))
+
+        traj = await svc.compute_trajectories(
+            org_id=org_id,
+            entity_id=req.entity_id,
+            quantity=req.quantity,
+            measurements=measurements,
+        )
+        if traj:
+            trajectories.append(traj)
+
+    return {"trajectories": trajectories, "count": len(trajectories)}
 
 
 @router.post("/v1/temporal/trajectories/forecast", response_model=Dict[str, Any])
@@ -122,29 +113,16 @@ async def forecast_trajectory(
     session: AsyncSession = Depends(get_db),
     tenant: TenantContext = Depends(get_tenant_context),
 ) -> Dict[str, Any]:
-    """
-    Forecast future values for a trajectory.
-    
-    Args:
-        request: Forecast request with:
-            - entity_id: ID of trajectory to forecast
-            - horizon_steps: How many periods ahead?
-            - confidence_level: Desired confidence (0.8-0.99)
-    
-    Returns:
-        List of forecasts with confidence intervals
-    """
-    org_id = tenant.org_id
-    
-    svc = TemporalReasoningService(db_session=session, org_id=org_id)
-    
-    # For demo, use empty measurements (would retrieve from DB in real app)
-    result = await svc.forecast_trajectory(
-        request,
-        measurements=[],
+    """Forecast future values for a trajectory."""
+    svc = TemporalReasoningService(session=session)
+
+    trajectory = {"entity_id": request.entity_id, "measurements": [], "predicted_future": []}
+    forecasts = await svc.forecast_trajectory(
+        trajectory=trajectory,
+        horizon_periods=request.horizon_steps,
     )
-    
-    return result
+
+    return {"entity_id": request.entity_id, "forecasts": forecasts}
 
 
 @router.get("/v1/temporal/trajectories/{entity_id}/inflection-points", response_model=Dict[str, Any])
@@ -154,28 +132,16 @@ async def get_inflection_points(
     session: AsyncSession = Depends(get_db),
     tenant: TenantContext = Depends(get_tenant_context),
 ) -> Dict[str, Any]:
-    """
-    Identify significant changes in trajectory.
-    
-    Args:
-        entity_id: ID of trajectory to analyze
-        sensitivity: How many std devs = inflection point?
-    
-    Returns:
-        List of inflection points with timestamps and severity
-    """
-    org_id = tenant.org_id
-    
-    svc = TemporalReasoningService(db_session=session, org_id=org_id)
-    
-    # For demo, use empty measurements (would retrieve from DB in real app)
-    result = await svc.detect_inflection_points(
-        entity_id,
-        measurements=[],
-        sensitivity=sensitivity,
+    """Identify significant changes in trajectory."""
+    svc = TemporalReasoningService(session=session)
+
+    trajectory = {"entity_id": entity_id, "measurements": []}
+    inflections = await svc.detect_inflection_points(
+        trajectory=trajectory,
+        threshold_std=sensitivity,
     )
-    
-    return result
+
+    return {"entity_id": entity_id, "inflection_points": inflections}
 
 
 @router.get("/v1/temporal/query", response_model=Dict[str, Any])
@@ -189,48 +155,20 @@ async def temporal_query(
     session: AsyncSession = Depends(get_db),
     tenant: TenantContext = Depends(get_tenant_context),
 ) -> Dict[str, Any]:
-    """
-    Execute SQL-like temporal queries.
-    
-    Examples:
-    - query_type=facts_valid_at_time&timestamp=2026-03-01T12:00:00
-    - query_type=facts_updated_after&after=2026-02-01T00:00:00
-    - query_type=trajectory_crosses_threshold&entity_id=xyz&threshold=0.8
-    
-    Args:
-        query_type: Type of temporal query
-        timestamp: Query timestamp (ISO format)
-        entity_id: Entity to query
-        threshold: Threshold value for crossing queries
-        start_time: Query start time
-        end_time: Query end time
-    
-    Returns:
-        Query results
-    """
+    """Execute SQL-like temporal queries."""
     org_id = tenant.org_id
-    
-    svc = TemporalReasoningService(db_session=session, org_id=org_id)
-    
-    # Parse timestamps if provided
-    ts = None
+    svc = TemporalReasoningService(session=session)
+
+    kwargs: Dict[str, Any] = {}
     if timestamp:
-        ts = datetime.fromisoformat(timestamp)
-    
-    result = await svc.temporal_query(
-        query_type=query_type,
-        timestamp=ts,
-        entity_id=entity_id,
-        threshold=threshold,
-        start_time=start_time,
-        end_time=end_time,
-    )
-    
-    return {
-        "query_type": query_type,
-        "success": result.get("success", True),
-        "results": result,
-    }
+        kwargs["timestamp"] = datetime.fromisoformat(timestamp)
+    if entity_id:
+        kwargs["entity_id"] = entity_id
+    if threshold is not None:
+        kwargs["threshold"] = threshold
+
+    results = await svc.temporal_query(org_id=org_id, query_type=query_type, **kwargs)
+    return {"query_type": query_type, "success": True, "results": results}
 
 
 @router.post("/v1/temporal/when-should-act", response_model=Dict[str, Any])
@@ -239,34 +177,25 @@ async def when_should_act(
     session: AsyncSession = Depends(get_db),
     tenant: TenantContext = Depends(get_tenant_context),
 ) -> Dict[str, Any]:
-    """
-    Estimate optimal time to act given goal and trajectory.
-    
-    Args:
-        request: Action timing request with:
-            - entity_id: Entity to analyze
-            - threshold: Critical threshold value
-            - measurements: Current measurements
-            - lookahead_hours: How far to look ahead?
-    
-    Returns:
-        Recommended action time and reasoning
-    """
+    """Estimate optimal time to act given goal and trajectory."""
     org_id = tenant.org_id
-    
-    svc = TemporalReasoningService(db_session=session, org_id=org_id)
-    
+    svc = TemporalReasoningService(session=session)
+
+    measurements = [
+        {"timestamp": m.get("timestamp") or m.get("time"), "value": float(m.get("value", m.get("v", 0.0)))}
+        for m in request.measurements
+    ]
+    trajectory = {"entity_id": request.entity_id, "measurements": measurements, "predicted_future": []}
+    goal_context = {"critical_threshold": request.threshold}
+
     result = await svc.when_should_act(
-        entity_id=request.entity_id,
-        threshold=request.threshold,
-        measurements=request.measurements,
-        lookahead_hours=request.lookahead_hours,
+        org_id=org_id,
+        goal_context=goal_context,
+        trajectory=trajectory,
+        action_lead_time_hours=request.lookahead_hours,
     )
-    
+
     if not result:
-        return {
-            "status": "no_action_needed",
-            "reason": "Trajectory within acceptable range",
-        }
-    
+        return {"status": "no_action_needed", "reason": "Trajectory within acceptable range"}
+
     return result
