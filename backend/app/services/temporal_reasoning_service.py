@@ -199,7 +199,7 @@ class TemporalReasoningService:
             diffs = np.diff(values)
             for i in range(1, len(diffs)):
                 if diffs[i] * diffs[i - 1] < 0:  # Sign change
-                    inflection_points.append(timestamps[i])
+                    inflection_points.append(datetime.fromtimestamp(float(timestamps[i])).isoformat())
         
         # Simple EMA for forecasting
         alpha = 0.3
@@ -208,7 +208,7 @@ class TemporalReasoningService:
         for v in values[1:]:
             ema = alpha * v + (1 - alpha) * ema
             forecast.append(({
-                "timestamp": datetime.fromtimestamp(timestamps[-1] + (len(forecast) + 1) * 3600).isoformat(),
+                "timestamp": datetime.fromtimestamp(float(timestamps[-1]) + (len(forecast) + 1) * 3600).isoformat(),
                 "predicted_value": float(ema),
                 "confidence": 0.7 - (len(forecast) * 0.05),  # Confidence decreases further ahead
             }))
@@ -222,7 +222,7 @@ class TemporalReasoningService:
             "trend_direction": trend_direction,
             "trend_strength": float(trend_strength),
             "predicted_future": forecast[:7],  # Next 7 periods
-            "inflection_points": [t.isoformat() for t in inflection_points],
+            "inflection_points": inflection_points,
             "last_computed_at": datetime.utcnow().isoformat(),
             "created_at": datetime.utcnow().isoformat(),
         }
