@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
+from app.middleware.tenant_context import TenantContext, get_tenant_context
 from app.services.temporal_reasoning_service import TemporalReasoningService
 from app.schemas.temporal_reasoning_pr5 import (
     TemporalFactRequest,
@@ -35,6 +36,7 @@ router = APIRouter()
 async def tag_fact_validity(
     request: TemporalFactRequest,
     session: AsyncSession = Depends(get_db),
+    tenant: TenantContext = Depends(get_tenant_context),
 ) -> Dict[str, Any]:
     """
     Tag a fact with temporal validity interval.
@@ -50,8 +52,7 @@ async def tag_fact_validity(
     Returns:
         Temporal fact metadata with ID
     """
-    from app.core.auth import get_current_org_id
-    org_id = await get_current_org_id()
+    org_id = tenant.org_id
     
     svc = TemporalReasoningService(db_session=session, org_id=org_id)
     
@@ -64,6 +65,7 @@ async def tag_fact_validity(
 async def detect_sequences(
     requests: List[TemporalSequenceRequest],
     session: AsyncSession = Depends(get_db),
+    tenant: TenantContext = Depends(get_tenant_context),
 ) -> Dict[str, Any]:
     """
     Detect recurring event sequences.
@@ -78,8 +80,7 @@ async def detect_sequences(
     Returns:
         List of detected sequences with pattern metadata
     """
-    from app.core.auth import get_current_org_id
-    org_id = await get_current_org_id()
+    org_id = tenant.org_id
     
     svc = TemporalReasoningService(db_session=session, org_id=org_id)
     
@@ -92,6 +93,7 @@ async def detect_sequences(
 async def compute_trajectory(
     requests: List[TrajectoryRequest],
     session: AsyncSession = Depends(get_db),
+    tenant: TenantContext = Depends(get_tenant_context),
 ) -> Dict[str, Any]:
     """
     Analyze how quantities change over time.
@@ -105,8 +107,7 @@ async def compute_trajectory(
     Returns:
         Trajectory analysis with trend, inflection points, forecast
     """
-    from app.core.auth import get_current_org_id
-    org_id = await get_current_org_id()
+    org_id = tenant.org_id
     
     svc = TemporalReasoningService(db_session=session, org_id=org_id)
     
@@ -119,6 +120,7 @@ async def compute_trajectory(
 async def forecast_trajectory(
     request: ForecastRequest,
     session: AsyncSession = Depends(get_db),
+    tenant: TenantContext = Depends(get_tenant_context),
 ) -> Dict[str, Any]:
     """
     Forecast future values for a trajectory.
@@ -132,8 +134,7 @@ async def forecast_trajectory(
     Returns:
         List of forecasts with confidence intervals
     """
-    from app.core.auth import get_current_org_id
-    org_id = await get_current_org_id()
+    org_id = tenant.org_id
     
     svc = TemporalReasoningService(db_session=session, org_id=org_id)
     
@@ -151,6 +152,7 @@ async def get_inflection_points(
     entity_id: str,
     sensitivity: float = Query(1.5, ge=0.5, le=3.0),
     session: AsyncSession = Depends(get_db),
+    tenant: TenantContext = Depends(get_tenant_context),
 ) -> Dict[str, Any]:
     """
     Identify significant changes in trajectory.
@@ -162,8 +164,7 @@ async def get_inflection_points(
     Returns:
         List of inflection points with timestamps and severity
     """
-    from app.core.auth import get_current_org_id
-    org_id = await get_current_org_id()
+    org_id = tenant.org_id
     
     svc = TemporalReasoningService(db_session=session, org_id=org_id)
     
@@ -186,6 +187,7 @@ async def temporal_query(
     start_time: Optional[str] = Query(None),
     end_time: Optional[str] = Query(None),
     session: AsyncSession = Depends(get_db),
+    tenant: TenantContext = Depends(get_tenant_context),
 ) -> Dict[str, Any]:
     """
     Execute SQL-like temporal queries.
@@ -206,8 +208,7 @@ async def temporal_query(
     Returns:
         Query results
     """
-    from app.core.auth import get_current_org_id
-    org_id = await get_current_org_id()
+    org_id = tenant.org_id
     
     svc = TemporalReasoningService(db_session=session, org_id=org_id)
     
@@ -236,6 +237,7 @@ async def temporal_query(
 async def when_should_act(
     request: ActionTimingRequest,
     session: AsyncSession = Depends(get_db),
+    tenant: TenantContext = Depends(get_tenant_context),
 ) -> Dict[str, Any]:
     """
     Estimate optimal time to act given goal and trajectory.
@@ -250,8 +252,7 @@ async def when_should_act(
     Returns:
         Recommended action time and reasoning
     """
-    from app.core.auth import get_current_org_id
-    org_id = await get_current_org_id()
+    org_id = tenant.org_id
     
     svc = TemporalReasoningService(db_session=session, org_id=org_id)
     
