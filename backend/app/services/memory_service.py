@@ -25,6 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.qdrant import QdrantService
+from app.agents.registry import get_agent
 from app.models.memory import MemoryMetadata, MemorySharing
 from app.models.memory_feedback import MemoryFeedback
 from app.services.permission_checker import PermissionChecker, AccessDecision
@@ -188,7 +189,7 @@ class MemoryService:
             classification=data.classification,
             required_clearance=data.required_clearance or 0,
             title=data.title,
-            content_preview=data.content[:500],
+            content_preview=data.content[:2000],
             content_hash=content_hash,
             tags=data.tags or [],
             entities=data.entities or {},
@@ -731,6 +732,8 @@ class MemoryService:
                 stmt = stmt.where(MemoryMetadata.scope == scope_val)
             if request.team_id:
                 stmt = stmt.where(MemoryMetadata.scope == "team", MemoryMetadata.scope_id == request.team_id)
+            if request.tags:
+                stmt = stmt.where(MemoryMetadata.tags.contains(request.tags))
 
             lex_res = await self.session.execute(stmt)
             for row in lex_res.all():
@@ -744,17 +747,56 @@ class MemoryService:
             return []
 
         # Fetch from Postgres (RLS will filter unauthorized)
-        query = select(MemoryMetadata).where(
-            and_(
-                MemoryMetadata.id.in_(candidate_ids),
-                MemoryMetadata.is_active.is_(True),
-                # Defense-in-depth: even with RLS, constrain by org_id explicitly.
-                MemoryMetadata.organization_id == self.org_id,
-            )
-        )
+        _where_clauses = [
+            MemoryMetadata.id.in_(candidate_ids),
+            MemoryMetadata.is_active.is_(True),
+            # Defense-in-depth: even with RLS, constrain by org_id explicitly.
+            MemoryMetadata.organization_id == self.org_id,
+        ]
+        # Tag filtering: memory must contain ALL requested tags (@> = array contains).
+        # This scopes search to a specific conversation/context without needing a separate
+        # index scan — the candidate_ids set from Qdrant is already small.
+        if request.tags:
+            _where_clauses.append(MemoryMetadata.tags.contains(request.tags))
+
+        query = select(MemoryMetadata).where(and_(*_where_clauses))
 
         result = await self.session.execute(query)
         memories = result.scalars().all()
+
+        if getattr(request, "use_graph", False) and memories:
+            # Graph expansion is best-effort and must never break search.
+            try:
+                wm_agent = get_agent("world_model")
+                if wm_agent is not None and hasattr(wm_agent, "get_neighbours"):
+                    entity_ids: set[str] = set()
+                    for mem in memories[:5]:
+                        ents = getattr(mem, "entities", None) or {}
+                        if isinstance(ents, dict):
+                            entity_ids.update(str(k) for k in ents.keys())
+
+                    if entity_ids:
+                        neighbour_ids = await wm_agent.get_neighbours(
+                            org_id=self.org_id,
+                            entity_ids=list(entity_ids),
+                            db=self.session,
+                            limit=20,
+                        )
+                        if neighbour_ids:
+                            nb_stmt = select(MemoryMetadata).where(
+                                MemoryMetadata.id.in_(list(neighbour_ids)),
+                                MemoryMetadata.is_active.is_(True),
+                                MemoryMetadata.organization_id == self.org_id,
+                            )
+                            if request.tags:
+                                nb_stmt = nb_stmt.where(MemoryMetadata.tags.contains(request.tags))
+
+                            nb_result = await self.session.execute(nb_stmt)
+                            neighbours = nb_result.scalars().all()
+                            existing_ids = {m.id for m in memories}
+                            memories += [m for m in neighbours if m.id not in existing_ids]
+            except Exception:
+                pass
 
         # Optional: feedback-driven reranking (closed-loop retrieval).
         # Uses most recent per-user feedback of type "relevance" for each memory.
@@ -1189,8 +1231,12 @@ class MemoryService:
         # Soft delete
         memory.is_active = False
         
-        # Remove from Qdrant
-        await QdrantService.delete_memory(memory.vector_id, self.org_id)
+        # Remove from Qdrant (best-effort; soft-delete in DB is authoritative)
+        try:
+            if memory.vector_id:
+                await QdrantService.delete_memory(memory.vector_id, self.org_id)
+        except Exception:
+            pass
         
         # Audit log
         await self.audit_service.log_memory_operation(

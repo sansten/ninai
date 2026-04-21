@@ -52,15 +52,6 @@ def build_memory_dag(
     trace_id: str | None = None,
     storage: str = "long_term",
 ):
-    # 1) classification
-    # 2) metadata
-    # 3) topic modeling (after 1+2)
-    # 4) pattern detection
-    # 5) promotion
-    # 6) graph linking (after 2/3)
-    # 7) logseq export (optional)
-    # 8) feedback learning
-
     base_kwargs = {
         "org_id": org_id,
         "memory_id": memory_id,
@@ -69,25 +60,41 @@ def build_memory_dag(
         "storage": storage,
     }
 
-    enrich = chain(
+    # Stage 1: classification + metadata + normalization (sequential)
+    stage1 = chain(
         classification_task.si(**base_kwargs),
         metadata_task.si(**base_kwargs),
         semantic_normalization_task.si(**base_kwargs),
     )
 
-    topics_then_patterns = chain(
+    # Stage 2: topic/pattern/promotion (sequential)
+    stage2 = chain(
         topic_modeling_task.si(**base_kwargs),
         pattern_detection_task.si(**base_kwargs),
         promotion_task.si(**base_kwargs),
     )
 
-    graph_and_export = group(
+    # Stage 3: entity extraction + graph linking + logseq export (parallel)
+    stage3 = group(
+        entity_resolution_task.si(**base_kwargs),
         graph_linking_task.si(**base_kwargs),
         logseq_export_task.si(**base_kwargs),
     )
 
-    # classification+metadata -> (topics->patterns->promotion) -> (graph+logseq) -> feedback
-    return chain(enrich, topics_then_patterns, graph_and_export, feedback_learning_task.si(**base_kwargs))
+    # Stage 4: world model update (depends on entity resolution writes)
+    stage4 = world_model_task.si(**base_kwargs)
+
+    # Stage 5: temporal + episodic + causal reasoning (parallel)
+    stage5 = group(
+        temporal_reasoning_task.si(**base_kwargs),
+        episodic_grouping_task.si(**base_kwargs),
+        causal_reasoning_task.si(**base_kwargs),
+    )
+
+    # Stage 6: feedback learning (always last)
+    stage6 = feedback_learning_task.si(**base_kwargs)
+
+    return chain(stage1, stage2, stage3, stage4, stage5, stage6)
 
 
 def enqueue_memory_pipeline(**kwargs):
@@ -248,4 +255,74 @@ def feedback_learning_task(self, org_id: str, memory_id: str, initiator_user_id:
     runner = AgentRunner(service_user_id=getattr(settings, "SYSTEM_TASK_USER_ID", None) or None)
     ctx = PipelineContext(org_id=org_id, memory_id=memory_id, initiator_user_id=initiator_user_id, trace_id=trace_id, storage=storage)
     res = _run_async(runner.run_agent(ctx=ctx, agent_name="feedback", attempt=self.request.retries + 1))
+    return res.model_dump(mode="json") if hasattr(res, "model_dump") else res
+
+
+@celery_app.task(
+    bind=True,
+    max_retries=5,
+    autoretry_for=(Exception,),
+    dont_autoretry_for=(ValueError,),
+    retry_backoff=True,
+)
+def entity_resolution_task(self, org_id: str, memory_id: str, initiator_user_id: str | None = None, trace_id: str | None = None, storage: str = "long_term"):
+    runner = AgentRunner(service_user_id=getattr(settings, "SYSTEM_TASK_USER_ID", None) or None)
+    ctx = PipelineContext(org_id=org_id, memory_id=memory_id, initiator_user_id=initiator_user_id, trace_id=trace_id, storage=storage)
+    res = _run_async(runner.run_agent(ctx=ctx, agent_name="entity_resolution", attempt=self.request.retries + 1))
+    return res.model_dump(mode="json") if hasattr(res, "model_dump") else res
+
+
+@celery_app.task(
+    bind=True,
+    max_retries=5,
+    autoretry_for=(Exception,),
+    dont_autoretry_for=(ValueError,),
+    retry_backoff=True,
+)
+def world_model_task(self, org_id: str, memory_id: str, initiator_user_id: str | None = None, trace_id: str | None = None, storage: str = "long_term"):
+    runner = AgentRunner(service_user_id=getattr(settings, "SYSTEM_TASK_USER_ID", None) or None)
+    ctx = PipelineContext(org_id=org_id, memory_id=memory_id, initiator_user_id=initiator_user_id, trace_id=trace_id, storage=storage)
+    res = _run_async(runner.run_agent(ctx=ctx, agent_name="world_model", attempt=self.request.retries + 1))
+    return res.model_dump(mode="json") if hasattr(res, "model_dump") else res
+
+
+@celery_app.task(
+    bind=True,
+    max_retries=5,
+    autoretry_for=(Exception,),
+    dont_autoretry_for=(ValueError,),
+    retry_backoff=True,
+)
+def temporal_reasoning_task(self, org_id: str, memory_id: str, initiator_user_id: str | None = None, trace_id: str | None = None, storage: str = "long_term"):
+    runner = AgentRunner(service_user_id=getattr(settings, "SYSTEM_TASK_USER_ID", None) or None)
+    ctx = PipelineContext(org_id=org_id, memory_id=memory_id, initiator_user_id=initiator_user_id, trace_id=trace_id, storage=storage)
+    res = _run_async(runner.run_agent(ctx=ctx, agent_name="temporal_reasoning", attempt=self.request.retries + 1))
+    return res.model_dump(mode="json") if hasattr(res, "model_dump") else res
+
+
+@celery_app.task(
+    bind=True,
+    max_retries=5,
+    autoretry_for=(Exception,),
+    dont_autoretry_for=(ValueError,),
+    retry_backoff=True,
+)
+def episodic_grouping_task(self, org_id: str, memory_id: str, initiator_user_id: str | None = None, trace_id: str | None = None, storage: str = "long_term"):
+    runner = AgentRunner(service_user_id=getattr(settings, "SYSTEM_TASK_USER_ID", None) or None)
+    ctx = PipelineContext(org_id=org_id, memory_id=memory_id, initiator_user_id=initiator_user_id, trace_id=trace_id, storage=storage)
+    res = _run_async(runner.run_agent(ctx=ctx, agent_name="episodic_grouping", attempt=self.request.retries + 1))
+    return res.model_dump(mode="json") if hasattr(res, "model_dump") else res
+
+
+@celery_app.task(
+    bind=True,
+    max_retries=5,
+    autoretry_for=(Exception,),
+    dont_autoretry_for=(ValueError,),
+    retry_backoff=True,
+)
+def causal_reasoning_task(self, org_id: str, memory_id: str, initiator_user_id: str | None = None, trace_id: str | None = None, storage: str = "long_term"):
+    runner = AgentRunner(service_user_id=getattr(settings, "SYSTEM_TASK_USER_ID", None) or None)
+    ctx = PipelineContext(org_id=org_id, memory_id=memory_id, initiator_user_id=initiator_user_id, trace_id=trace_id, storage=storage)
+    res = _run_async(runner.run_agent(ctx=ctx, agent_name="causal_reasoning", attempt=self.request.retries + 1))
     return res.model_dump(mode="json") if hasattr(res, "model_dump") else res

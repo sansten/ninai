@@ -11,6 +11,7 @@ from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Request, UploadFile, File
 from fastapi.responses import FileResponse
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -70,6 +71,7 @@ from app.schemas.base import BaseSchema
 from app.services.memory_feedback_service import MemoryFeedbackService
 from app.services.usage_service import UsageService
 from app.tasks.memory_pipeline import enqueue_feedback_learning
+from app.models.memory import MemoryMetadata
 
 
 router = APIRouter()
@@ -158,7 +160,7 @@ async def create_memory(
     # Apply org mandate + user preference policy
     org_policy = await get_org_policy(db, tenant.org_id)
     user_pref = await get_user_pref(db, tenant.user_id)
-    actor_ctx = identity_policy_svc.resolve(
+    actor_ctx = await identity_policy_svc.resolve(
         resolved_identity=resolved_identity,
         org_policy=org_policy,
         user_pref=user_pref,
@@ -408,7 +410,7 @@ async def list_all_memories(
             {
                 "id": m.id,
                 "title": m.title,
-                "content_preview": m.content[:200] if m.content else None,
+                "content_preview": m.content[:2000] if m.content else None,
                 "scope": m.scope,
                 "tags": m.tags,
                 "access_count": m.access_count,
@@ -716,6 +718,8 @@ async def search_memories(
         },
     ),
     limit: int = Query(10, ge=1, le=100, description="Maximum number of results to return"),
+    tags: Optional[List[str]] = Query(None, description="Filter results to memories that have ALL specified tags"),
+    use_graph: bool = Query(False, description="Augment results with entity-graph neighbours"),
     include_enrichment: bool = Query(False, description="Include facts_used and disputed_facts enrichment"),
     include_playbooks: bool = Query(False, description="Include playbook matches for this query"),
     tenant: TenantContext = Depends(get_tenant_context),
@@ -791,6 +795,8 @@ async def search_memories(
         limit=limit,
         hybrid=hybrid,
         hnms_mode=hnms_mode,
+        tags=tags,
+        use_graph=use_graph,
     )
     
     try:
@@ -1310,5 +1316,96 @@ async def consolidate_memory(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=str(e),
         )
+
+
+@router.post(
+    "/enrich/bulk",
+    summary="Trigger enrichment agents on existing memories",
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def bulk_enrich_memories(
+    tags: Optional[List[str]] = Query(None, description="Filter memories by ALL of these tags"),
+    agents: Optional[List[str]] = Query(
+        None,
+        description="Agent names to run. Defaults to: entity_resolution, world_model, temporal_reasoning, episodic_grouping, causal_reasoning",
+    ),
+    limit: int = Query(1000, ge=1, le=10000, description="Max memories to process"),
+    tenant: TenantContext = Depends(get_tenant_context),
+    db: AsyncSession = Depends(get_db),
+):
+    """Queue enrichment tasks for existing memories and return immediately."""
+    from celery import chain as celery_chain
+    from app.tasks.memory_pipeline import (
+        entity_resolution_task,
+        world_model_task,
+        temporal_reasoning_task,
+        episodic_grouping_task,
+        causal_reasoning_task,
+    )
+
+    await set_tenant_context(
+        db, tenant.user_id, tenant.org_id, tenant.roles_string, tenant.clearance_level
+    )
+
+    default_agents = [
+        "entity_resolution",
+        "world_model",
+        "temporal_reasoning",
+        "episodic_grouping",
+        "causal_reasoning",
+    ]
+    task_map = {
+        "entity_resolution": entity_resolution_task,
+        "world_model": world_model_task,
+        "temporal_reasoning": temporal_reasoning_task,
+        "episodic_grouping": episodic_grouping_task,
+        "causal_reasoning": causal_reasoning_task,
+    }
+
+    requested = [a.lower() for a in (agents or default_agents)]
+    unknown = [a for a in requested if a not in task_map]
+    if unknown:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"Unknown agents: {unknown}")
+
+    stmt = (
+        select(MemoryMetadata)
+        .where(
+            MemoryMetadata.organization_id == tenant.org_id,
+            MemoryMetadata.is_active.is_(True),
+        )
+        .limit(limit)
+    )
+    if tags:
+        stmt = stmt.where(MemoryMetadata.tags.contains(tags))
+
+    result = await db.execute(stmt)
+    memories = result.scalars().all()
+
+    execution_order = [
+        "entity_resolution",
+        "world_model",
+        "temporal_reasoning",
+        "episodic_grouping",
+        "causal_reasoning",
+    ]
+    tasks_in_order = [name for name in execution_order if name in requested]
+
+    enqueued: list[str] = []
+    for memory in memories:
+        kwargs = {
+            "org_id": str(tenant.org_id),
+            "memory_id": str(memory.id),
+            "initiator_user_id": str(tenant.user_id),
+            "trace_id": None,
+            "storage": str(getattr(memory, "memory_type", None) or "long_term"),
+        }
+        celery_chain(*[task_map[name].si(**kwargs) for name in tasks_in_order]).apply_async()
+        enqueued.append(str(memory.id))
+
+    return {
+        "queued_count": len(enqueued),
+        "memory_ids": enqueued[:50],
+        "agents": requested,
+    }
 
 
