@@ -9,7 +9,7 @@ from typing import Optional, List, Any
 from datetime import datetime
 from enum import Enum
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 
 from app.schemas.base import BaseSchema
 from app.schemas.provenance import ProvenanceSource
@@ -148,11 +148,21 @@ class MemoryResponse(BaseSchema):
     created_at: datetime
     updated_at: datetime
     
+    # Full content — mirrors content_preview (populated by validator so SDK callers
+    # can use m.content without falling back to content_preview manually)
+    content: str = ''
+
     # Search result score (only present in search results)
     score: Optional[float] = None
 
     # Provenance/citations (optional; populated for search/RAG-style responses)
     provenance: Optional[List[ProvenanceSource]] = None
+
+    @model_validator(mode='after')
+    def _fill_content(self) -> 'MemoryResponse':
+        if not self.content:
+            self.content = self.content_preview
+        return self
 
 
 # =============================================================================
@@ -172,6 +182,7 @@ class MemorySearchRequest(BaseSchema):
     limit: int = Field(10, ge=1, le=100)
     score_threshold: Optional[float] = Field(None, ge=0.0, le=1.0)
     hybrid: bool = Field(False, description="Enable hybrid search (lexical + vector)")
+    use_graph: bool = Field(False, description="Augment results with entity-graph neighbours")
     hnms_mode: Optional[SearchHnmsMode] = Field(
         None,
         description="Ranking mode override: balanced|performance|research",

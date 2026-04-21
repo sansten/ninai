@@ -7,6 +7,7 @@ Resource classes for different API endpoints.
 
 from typing import Optional, List, Dict, Any, TYPE_CHECKING
 from pathlib import Path
+from datetime import datetime
 
 if TYPE_CHECKING:
     from ninai.client import NinaiClient
@@ -69,6 +70,11 @@ class MemoriesResource:
         metadata: Optional[Dict[str, Any]] = None,
         source_type: Optional[str] = None,
         source_id: Optional[str] = None,
+        occurred_at: Optional[datetime] = None,
+        write_actor_id: Optional[str] = None,
+        write_actor_type: Optional[str] = None,
+        write_role: Optional[str] = None,
+        write_responsibility: Optional[str] = None,
     ) -> Memory:
         """
         Create a new memory.
@@ -85,7 +91,12 @@ class MemoriesResource:
             metadata: Additional metadata as JSON
             source_type: Source type (manual, agent, integration)
             source_id: Source identifier
-            
+            occurred_at: Event timestamp (separate from text) for time-series analysis
+            write_actor_id: Writer identity (employee ID, bot ID, or anonymous)
+            write_actor_type: Writer type (employee|bot|anonymous)
+            write_role: Writer role key
+            write_responsibility: Writer responsibility description
+
         Returns:
             Memory: The created memory object
         """
@@ -111,21 +122,52 @@ class MemoriesResource:
             payload["source_type"] = source_type
         if source_id:
             payload["source_id"] = source_id
+        if occurred_at:
+            payload["occurred_at"] = occurred_at.isoformat()
+        if write_actor_id:
+            payload["write_actor_id"] = write_actor_id
+        if write_actor_type:
+            payload["write_actor_type"] = write_actor_type
+        if write_role:
+            payload["write_role"] = write_role
+        if write_responsibility:
+            payload["write_responsibility"] = write_responsibility
         
         response = self._client._post("/memories", json=payload)
         return Memory(**response)
     
-    def get(self, memory_id: str) -> Memory:
+    def get(
+        self,
+        memory_id: str,
+        read_actor_id: Optional[str] = None,
+        read_actor_type: Optional[str] = None,
+        read_role: Optional[str] = None,
+        read_responsibility: Optional[str] = None,
+    ) -> Memory:
         """
         Get a memory by ID.
-        
+
         Args:
             memory_id: The memory's unique identifier
-            
+            read_actor_id: Reader identity (employee ID, bot ID, or anonymous)
+            read_actor_type: Reader type (employee|bot|anonymous)
+            read_role: Reader role key
+            read_responsibility: Reader responsibility description
+
         Returns:
             Memory: The memory object
         """
-        response = self._client._get(f"/memories/{memory_id}")
+        params: Dict[str, Any] = {}
+        if read_actor_id:
+            params["read_actor_id"] = read_actor_id
+        if read_actor_type:
+            params["read_actor_type"] = read_actor_type
+        if read_role:
+            params["read_role"] = read_role
+        if read_responsibility:
+            params["read_responsibility"] = read_responsibility
+
+        response = self._client._get(f"/memories/{memory_id}", params=params or None)
         return Memory(**response)
     
     def list(
@@ -135,6 +177,10 @@ class MemoriesResource:
         memory_type: Optional[str] = None,
         page: int = 1,
         page_size: int = 20,
+        read_actor_id: Optional[str] = None,
+        read_actor_type: Optional[str] = None,
+        read_role: Optional[str] = None,
+        read_responsibility: Optional[str] = None,
     ) -> MemoryList:
         """
         List memories with optional filters.
@@ -145,7 +191,11 @@ class MemoriesResource:
             memory_type: Filter by memory type
             page: Page number (1-indexed)
             page_size: Number of items per page
-            
+            read_actor_id: Reader identity (employee ID, bot ID, or anonymous)
+            read_actor_type: Reader type (employee|bot|anonymous)
+            read_role: Reader role key
+            read_responsibility: Reader responsibility description
+
         Returns:
             MemoryList: Paginated list of memories
         """
@@ -157,7 +207,15 @@ class MemoriesResource:
             params["tags"] = ",".join(tags)
         if memory_type:
             params["memory_type"] = memory_type
-        
+        if read_actor_id:
+            params["read_actor_id"] = read_actor_id
+        if read_actor_type:
+            params["read_actor_type"] = read_actor_type
+        if read_role:
+            params["read_role"] = read_role
+        if read_responsibility:
+            params["read_responsibility"] = read_responsibility
+
         response = self._client._get("/memories", params=params)
         return MemoryList(**response)
     
@@ -169,6 +227,11 @@ class MemoriesResource:
         limit: int = 10,
         threshold: float = 0.7,
         hybrid: bool = False,
+        use_graph: bool = False,
+        read_actor_id: Optional[str] = None,
+        read_actor_type: Optional[str] = None,
+        read_role: Optional[str] = None,
+        read_responsibility: Optional[str] = None,
     ) -> SearchResult:
         """
         Search memories using semantic similarity.
@@ -180,7 +243,12 @@ class MemoriesResource:
             limit: Maximum number of results
             threshold: Minimum similarity score (0-1)
             hybrid: Enable hybrid lexical+vector ranking
-            
+            use_graph: Expand candidates using world-model entity graph links
+            read_actor_id: Reader identity (employee ID, bot ID, or anonymous)
+            read_actor_type: Reader type (employee|bot|anonymous)
+            read_role: Reader role key
+            read_responsibility: Reader responsibility description
+
         Returns:
             SearchResult: Search results with matching memories
         """
@@ -192,12 +260,22 @@ class MemoriesResource:
         if scope:
             params["scope"] = scope
         if tags:
-            params["tags"] = ",".join(tags)
+            params["tags"] = tags
         if threshold is not None:
             params["score_threshold"] = threshold
         if hybrid:
             params["hybrid"] = True
-        
+        if use_graph:
+            params["use_graph"] = True
+        if read_actor_id:
+            params["read_actor_id"] = read_actor_id
+        if read_actor_type:
+            params["read_actor_type"] = read_actor_type
+        if read_role:
+            params["read_role"] = read_role
+        if read_responsibility:
+            params["read_responsibility"] = read_responsibility
+
         response = self._client._get("/memories/search", params=params)
 
         # API returns MemorySearchResponse with 'results' field; SDK expects 'items'
@@ -1217,3 +1295,170 @@ class ProofResource:
             },
         )
         return MonthlyImpactReport(**response)
+
+
+class CognitiveGatewayResource:
+    """Cognitive Gateway API — Phase 49.
+
+    Five-verb REST interface exposing Ninai's full intelligence stack.
+    Each endpoint delegates to backend agents for sophisticated reasoning.
+
+    Verbs:
+    - write: Store and enrich a memory record
+    - read: Retrieve and rank memories for a query
+    - decide: Run enrichment pipeline and return decision with confidence
+    - plan: Decompose a goal into ordered, actionable steps
+    - explain: Retrieve audit trail and explainability for a memory
+
+    Usage::
+
+        # Make a decision
+        result = client.cognitive.gateway.decide(
+            content="DNS is misconfigured vs PostgreSQL saturated",
+            enrichment={"analysis_type": "contradiction_detection"}
+        )
+        print(f"Decision: {result['decision']}")
+        print(f"Confidence: {result['confidence']}")
+        print(f"Agents involved: {result['agents_run']}")
+    """
+
+    def __init__(self, client: "NinaiClient") -> None:
+        self._client = client
+
+    def write(
+        self,
+        content: str,
+        title: Optional[str] = None,
+        tags: Optional[List[str]] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+        context_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Store and enrich a memory record via cognitive pipeline.
+
+        Args:
+            content: The content to store
+            title: Optional title
+            tags: Optional tags
+            metadata: Optional metadata
+            context_id: Optional context ID for chaining calls
+
+        Returns:
+            Dict with memory_id, enriched flag, enrichment_summary, etc.
+        """
+        payload = {
+            "content": content,
+            "title": title or "",
+            "tags": tags or [],
+            "metadata": metadata or {},
+            "context_id": context_id,
+        }
+        return self._client._post("/cognitive/gateway/write", json=payload)
+
+    def read(
+        self,
+        query: str,
+        memories: Optional[List[Dict[str, Any]]] = None,
+        limit: int = 10,
+        context_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Retrieve and rank memories for a query.
+
+        Args:
+            query: The search query
+            memories: Optional pre-fetched candidate memories
+            limit: Max results to return
+            context_id: Optional context ID for chaining
+
+        Returns:
+            Dict with memories, total, query, context_assembled, etc.
+        """
+        payload = {
+            "query": query,
+            "memories": memories or [],
+            "limit": limit,
+            "context_id": context_id,
+        }
+        return self._client._post("/cognitive/gateway/read", json=payload)
+
+    def decide(
+        self,
+        content: str,
+        enrichment: Optional[Dict[str, Any]] = None,
+        context_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Run enrichment pipeline and return decision with confidence.
+
+        Delegates to ConflictDetectionAgent, CredibilityAgent, CausalReasoningAgent,
+        and other agents for multi-agent reasoning.
+
+        Args:
+            content: The content to analyze
+            enrichment: Optional enrichment context
+            context_id: Optional context ID for chaining
+
+        Returns:
+            Dict with decision, confidence, agents_run, debate_transcript, enrichment.
+        """
+        payload = {
+            "content": content,
+            "enrichment": enrichment or {},
+            "context_id": context_id,
+        }
+        return self._client._post("/cognitive/gateway/decide", json=payload)
+
+    def plan(
+        self,
+        goal: str,
+        context: Optional[Dict[str, Any]] = None,
+        context_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Decompose a goal into ordered, actionable steps.
+
+        Uses GoalDecompositionAgent to break down complex goals.
+
+        Args:
+            goal: The goal to plan
+            context: Optional context
+            context_id: Optional context ID for chaining
+
+        Returns:
+            Dict with goal, steps, step_count, blocking_step, confidence.
+        """
+        payload = {
+            "goal": goal,
+            "context": context or {},
+            "context_id": context_id,
+        }
+        return self._client._post("/cognitive/gateway/plan", json=payload)
+
+    def explain(self, memory_id: str) -> Dict[str, Any]:
+        """Retrieve audit trail and explainability for a memory.
+
+        Shows which agents analyzed this memory and their reasoning.
+
+        Args:
+            memory_id: The memory ID to explain
+
+        Returns:
+            Dict with memory_id, decisions, agents, confidence, explainability_summary.
+        """
+        return self._client._get(f"/cognitive/gateway/explain/{memory_id}")
+
+    def create_context(self) -> Dict[str, Any]:
+        """Create a new gateway context for chaining multiple verb calls.
+
+        Returns:
+            Dict with context_id, org_id, ttl_seconds, working_set_summary.
+        """
+        return self._client._post("/cognitive/gateway/context")
+
+    def get_context(self, context_id: str) -> Dict[str, Any]:
+        """Inspect accumulated state of a gateway context chain.
+
+        Args:
+            context_id: The context ID
+
+        Returns:
+            Dict with full context session state.
+        """
+        return self._client._get(f"/cognitive/gateway/context/{context_id}")
