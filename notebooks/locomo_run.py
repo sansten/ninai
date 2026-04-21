@@ -448,6 +448,23 @@ def _sharpen_single_hop(answer, question):
         m = re.search(r'\b(\d[\d,./]*(?:\s+\w+){0,2})\b', answer)
         if m:
             return m.group(1)
+    # For "how old" / age questions: extract first number
+    if 'how old' in q_lower or 'what age' in q_lower:
+        m = re.search(r'\b(\d+)\b', answer)
+        if m:
+            return m.group(1)
+    # For "which" questions: extract the shortest noun phrase
+    if q_lower.startswith('which'):
+        toks = answer.split()
+        run = []
+        for w in toks:
+            cleaned = re.sub(r'[^\w]', '', w)
+            if cleaned and (cleaned[0].isupper() or cleaned[0].isdigit()):
+                run.append(w)
+            elif run:
+                break
+        if run and len(run) <= 5:
+            return ' '.join(run)
     return answer
 
 def _sharpen_boolean(answer, question):
@@ -541,7 +558,7 @@ def _mem_obj_to_dict(m):
         'occurred_at': m.occurred_at.isoformat() if m.occurred_at else None,
     }
 
-def _search_semantic(question, conv_id, run_tag, client, limit, hybrid=True):
+def _search_semantic(question, conv_id, run_tag, client, limit, hybrid=True, use_graph=True):
     # Ninai hybrid semantic+lexical search filtered to one conversation
     for attempt in range(3):
         try:
@@ -554,7 +571,7 @@ def _search_semantic(question, conv_id, run_tag, client, limit, hybrid=True):
                     limit=limit,
                     threshold=0.0,
                     hybrid=hybrid,
-                    use_graph=True,
+                    use_graph=use_graph,
                 )
                 result = fut.result(timeout=25)
             hits = [
@@ -612,7 +629,7 @@ def _retrieve(question, mem_dicts, mems_obj, category, limit,
         k = limit if category not in ('multi_hop',) else min(limit * 2, 80)
         # QueryIntelligenceAgent: entity/intent-expanded query for stage-1 search
         search_q = _query_expand(question, category)
-        hits = _search_semantic(search_q, conv_id, run_tag, client, k)
+        hits = _search_semantic(search_q, conv_id, run_tag, client, k, use_graph=(category != 'adversarial'))
         if len(hits) >= 3:
             # Session expansion: include ALL turns from sessions already hit by semantic search.
             # Semantic finds the right session but may miss the answer-bearing turn.
@@ -623,7 +640,7 @@ def _retrieve(question, mem_dicts, mems_obj, category, limit,
                 stage1_text = ' '.join(h['content'] for h in hits[:10])
                 key_terms   = _extract_key_terms(stage1_text)
                 expanded_q  = question + ' ' + ' '.join(key_terms[:5])
-                hits2 = _search_semantic(expanded_q, conv_id, run_tag, client, limit)
+                hits2 = _search_semantic(expanded_q, conv_id, run_tag, client, limit, use_graph=False)
                 # Stage 3: proper noun bridge terms
                 all_text = ' '.join(h['content'] for h in hits + hits2)
                 proper_nouns = []
@@ -637,7 +654,7 @@ def _retrieve(question, mem_dicts, mems_obj, category, limit,
                     if p not in q_toks:
                         pn_freq[p] = pn_freq.get(p, 0) + 1
                 bridge_terms = [w for w, _ in sorted(pn_freq.items(), key=lambda x: -x[1])[:4]]
-                hits3 = _search_semantic(' '.join(bridge_terms), conv_id, run_tag, client, limit) if bridge_terms else []
+                hits3 = _search_semantic(' '.join(bridge_terms), conv_id, run_tag, client, limit, use_graph=False) if bridge_terms else []
                 seen_ids, merged = set(), []
                 for h in hits + hits2 + hits3:
                     if h['id'] not in seen_ids:
@@ -760,15 +777,19 @@ def _build_prompt(category, question, context, last_date='', session_overview=''
         return (
             _overview_block + 'Conversation excerpts (chronological):\n' + context + '\n\n'
             'Question: ' + question + '\n'
-            'RULE: Answer with ONLY the key fact (name, place, or short phrase). Prefer 1-5 words.\n'
-            'Do NOT write a full sentence. Do NOT explain.\n'
+            'RULE: This requires connecting two facts from different turns.\n'
+            'Step 1 (internal): identify the two relevant facts.\n'
+            'Step 2: output ONLY the final answer — a name, place, or short phrase (1-6 words).\n'
+            'Do NOT output the steps. Do NOT explain. Just the answer.\n'
             'Answer:'
         )
     elif category == 'adversarial':
         return (
             _overview_block + 'Conversation (chronological order):\n' + context + '\n\n'
             'Question: ' + question + '\n'
-            'RULE: Answer using only what the conversation states. Reply with ONLY the exact fact — 1 to 8 words. No explanation.\n'
+            'RULE: Answer using ONLY what the conversation explicitly states.\n'
+            'If the question assumes a fact NOT in the conversation, state the correct fact from the conversation instead.\n'
+            'Reply with ONLY 1 to 8 words — the exact fact or correction. No explanation.\n'
             'Answer:'
         )
     elif category == 'open_domain':
@@ -982,12 +1003,12 @@ if qwen_idx:
 
 if deep_idx:
     deep_workers = 4
-    print(f'  deepseek 16K ({LLM_MODEL_HARD}): {len(deep_idx)} prompts, workers={deep_workers}')
+    print(f'  deepseek 24K ({LLM_MODEL_HARD}): {len(deep_idx)} prompts, workers={deep_workers}')
     deep_prompts = [prompts[i] for i in deep_idx]
     deep_raw = _run_prompts_parallel(deep_prompts,
                                      models=[LLM_MODEL_HARD] * len(deep_prompts),
                                      workers=deep_workers,
-                                     num_ctx=16384)
+                                     num_ctx=24576)
     for j, i in enumerate(deep_idx):
         raw_answers[i] = deep_raw[j]
 
