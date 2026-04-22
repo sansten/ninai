@@ -675,6 +675,7 @@ class MemoryService:
                 score_threshold=request.score_threshold or 0.0,
                 scope_filter=scope_val,
                 team_id=request.team_id,
+                tags=request.tags if request.tags else None,
             )
         except Exception as exc:
             # Keep search available during transient vector store outages.

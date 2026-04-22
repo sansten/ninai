@@ -14,6 +14,7 @@ from qdrant_client.http import models as qdrant_models
 from qdrant_client.http.models import (
     Filter,
     FieldCondition,
+    MatchAny,
     MatchValue,
     Range,
     PointStruct,
@@ -133,6 +134,12 @@ class QdrantService:
         Returns:
             bool: True if operation successful
         """
+        # Skip upsert for zero vectors — cosine distance is undefined for the zero vector,
+        # and Qdrant will reject or silently corrupt such entries.
+        if not any(vector):
+            logger.debug("Skipping Qdrant upsert for memory_id=%s: zero embedding vector.", memory_id)
+            return False
+
         await cls.ensure_collection()
         client = cls.get_client()
         
@@ -161,6 +168,7 @@ class QdrantService:
         scope_filter: Optional[str] = None,
         team_id: Optional[str] = None,
         classification_max: Optional[str] = None,
+        tags: Optional[List[str]] = None,
     ) -> List[Dict[str, Any]]:
         """
         Search for similar memories with organization filtering.
@@ -181,7 +189,17 @@ class QdrantService:
             List of search results with scores and payloads
         """
         client = cls.get_client()
-        
+
+        # If the query vector is all zeros (no embedding available), skip vector search.
+        if not any(query_vector):
+            return []
+
+        # Ensure the collection exists before searching; returns empty if unavailable.
+        try:
+            await cls.ensure_collection()
+        except Exception:
+            return []
+
         # Build filter conditions
         filter_conditions = []
         
@@ -200,19 +218,32 @@ class QdrantService:
                     match=MatchValue(value=team_id),
                 )
             )
+
+        if tags:
+            for tag in tags:
+                filter_conditions.append(
+                    FieldCondition(
+                        key="tags",
+                        match=MatchAny(any=[tag]),
+                    )
+                )
         
         # Build filter with org isolation
         search_filter = cls.build_org_filter(org_id, filter_conditions)
         
         # Perform search
-        results = client.search(
-            collection_name=settings.QDRANT_COLLECTION_NAME,
-            query_vector=query_vector,
-            query_filter=search_filter,
-            limit=limit,
-            score_threshold=score_threshold,
-        )
-        
+        try:
+            results = client.search(
+                collection_name=settings.QDRANT_COLLECTION_NAME,
+                query_vector=query_vector,
+                query_filter=search_filter,
+                limit=limit,
+                score_threshold=score_threshold,
+            )
+        except Exception as exc:
+            logger.warning("Qdrant search returned an error, falling back to empty results: %s", exc)
+            return []
+
         return [
             {
                 "id": str(result.id),

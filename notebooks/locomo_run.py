@@ -630,7 +630,7 @@ def _retrieve(question, mem_dicts, mems_obj, category, limit,
         k = limit if category not in ('multi_hop',) else min(limit * 2, 80)
         # QueryIntelligenceAgent: entity/intent-expanded query for stage-1 search
         search_q = _query_expand(question, category)
-        hits = _search_semantic(search_q, conv_id, run_tag, client, k, use_graph=(category != 'adversarial'))
+        hits = _search_semantic(search_q, conv_id, run_tag, client, k, use_graph=True)
         if len(hits) >= 3:
             # Session expansion: include ALL turns from sessions already hit by semantic search.
             # Semantic finds the right session but may miss the answer-bearing turn.
@@ -786,7 +786,7 @@ def _build_prompt(category, question, context, last_date='', session_overview=''
         )
     elif category == 'adversarial':
         return (
-            _overview_block + 'Conversation (chronological order):\n' + context + '\n\n'
+            'Conversation (chronological order):\n' + context + '\n\n'
             'Question: ' + question + '\n'
             'RULE: Answer using only what the conversation states. Reply with ONLY the exact fact — 1 to 8 words. No explanation.\n'
             'Answer:'
@@ -795,8 +795,8 @@ def _build_prompt(category, question, context, last_date='', session_overview=''
         return (
             _overview_block + 'Conversation excerpts:\n' + context + '\n\n'
             'Question: ' + question + '\n'
-            'RULE: Reply with ONLY the shortest exact span from the conversation that answers the question.\n'
-            'Prefer 3-12 words. Use exact names and wording from the conversation. No explanation.\n'
+            'RULE: Reply with ONLY the exact span or phrase from the conversation that answers the question.\n'
+            'Use exact names and wording from the conversation. Aim for 5–25 words. No explanation.\n'
             'Answer:'
         )
     else:  # single_hop
@@ -927,7 +927,7 @@ def _retrieve_one(args):
     conv_id, qa = args
     mems_dict = conv_memories_dict.get(conv_id, [])
     mems_obj  = conv_memories_obj.get(conv_id, [])
-    _eff_limit = RETRIEVAL_LIMIT if qa['category'] != 'multi_hop' else min(RETRIEVAL_LIMIT * 2, 80)
+    _eff_limit = RETRIEVAL_LIMIT if qa['category'] != 'multi_hop' else 30
     retrieved = _retrieve(
         qa['question'], mems_dict, mems_obj, qa['category'], _eff_limit,
         client=client, run_tag=run_tag, conv_id=conv_id,
@@ -1033,9 +1033,9 @@ generated_answers = []
 for rec, raw in zip(qa_records, raw_answers):
     if raw:
         gen = _clean_answer(raw)
-        if rec['category'] in ('single_hop', 'adversarial'):
+        if rec['category'] == 'single_hop':
             gen = _sharpen_single_hop(gen, rec['question'])
-        if rec['category'] in ('single_hop', 'adversarial'):
+        if rec['category'] == 'single_hop':
             gen = _sharpen_boolean(gen, rec['question'])
         if rec['category'] == 'temporal':
             gen = _resolve_temporal_references(gen, rec.get('last_date', ''))
