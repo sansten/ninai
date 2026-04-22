@@ -122,9 +122,18 @@ async def test_scim_users_list_happy_path(monkeypatch):
 async def test_scim_create_user_requires_user_name():
     app.state.feature_gate = _AllowAllGate()
 
+    session = AsyncMock(spec=AsyncSession)
+
+    async def override_get_db():
+        yield session
+
+    app.dependency_overrides[get_db] = override_get_db
+
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         resp = await ac.post("/api/v1/scim/v2/Users", headers=_auth_headers(), json={})
+
+    app.dependency_overrides.clear()
 
     assert resp.status_code == 422
 

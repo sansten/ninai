@@ -101,7 +101,8 @@ class TestHeuristic:
         assert "hour_9" in keys
 
     def test_day_of_week_pattern_detected(self):
-        base = datetime(2026, 1, 26, 8, 0, 0, tzinfo=timezone.utc)  # Monday
+        # Keep this relative so the 90-day analysis window does not age out fixtures.
+        base = _NOW.replace(hour=8, minute=0, second=0, microsecond=0)
         memories = []
         for i in [0, 7, 14]:
             dt = base - timedelta(days=i)

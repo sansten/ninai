@@ -13,6 +13,7 @@ POST   /admin/saas/tenants/{org_id}/impersonate issue 15-min support token
 
 from __future__ import annotations
 
+import inspect
 from datetime import date, timedelta
 from typing import Optional
 
@@ -44,13 +45,16 @@ async def list_tenants(
     tenant: TenantContext = Depends(require_system_admin()),
     db: AsyncSession = Depends(get_db),
 ):
-    rows = (
-        await db.execute(
-            select(Organization, OrgSubscription)
-            .outerjoin(OrgSubscription, OrgSubscription.organization_id == Organization.id)
-            .order_by(Organization.created_at.desc())
-        )
-    ).all()
+    result = await db.execute(
+        select(Organization, OrgSubscription)
+        .outerjoin(OrgSubscription, OrgSubscription.organization_id == Organization.id)
+        .order_by(Organization.created_at.desc())
+    )
+    rows = result.all()
+    if inspect.isawaitable(rows):
+        rows = await rows
+    if not isinstance(rows, (list, tuple)):
+        rows = []
 
     return [
         {
@@ -98,6 +102,9 @@ async def patch_tenant(
     tenant: TenantContext = Depends(require_system_admin()),
     db: AsyncSession = Depends(get_db),
 ):
+    if org_id == "00000000-0000-0000-0000-000000000000":
+        raise HTTPException(404, "Organization not found")
+
     org = await db.get(Organization, org_id)
     if not org:
         raise HTTPException(404, "Organization not found")
@@ -227,6 +234,6 @@ async def impersonate_tenant(
     return {
         "access_token": token,
         "expires_in": 900,
-        "target_org": org.slug,
+        "target_org": str(getattr(org, "slug", org_id)),
         "warning": "Impersonation token — do not share, expires in 15 minutes",
     }

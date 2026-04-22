@@ -533,6 +533,30 @@ def admin_token(e2e_seeded_user: dict) -> str:
 
 
 @pytest.fixture
+def user_token(test_org_id: str, test_user_id: str) -> str:
+    """Get a JWT token for a regular non-admin user."""
+    from app.core.security import create_access_token
+
+    return create_access_token(
+        user_id=test_user_id,
+        org_id=test_org_id,
+        roles=["user"],
+    )
+
+
+@pytest.fixture
+def superadmin_token(test_org_id: str, test_user_id: str) -> str:
+    """Get a JWT token for a system administrator."""
+    from app.core.security import create_access_token
+
+    return create_access_token(
+        user_id=test_user_id,
+        org_id=test_org_id,
+        roles=["system_admin"],
+    )
+
+
+@pytest.fixture
 def mfa_auth_headers(test_org_id: str, test_user_id: str) -> dict:
     """
     Get auth headers for MFA tests.
