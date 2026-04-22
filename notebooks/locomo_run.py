@@ -22,6 +22,7 @@ RETRIEVAL_LIMIT  = 50   # top-N from deduplicated unique turns per conversation
 ROUGE_TYPE       = 'rouge1'
 LLM_MODEL        = 'qwen2.5:7b'
 LLM_MODEL_HARD   = 'deepseek-coder-v2:16b'
+LLM_MODEL_MID    = 'gemma4:e4b'
 LLM_TIMEOUT      = 120
 LLM_WORKERS      = 8
 INGEST_WORKERS   = 16  # more parallelism for 5882 turns
@@ -787,9 +788,7 @@ def _build_prompt(category, question, context, last_date='', session_overview=''
         return (
             _overview_block + 'Conversation (chronological order):\n' + context + '\n\n'
             'Question: ' + question + '\n'
-            'RULE: Answer using ONLY what the conversation explicitly states.\n'
-            'If the question assumes a fact NOT in the conversation, state the correct fact from the conversation instead.\n'
-            'Reply with ONLY 1 to 8 words — the exact fact or correction. No explanation.\n'
+            'RULE: Answer using only what the conversation states. Reply with ONLY the exact fact — 1 to 8 words. No explanation.\n'
             'Answer:'
         )
     elif category == 'open_domain':
@@ -928,8 +927,9 @@ def _retrieve_one(args):
     conv_id, qa = args
     mems_dict = conv_memories_dict.get(conv_id, [])
     mems_obj  = conv_memories_obj.get(conv_id, [])
+    _eff_limit = RETRIEVAL_LIMIT if qa['category'] != 'multi_hop' else min(RETRIEVAL_LIMIT * 2, 80)
     retrieved = _retrieve(
-        qa['question'], mems_dict, mems_obj, qa['category'], RETRIEVAL_LIMIT,
+        qa['question'], mems_dict, mems_obj, qa['category'], _eff_limit,
         client=client, run_tag=run_tag, conv_id=conv_id,
     )
     if len(retrieved) > RETRIEVAL_LIMIT * 4:
@@ -986,11 +986,14 @@ import time as _time
 t0 = _time.time()
 raw_answers = [''] * len(prompts)
 # qwen: adversarial, single_hop, temporal (short answers, fast)
-# deepseek (16K ctx): open_domain + multi_hop (richer answers; 16K sufficient for ~2.5K-token prompts)
+# gemma4: open_domain (better base model for conversational short-answer)
+# deepseek (24K ctx): multi_hop (chain-of-thought reasoning)
 qwen_cats = {'adversarial', 'single_hop', 'temporal'}
-deep_cats = {'open_domain', 'multi_hop'}
+deep_cats = {'multi_hop'}
+mid_cats  = {'open_domain'}
 qwen_idx = [i for i, r in enumerate(qa_records) if r['category'] in qwen_cats]
 deep_idx = [i for i, r in enumerate(qa_records) if r['category'] in deep_cats]
+mid_idx  = [i for i, r in enumerate(qa_records) if r['category'] in mid_cats]
 
 if qwen_idx:
     print(f'  qwen ({LLM_MODEL}): {len(qwen_idx)} prompts')
@@ -1011,6 +1014,17 @@ if deep_idx:
                                      num_ctx=24576)
     for j, i in enumerate(deep_idx):
         raw_answers[i] = deep_raw[j]
+
+if mid_idx:
+    mid_workers = 6
+    print(f'  gemma4 ({LLM_MODEL_MID}): {len(mid_idx)} prompts, workers={mid_workers}')
+    mid_prompts = [prompts[i] for i in mid_idx]
+    mid_raw = _run_prompts_parallel(mid_prompts,
+                                    models=[LLM_MODEL_MID] * len(mid_prompts),
+                                    workers=mid_workers,
+                                    num_ctx=16384)
+    for j, i in enumerate(mid_idx):
+        raw_answers[i] = mid_raw[j]
 
 elapsed = _time.time() - t0
 
