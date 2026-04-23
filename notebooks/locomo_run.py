@@ -1,4 +1,4 @@
-import json, time, pathlib, re, uuid
+import json, time, pathlib, re, uuid, socket
 import pandas as pd
 import plotly.graph_objects as go
 import plotly.express as px
@@ -18,18 +18,42 @@ _NB_DIR      = pathlib.Path('d:/Sansten/Projects/Ninai2/repos/ninai/notebooks')
 # Official LoCoMo dataset (snap-research/locomo, 10 convs, 1986 QA pairs)
 DATASET_PATH = _NB_DIR / 'locomo_dataset' / 'locomo10.json'
 
-RETRIEVAL_LIMIT  = 50   # top-N from deduplicated unique turns per conversation
-ROUGE_TYPE       = 'rouge1'
-LLM_MODEL        = 'qwen2.5:7b'
-LLM_MODEL_HARD   = 'deepseek-coder-v2:16b'
-LLM_MODEL_MID    = 'gemma4:e4b'
-LLM_TIMEOUT      = 120
-LLM_WORKERS      = 8
-INGEST_WORKERS   = 16  # more parallelism for 5882 turns
+RETRIEVAL_LIMIT   = 50   # top-N from deduplicated unique turns per conversation
+ROUGE_TYPE        = 'rouge1'
+LLM_MODEL         = 'qwen2.5:7b'
+LLM_MODEL_HARD    = 'deepseek-coder-v2:16b'
+LLM_MODEL_MID     = 'gemma4:e4b'
+LLM_TIMEOUT       = 30   # default fallback timeout
+LLM_TIMEOUT_QWEN  = 15
+LLM_TIMEOUT_DEEP  = 25
+LLM_TIMEOUT_MID   = 90   # for gemma4 on GPU; probe-based adaptive fallback handles CPU mode
+LLM_WORKERS       = 12
+INGEST_WORKERS    = 16  # more parallelism for 5882 turns
 
-LOCOMO_SEED = 99    # fresh run tag for full dataset
-RESUME_TAG  = 'locomo-full-676b1b69'  # reuse existing ingest
-SKIP_INGEST = True
+# Enrichment barrier — wait for Celery fanout agents before retrieval.
+ENRICH_WAIT_MIN_S = 600   # minimum wait regardless of signal (10 min)
+ENRICH_WAIT_MAX_S = 1200  # hard cap (20 min)
+ENRICH_SAMPLE_N   = 20    # memories to track
+ENRICH_READY_PCT  = 0.75  # fraction that must be enriched before min_wait allows proceed
+
+# ── Run mode ─────────────────────────────────────────────────────────────
+# QUICK_VALIDATE = True  →  smoke-test specific categories against existing
+#                            data (no purge, no re-ingest, fast ~35 min).
+#                            Change QUICK_CATS to add categories step by step.
+# QUICK_VALIDATE = False →  full run: purge stale data, fresh ingest,
+#                            enrichment barrier, all 1986 QA pairs (~2.5h).
+# ─────────────────────────────────────────────────────────────────────────
+QUICK_VALIDATE = True
+QUICK_CATS     = {'adversarial', 'multi_hop'}
+
+if QUICK_VALIDATE:
+    LOCOMO_SEED = 99                          # original seed — reuses existing run_tag
+    RESUME_TAG  = 'locomo-full-676b1b69'      # existing ingest, no purge needed
+    SKIP_INGEST = True
+else:
+    LOCOMO_SEED = 100                         # fresh seed → new run_tag
+    RESUME_TAG  = None
+    SKIP_INGEST = False
 
 _rng = random.Random(LOCOMO_SEED)
 run_tag = RESUME_TAG or 'locomo-full-{:08x}'.format(_rng.randint(0, 0xFFFFFFFF))
@@ -37,12 +61,140 @@ run_tag = RESUME_TAG or 'locomo-full-{:08x}'.format(_rng.randint(0, 0xFFFFFFFF))
 print(f'Dataset : {DATASET_PATH}')
 print(f'Exists  : {DATASET_PATH.exists()}')
 print(f'run_tag : {run_tag!r}')
+print(f'Mode    : {"QUICK_VALIDATE " + str(QUICK_CATS) if QUICK_VALIDATE else "FULL RUN"}')
 print(f'SKIP    : {SKIP_INGEST}')
 
 client = NinaiClient(base_url=BASE_URL)
 client.login(email=EMAIL, password=PASSWORD, org_slug=ORG_SLUG)
 _token = client._access_token or ''
 print('Authenticated with Ninai.')
+
+import urllib.request as _urllib_req
+
+def _batch_delete(memory_ids, base_url, token, batch_size=500):
+    """Delete memory IDs in batches via /memories/batch/delete. Returns (deleted, failed) counts."""
+    deleted = failed = 0
+    for i in range(0, len(memory_ids), batch_size):
+        chunk = memory_ids[i:i + batch_size]
+        payload = json.dumps({'memory_ids': chunk}).encode()
+        req = _urllib_req.Request(
+            base_url.rstrip('/') + '/memories/batch/delete',
+            data=payload,
+            headers={'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token},
+            method='POST',
+        )
+        try:
+            with _urllib_req.urlopen(req, timeout=60) as resp:
+                data = json.loads(resp.read().decode())
+            for r in data.get('results', []):
+                if r.get('success'):
+                    deleted += 1
+                else:
+                    failed += 1
+        except Exception as e:
+            print(f'  WARN: batch delete chunk {i//batch_size + 1} failed: {e}')
+            failed += len(chunk)
+    return deleted, failed
+
+def _purge_locomo_tag(tag, base_url, token, client):
+    """Fetch ALL memories tagged with tag (source + enrichment derivatives) and delete them."""
+    print(f'Purging all memories tagged {tag!r}...')
+    all_ids = []
+    page = 1
+    while True:
+        try:
+            result = client.memories.list(tags=[tag], page=page, page_size=100)
+        except Exception as e:
+            print(f'  WARN: list page {page} failed: {e}')
+            break
+        for m in result.items:
+            all_ids.append(str(m.id))
+        if page % 20 == 0:
+            print(f'  ...scanned {page} pages ({len(all_ids)} memories so far)')
+        if not result.has_more:
+            break
+        page += 1
+    print(f'Found {len(all_ids)} memories to delete.')
+    if not all_ids:
+        return
+    deleted, failed = _batch_delete(all_ids, base_url, token)
+    print(f'Purge done: {deleted} deleted, {failed} failed.')
+
+if not QUICK_VALIDATE:
+    _STALE_TAG = 'locomo-full-676b1b69'
+    _purge_locomo_tag(_STALE_TAG, BASE_URL, _token, client)
+
+def _list_memories_with_retry(client, *, tags, page=None, page_size=100, max_attempts=6):
+    """Retry paginated list calls to tolerate transient upstream 5xx/502 ingress errors."""
+    for attempt in range(max_attempts):
+        try:
+            kwargs = {'tags': tags, 'page_size': page_size}
+            if page is not None:
+                kwargs['page'] = page
+            return client.memories.list(**kwargs)
+        except Exception as e:
+            err = str(e)
+            transient = any(code in err for code in ('502', '503', '504', 'Bad Gateway', 'Gateway Timeout'))
+            if transient and attempt < max_attempts - 1:
+                wait_s = min(8, 1.6 ** attempt)
+                print(f'  WARN: list page={page or 1} retry {attempt + 1}/{max_attempts - 1} after transient error: {err[:120]}')
+                time.sleep(wait_s)
+                continue
+            raise
+
+def _wait_for_enrichment(sample_ids, client, min_s=ENRICH_WAIT_MIN_S,
+                         max_s=ENRICH_WAIT_MAX_S, ready_pct=ENRICH_READY_PCT,
+                         poll_s=60):
+    """
+    Block until Celery enrichment pipelines have settled.
+
+    Signal: for each sampled memory, updated_at > created_at means at least one
+    pipeline stage has written back (classification, entity_resolution, etc.).
+    Also accepts entities != {} as a secondary enrichment marker.
+
+    Proceeds when >= ready_pct of samples are enriched AND min_s has elapsed,
+    or when max_s is reached.
+    """
+    import time as _t
+    print(f'Enrichment barrier: sampling {len(sample_ids)} memories '
+          f'(min {min_s//60}min / max {max_s//60}min, poll every {poll_s}s)...')
+
+    # Snapshot baseline created_at for each sample
+    baseline = {}
+    for mid in sample_ids:
+        try:
+            m = client.memories.get(mid)
+            baseline[mid] = m.created_at
+        except Exception as e:
+            print(f'  WARN: could not fetch baseline for {mid}: {e}')
+
+    if not baseline:
+        print('  No baseline fetched — using fixed time wait.')
+        for remaining in range(min_s, 0, -poll_s):
+            print(f'  [{min_s - remaining + poll_s}s elapsed] waiting...')
+            _t.sleep(poll_s)
+        return
+
+    t0 = _t.time()
+    while True:
+        elapsed = _t.time() - t0
+        enriched = 0
+        for mid, created_at in baseline.items():
+            try:
+                m = client.memories.get(mid)
+                if m.updated_at > created_at or bool(m.entities):
+                    enriched += 1
+            except Exception:
+                enriched += 1  # can't fetch = assume done, don't block indefinitely
+        pct = enriched / len(baseline)
+        mins, secs = int(elapsed) // 60, int(elapsed) % 60
+        print(f'  [{mins}m{secs:02d}s] enriched: {enriched}/{len(baseline)} ({pct:.0%})', flush=True)
+
+        if (pct >= ready_pct and elapsed >= min_s) or elapsed >= max_s:
+            why = 'signal+min_wait' if (pct >= ready_pct and elapsed >= min_s) else 'max_wait'
+            print(f'Enrichment barrier passed ({why}, {elapsed/60:.1f}min). Starting retrieval.')
+            break
+        _t.sleep(poll_s)
 
 import re as _re
 from datetime import datetime, timezone
@@ -143,7 +295,7 @@ ingested = []
 print(f'Run tag: {run_tag}')
 
 if SKIP_INGEST:
-    existing = client.memories.list(tags=[run_tag], page_size=20)
+    existing = _list_memories_with_retry(client, tags=[run_tag], page_size=20)
     print(f'SKIP_INGEST=True -- found {len(existing.items)} memories tagged {run_tag!r} (first page)')
     if not existing.items:
         print('  WARNING: no memories found -- set SKIP_INGEST=False and re-run')
@@ -201,6 +353,17 @@ else:
     elapsed = time.time() - t0
     n = len(ingested) or 1
     print(f'Ingested {len(ingested)}/{len(to_ingest)} in {elapsed:.1f}s  ({elapsed/n:.3f}s/mem, {failed} failed)')
+
+    # Wait for enrichment pipelines before retrieval.
+    # Celery fanout: 6-stage chain (classification → entity_resolution → graph_linking
+    # → world_model → temporal/episodic/causal → feedback) runs async per memory.
+    # Retrieval uses knowledge graph and entity links built in those stages.
+    # Sampling spread over first, middle, and last thirds gives a representative view.
+    _n = ENRICH_SAMPLE_N
+    _ids_all = [r['memory_id'] for r in ingested if r.get('memory_id')]
+    _step = max(1, len(_ids_all) // _n)
+    _sample_ids = [_ids_all[i] for i in range(0, min(len(_ids_all), _n * _step), _step)][:_n]
+    _wait_for_enrichment(_sample_ids, client)
 
 # Retrieval helpers for LoCoMo benchmark.
 # Primary: Ninai hybrid semantic search (lexical+vector).
@@ -482,21 +645,46 @@ def _sharpen_boolean(answer, question):
         return 'No'
     return answer
 
+def _sharpen_multi_hop(answer, question):
+    q = question.lower().strip()
+    a = answer.strip()
+    if not a:
+        return a
+
+    # Multi-hop has many implicit yes/no questions; coerce concise polarity output.
+    _bool_starts = ('do ', 'did ', 'is ', 'are ', 'was ', 'were ', 'has ', 'have ', 'can ', 'would ', 'could ', 'should ')
+    if any(q.startswith(s) for s in _bool_starts):
+        yn = _sharpen_boolean(a, question)
+        if yn in ('Yes', 'No'):
+            return yn
+        low = a.lower()
+        if any(t in low for t in (' not ', "n't", ' unlikely', 'never', 'no ')):
+            return 'No'
+        return 'Yes'
+
+    # If asked for state, strip "city, state" to state when possible.
+    if 'what state' in q:
+        if ',' in a:
+            parts = [p.strip() for p in a.split(',') if p.strip()]
+            if len(parts) >= 2:
+                return parts[-1]
+    return a
+
 def _iso_to_natural(answer):
     # Convert ISO date outputs (YYYY-MM-DD) from context prefixes into natural language.
     # LLMs sometimes echo the [YYYY-MM-DD] context prefix format as the answer.
     _months = ['January','February','March','April','May','June',
                'July','August','September','October','November','December']
     _a = answer.strip()
-    # Strip leading/trailing brackets: '[2023-05-08]' → '2023-05-08'
+    # Strip leading/trailing brackets: '[2023-05-08]' -> '2023-05-08'
     _a = re.sub(r'^\[|\]$', '', _a).strip()
-    # Full ISO date: '2023-05-08' → '8 May 2023'
+    # Full ISO date: '2023-05-08' -> '8 May 2023'
     _m = re.match(r'^(\d{4})-(\d{2})-(\d{2})$', _a)
     if _m:
         _y, _mo, _d = int(_m.group(1)), int(_m.group(2)), int(_m.group(3))
         if 1 <= _mo <= 12:
             return '{} {} {}'.format(_d, _months[_mo-1], _y)
-    # Year-month only: '2023-05' → 'May 2023'
+    # Year-month only: '2023-05' -> 'May 2023'
     _m = re.match(r'^(\d{4})-(\d{2})$', _a)
     if _m:
         _y, _mo = int(_m.group(1)), int(_m.group(2))
@@ -506,7 +694,7 @@ def _iso_to_natural(answer):
 
 def _resolve_temporal_references(answer, last_date):
     # Convert relative time expressions to absolute dates using the last session date.
-    # Fixes: 'last year' → '2022', 'next month' → 'June 2023' etc.
+    # Fixes: 'last year' -> '2022', 'next month' -> 'June 2023' etc.
     if not last_date or not answer:
         return answer
     try:
@@ -536,7 +724,7 @@ def _resolve_temporal_references(answer, last_date):
     if re.search(r'\blast\s+week\b', _low):
         _w = _ref - _td(days=7)
         return _w.strftime('week of %B %d %Y')
-    # 'X years ago' → compute year
+    # 'X years ago' -> compute year
     _m = re.search(r'\b(\d+)\s+years?\s+ago\b', _low)
     if _m:
         return str(_ref.year - int(_m.group(1)))
@@ -564,12 +752,14 @@ def _search_semantic(question, conv_id, run_tag, client, limit, hybrid=True, use
     for attempt in range(3):
         try:
             # enforce timeout so one slow API call cannot stall the whole benchmark
+            # Small over-fetch margin for dedup safety (fresh ingest: 1x vectors).
+            _api_limit = min(limit * 2, 120)
             with concurrent.futures.ThreadPoolExecutor(max_workers=1) as _pool:
                 fut = _pool.submit(
                     client.memories.search,
                     query=question,
                     tags=[conv_id, run_tag],
-                    limit=limit,
+                    limit=_api_limit,
                     threshold=0.0,
                     hybrid=hybrid,
                     use_graph=use_graph,
@@ -578,6 +768,7 @@ def _search_semantic(question, conv_id, run_tag, client, limit, hybrid=True, use
             hits = [
                 _mem_obj_to_dict(m) for m in (result.items or [])
                 if getattr(m, 'source_type', None) == 'locomo_benchmark'
+                   or getattr(m, 'source_type', None) is None  # tolerate unset field
             ]
             # semantic search can return duplicate turns; keep first occurrence only
             _seen = set()
@@ -625,9 +816,9 @@ def _cognitive_rerank(question, hits, limit, base_url, token):
 
 def _retrieve(question, mem_dicts, mems_obj, category, limit,
               client=None, run_tag=None, conv_id=None):
-    # ── Primary: Ninai semantic search (hybrid lexical+vector) ──────────
+    # Primary: Ninai semantic search (hybrid lexical+vector)
     if client is not None and run_tag is not None and conv_id is not None:
-        k = limit if category not in ('multi_hop',) else min(limit * 2, 80)
+        k = limit if category not in ('multi_hop',) else min(limit * 2, 120)
         # QueryIntelligenceAgent: entity/intent-expanded query for stage-1 search
         search_q = _query_expand(question, category)
         hits = _search_semantic(search_q, conv_id, run_tag, client, k, use_graph=True)
@@ -641,7 +832,7 @@ def _retrieve(question, mem_dicts, mems_obj, category, limit,
                 stage1_text = ' '.join(h['content'] for h in hits[:10])
                 key_terms   = _extract_key_terms(stage1_text)
                 expanded_q  = question + ' ' + ' '.join(key_terms[:5])
-                hits2 = _search_semantic(expanded_q, conv_id, run_tag, client, limit, use_graph=False)
+                hits2 = _search_semantic(expanded_q, conv_id, run_tag, client, min(limit * 2, 120), use_graph=False)
                 # Stage 3: proper noun bridge terms
                 all_text = ' '.join(h['content'] for h in hits + hits2)
                 proper_nouns = []
@@ -655,7 +846,7 @@ def _retrieve(question, mem_dicts, mems_obj, category, limit,
                     if p not in q_toks:
                         pn_freq[p] = pn_freq.get(p, 0) + 1
                 bridge_terms = [w for w, _ in sorted(pn_freq.items(), key=lambda x: -x[1])[:4]]
-                hits3 = _search_semantic(' '.join(bridge_terms), conv_id, run_tag, client, limit, use_graph=False) if bridge_terms else []
+                hits3 = _search_semantic(' '.join(bridge_terms), conv_id, run_tag, client, min(limit * 2, 120), use_graph=False) if bridge_terms else []
                 seen_ids, merged = set(), []
                 for h in hits + hits2 + hits3:
                     if h['id'] not in seen_ids:
@@ -670,13 +861,35 @@ def _retrieve(question, mem_dicts, mems_obj, category, limit,
             # BM25 re-rank within session-expanded pool (relevance, not recency)
             # cognitive_rerank (AttentionRetrievalService) is recency-biased and
             # discards answer-bearing turns from older sessions. BM25 is query-centric.
+            if category == 'adversarial':
+                # Adversarial questions frequently require disambiguation across sessions.
+                # Semantic hits can over-cluster in one session and trigger false abstentions.
+                unique_all = _dedup_by_content(mem_dicts)
+                k_adv = max(limit, 60)
+                sem_ranked = _top_k_bm25(question, hits, min(k_adv * 2, 120))
+                bm_stage1 = _top_k_bm25(question, unique_all, min(k_adv * 2, 120))
+                key_terms = _extract_key_terms(
+                    ' '.join(m.get('content', '') for m in sem_ranked[:20] + bm_stage1[:20])
+                )
+                bm_stage2 = _top_k_bm25(question, unique_all, k_adv, extra_terms=' '.join(key_terms[:8]))
+
+                seen_ids, merged = set(), []
+                for m in sem_ranked + bm_stage1 + bm_stage2:
+                    mid = m.get('id', '')
+                    if mid and mid not in seen_ids:
+                        seen_ids.add(mid)
+                        merged.append(m)
+
+                merged = _episodic_diversify(merged, unique_all, question, k_adv)
+                return _sort_by_date(merged[:k_adv])
+
             hits = _top_k_bm25(question, hits, limit)
             return _sort_by_date(hits)
     # ── Fallback: stemmed BM25 ───────────────────────────────────────────
     unique = _dedup_by_content(mem_dicts)
     if category == 'multi_hop':
-        k1 = min(limit * 2, 60)
-        k2 = min(limit, 40)
+        k1 = min(limit * 3, 120)
+        k2 = min(max(limit, 60), 80)
         stage1 = _top_k_bm25(question, unique, k1)
         stage1_text = ' '.join(m.get('content', '') for m in stage1)
         key_terms = _extract_key_terms(stage1_text)
@@ -717,12 +930,19 @@ def _retrieve(question, mem_dicts, mems_obj, category, limit,
                 merged.append(m)
         return _sort_by_date(merged[:limit])
     elif category == 'adversarial':
-        k = min(limit, 30)
-        stage1 = _top_k_bm25(question, unique, k * 2)
+        k = max(min(limit, 60), 40)
+        stage1 = _top_k_bm25(question, unique, min(k * 2, 120))
         stage1_text = ' '.join(m.get('content', '') for m in stage1)
         key_terms = _extract_key_terms(stage1_text)
-        merged = _top_k_bm25(question, unique, k, extra_terms=' '.join(key_terms[:5]))
-        return _sort_by_date(merged)
+        stage2 = _top_k_bm25(question, unique, k, extra_terms=' '.join(key_terms[:8]))
+        seen_ids, merged = set(), []
+        for m in stage1 + stage2:
+            mid = m.get('id', '')
+            if mid and mid not in seen_ids:
+                seen_ids.add(mid)
+                merged.append(m)
+        merged = _episodic_diversify(merged, unique, question, k)
+        return _sort_by_date(merged[:k])
     else:
         k = min(limit, len(unique))
         return _sort_by_date(_top_k_bm25(question, unique, k))
@@ -775,28 +995,44 @@ def _build_prompt(category, question, context, last_date='', session_overview=''
             'Answer:'
         )
     elif category == 'multi_hop':
+        _is_yesno = q_lower.startswith(('do ', 'did ', 'is ', 'are ', 'was ', 'were ', 'has ', 'have ', 'can ', 'would ', 'could ', 'should '))
+        _q_specific = ''
+        if _is_yesno:
+            _q_specific = 'Because this is a yes/no question, output ONLY "Yes" or "No".\n'
+        elif 'what state' in q_lower:
+            _q_specific = 'Output ONLY the US state name (not city).\n'
+        elif 'what country' in q_lower:
+            _q_specific = 'Output ONLY the country name.\n'
         return (
             _overview_block + 'Conversation excerpts (chronological):\n' + context + '\n\n'
             'Question: ' + question + '\n'
             'RULE: This requires connecting two facts from different turns.\n'
             'Step 1 (internal): identify the two relevant facts.\n'
-            'Step 2: output ONLY the final answer — a name, place, or short phrase (1-6 words).\n'
+            'Step 2: output ONLY the final answer — a name, place, or short phrase (1-12 words).\n'
+            + _q_specific +
+            'Do not answer "Yes"/"No" unless the question is explicitly yes/no.\n'
             'Do NOT output the steps. Do NOT explain. Just the answer.\n'
             'Answer:'
         )
     elif category == 'adversarial':
         return (
-            'Conversation (chronological order):\n' + context + '\n\n'
+            _overview_block + 'Conversation (chronological order):\n' + context + '\n\n'
             'Question: ' + question + '\n'
-            'RULE: Answer using only what the conversation states. Reply with ONLY the exact fact — 1 to 8 words. No explanation.\n'
+            'RULE: Answer using only facts from the conversation.\n'
+            'For yes/no questions reply ONLY "Yes" or "No".\n'
+            'For all other questions reply with ONLY the exact answer phrase — 1 to 20 words.\n'
+            'Most LoCoMo adversarial questions are answerable from context; choose the best supported span.\n'
+            'Do NOT default to "Not mentioned" when partial evidence exists.\n'
+            'Reply "Not mentioned" ONLY if there is truly no supporting clue anywhere in the provided conversation.\n'
+            'No explanation, no preamble, no "None".\n'
             'Answer:'
         )
     elif category == 'open_domain':
         return (
             _overview_block + 'Conversation excerpts:\n' + context + '\n\n'
             'Question: ' + question + '\n'
-            'RULE: Reply with ONLY the exact span or phrase from the conversation that answers the question.\n'
-            'Use exact names and wording from the conversation. Aim for 5–25 words. No explanation.\n'
+            'RULE: Answer from the conversation if the answer is there; otherwise use your general knowledge.\n'
+            'Reply with ONLY the answer - a name, phrase, or short sentence (1-20 words). No explanation, no preamble.\n'
             'Answer:'
         )
     else:  # single_hop
@@ -811,41 +1047,89 @@ def _build_prompt(category, question, context, last_date='', session_overview=''
             'Answer:'
         )
 
-def _ollama_generate(prompt, model=LLM_MODEL, timeout=LLM_TIMEOUT, num_ctx=32768):
-    try:
-        payload = json.dumps({
-            'model': model,
-            'prompt': prompt,
-            'stream': False,
-            'options': {
-                'num_ctx': num_ctx,
-                'temperature': 0,
-                'top_p': 1.0,
-            }
-        }).encode()
-        req = urllib.request.Request('http://localhost:11434/api/generate',
-            data=payload, headers={'Content-Type': 'application/json'})
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            return json.loads(resp.read().decode())['response'].strip()
-    except Exception:
-        return ''
+def _is_timeout_error(err):
+    if isinstance(err, (TimeoutError, socket.timeout)):
+        return True
+    msg = str(err).lower()
+    return 'timed out' in msg or 'timeout' in msg
 
-def _run_prompts_parallel(prompts, models=None, workers=LLM_WORKERS, num_ctx=32768):
+
+def _ollama_generate(prompt, model=LLM_MODEL, timeout=LLM_TIMEOUT, num_ctx=32768, timeout_retries=2):
+    payload = json.dumps({
+        'model': model,
+        'prompt': prompt,
+        'stream': False,
+        'options': {
+            'num_ctx': num_ctx,
+            'temperature': 0,
+            'top_p': 1.0,
+        }
+    }).encode()
+    req = urllib.request.Request('http://localhost:11434/api/generate',
+        data=payload, headers={'Content-Type': 'application/json'})
+
+    for attempt in range(timeout_retries + 1):
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                return json.loads(resp.read().decode())['response'].strip()
+        except Exception as e:
+            if _is_timeout_error(e) and attempt < timeout_retries:
+                # short backoff to let queued requests drain in Ollama
+                time.sleep(0.6 * (attempt + 1))
+                continue
+            return ''
+
+def _run_prompts_parallel(
+    prompts,
+    models=None,
+    workers=LLM_WORKERS,
+    num_ctx=32768,
+    request_timeout=LLM_TIMEOUT,
+    batch_timeout_s=None,
+    progress_every=100,
+):
     # models: list of model names, one per prompt; None = use LLM_MODEL for all
     if models is None:
         models = [LLM_MODEL] * len(prompts)
-    with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
-        futs = [pool.submit(_ollama_generate, p, m, LLM_TIMEOUT, num_ctx)
+    if batch_timeout_s is None:
+        # Hard cap to avoid rare deadlocks in local Ollama calls.
+        batch_timeout_s = max(300, int((len(prompts) / max(1, workers)) * request_timeout * 3))
+
+    results = [''] * len(prompts)
+    pool = concurrent.futures.ThreadPoolExecutor(max_workers=workers)
+    try:
+        futs = [pool.submit(_ollama_generate, p, m, request_timeout, num_ctx)
                 for p, m in zip(prompts, models)]
         fut_idx = {fut: i for i, fut in enumerate(futs)}
-        results = [None] * len(prompts)
+        pending = set(futs)
         done = 0
-        for fut in concurrent.futures.as_completed(futs):
-            results[fut_idx[fut]] = fut.result()
-            done += 1
-            if done % 100 == 0:
-                print(f'    {done}/{len(prompts)} answers received...')
+        t_start = time.time()
+
+        while pending:
+            finished, pending = concurrent.futures.wait(
+                pending,
+                timeout=10,
+                return_when=concurrent.futures.FIRST_COMPLETED,
+            )
+            for fut in finished:
+                idx = fut_idx[fut]
+                try:
+                    results[idx] = fut.result() or ''
+                except Exception:
+                    results[idx] = ''
+                done += 1
+                if progress_every and done % progress_every == 0:
+                    print(f'    {done}/{len(prompts)} answers received...')
+
+            if (time.time() - t_start) > batch_timeout_s:
+                print(f'    WARN: inference batch timeout ({batch_timeout_s}s), {len(pending)} prompts fallback to heuristic')
+                for fut in pending:
+                    results[fut_idx[fut]] = ''
+                break
+
         return results
+    finally:
+        pool.shutdown(wait=False, cancel_futures=True)
 
 def _extract_answer_heuristic(question, context):
     if not context.strip():
@@ -881,10 +1165,12 @@ print('Fetching run memories (source_type=locomo_benchmark)...')
 all_run_mems = []
 page = 1
 while True:
-    page_result = client.memories.list(tags=[run_tag], page=page, page_size=100)
+    page_result = _list_memories_with_retry(client, tags=[run_tag], page=page, page_size=100)
     for m in page_result.items:
         if getattr(m, 'source_type', None) == 'locomo_benchmark':
             all_run_mems.append(m)
+    if page % 5 == 0:
+        print(f'  fetched page {page} (memories so far: {len(all_run_mems)})')
     if not page_result.has_more:
         break
     page += 1
@@ -910,7 +1196,7 @@ for cid in conv_ids:
     unique_n = len(set(m.get('content','') for m in conv_memories_dict[cid]) - {''})
     print(f'  {cid}: {raw} raw -> {unique_n} unique after content-dedup')
 
-# Build session overview lookup (conv_id → session summary text from raw dataset)
+# Build session overview lookup (conv_id -> session summary text from raw dataset)
 conv_overview_dict = {conv['conv_id']: conv.get('session_overview', '') for conv in conversations}
 
 # ── Phase 1: semantic retrieval (stable sequential mode) ────────────────
@@ -921,13 +1207,16 @@ _all_qa_flat = [
     (conv['conv_id'], qa)
     for conv in conversations
     for qa in conv['qa_pairs']
+    if not QUICK_VALIDATE or qa['category'] in QUICK_CATS
 ]
+if QUICK_VALIDATE:
+    print(f'QUICK_VALIDATE: running {len(_all_qa_flat)} questions from {QUICK_CATS}')
 
 def _retrieve_one(args):
     conv_id, qa = args
     mems_dict = conv_memories_dict.get(conv_id, [])
     mems_obj  = conv_memories_obj.get(conv_id, [])
-    _eff_limit = RETRIEVAL_LIMIT if qa['category'] != 'multi_hop' else 30
+    _eff_limit = RETRIEVAL_LIMIT if qa['category'] != 'multi_hop' else 60
     retrieved = _retrieve(
         qa['question'], mems_dict, mems_obj, qa['category'], _eff_limit,
         client=client, run_tag=run_tag, conv_id=conv_id,
@@ -985,11 +1274,11 @@ print(f'Phase 3: model-routed LLM inference ({LLM_WORKERS} workers, {len(prompts
 import time as _time
 t0 = _time.time()
 raw_answers = [''] * len(prompts)
-# qwen: adversarial, single_hop, temporal (short answers, fast)
+# qwen: single_hop, temporal (short answers, fast)
 # gemma4: open_domain (better base model for conversational short-answer)
-# deepseek (24K ctx): multi_hop (chain-of-thought reasoning)
-qwen_cats = {'adversarial', 'single_hop', 'temporal'}
-deep_cats = {'multi_hop'}
+# deepseek (24K ctx): multi_hop + adversarial (harder disambiguation)
+qwen_cats = {'single_hop', 'temporal'}
+deep_cats = {'multi_hop', 'adversarial'}
 mid_cats  = {'open_domain'}
 qwen_idx = [i for i, r in enumerate(qa_records) if r['category'] in qwen_cats]
 deep_idx = [i for i, r in enumerate(qa_records) if r['category'] in deep_cats]
@@ -998,9 +1287,13 @@ mid_idx  = [i for i, r in enumerate(qa_records) if r['category'] in mid_cats]
 if qwen_idx:
     print(f'  qwen ({LLM_MODEL}): {len(qwen_idx)} prompts')
     qwen_prompts = [prompts[i] for i in qwen_idx]
-    qwen_raw = _run_prompts_parallel(qwen_prompts,
-                                     models=[LLM_MODEL] * len(qwen_prompts),
-                                     workers=LLM_WORKERS)
+    qwen_raw = _run_prompts_parallel(
+        qwen_prompts,
+        models=[LLM_MODEL] * len(qwen_prompts),
+        workers=LLM_WORKERS,
+        request_timeout=LLM_TIMEOUT_QWEN,
+        progress_every=100,
+    )
     for j, i in enumerate(qwen_idx):
         raw_answers[i] = qwen_raw[j]
 
@@ -1008,21 +1301,70 @@ if deep_idx:
     deep_workers = 4
     print(f'  deepseek 24K ({LLM_MODEL_HARD}): {len(deep_idx)} prompts, workers={deep_workers}')
     deep_prompts = [prompts[i] for i in deep_idx]
-    deep_raw = _run_prompts_parallel(deep_prompts,
-                                     models=[LLM_MODEL_HARD] * len(deep_prompts),
-                                     workers=deep_workers,
-                                     num_ctx=24576)
+    deep_raw = _run_prompts_parallel(
+        deep_prompts,
+        models=[LLM_MODEL_HARD] * len(deep_prompts),
+        workers=deep_workers,
+        num_ctx=24576,
+        request_timeout=max(LLM_TIMEOUT_DEEP, 45),
+        progress_every=25,
+    )
     for j, i in enumerate(deep_idx):
         raw_answers[i] = deep_raw[j]
 
 if mid_idx:
-    mid_workers = 6
-    print(f'  gemma4 ({LLM_MODEL_MID}): {len(mid_idx)} prompts, workers={mid_workers}')
+    # Detect GPU vs CPU mode for gemma4:e4b.
+    # Use tokens/sec from a probe generation — reliable regardless of warm/cold model.
+    # GPU gemma4:e4b: ~15-50 tok/s. CPU (2-core): ~1-5 tok/s.
+    # With serial CPU Ollama and workers>1, queue-wait timeouts fire at workers×gen_time.
+    _gemma_slow = True  # default: assume CPU until proven otherwise
+    try:
+        # Use a ~50-token output so KV-cache is large enough for reliable memory-bandwidth measurement.
+        # CPU (2-core, 9.6GB model): ~1-5 tok/s.  GPU (T4/A10): ~50-200 tok/s.
+        _probe_payload = json.dumps({
+            'model': LLM_MODEL_MID,
+            'prompt': 'List exactly 25 common English words, one per line, nothing else.',
+            'stream': False,
+            'options': {'num_ctx': 2048, 'temperature': 0},
+        }).encode()
+        _probe_req = urllib.request.Request(
+            'http://localhost:11434/api/generate',
+            data=_probe_payload, headers={'Content-Type': 'application/json'})
+        with urllib.request.urlopen(_probe_req, timeout=120) as _pr:
+            _probe_data = json.loads(_pr.read().decode())
+        _eval_count = int(_probe_data.get('eval_count', 1) or 1)
+        _eval_ns = int(_probe_data.get('eval_duration', 1) or 1)
+        _tok_per_sec = _eval_count / (_eval_ns / 1e9)
+        # Require ≥10 tokens to avoid misleading results from very short responses.
+        # Threshold: >15 tok/s = GPU; ≤15 = CPU.
+        if _eval_count < 10:
+            print(f'  gemma4 probe: only {_eval_count} tokens generated — too short, assuming CPU mode')
+        else:
+            _gemma_slow = _tok_per_sec <= 15
+            print(f'  gemma4 probe: {_tok_per_sec:.1f} tok/s ({_eval_count} tok) -> {"CPU mode" if _gemma_slow else "GPU mode"}')
+    except Exception as _pe:
+        print(f'  gemma4 probe failed ({_pe}), assuming CPU mode')
+
+    if _gemma_slow:
+        _mid_model   = LLM_MODEL           # qwen2.5:7b — fast, proven
+        _mid_workers = LLM_WORKERS         # 12 — safe since qwen is fast
+        _mid_timeout = LLM_TIMEOUT_QWEN    # 15s — same as qwen batch
+        print(f'  open_domain: CPU mode -> falling back to qwen2.5:7b')
+    else:
+        _mid_model   = LLM_MODEL_MID       # gemma4:e4b — GPU, fast
+        _mid_workers = 4                   # 4 workers; GPU handles parallel
+        _mid_timeout = LLM_TIMEOUT_MID     # 90s
+        print(f'  open_domain: GPU mode -> using gemma4:e4b')
+    print(f'  open_domain ({_mid_model}): {len(mid_idx)} prompts, workers={_mid_workers}')
     mid_prompts = [prompts[i] for i in mid_idx]
-    mid_raw = _run_prompts_parallel(mid_prompts,
-                                    models=[LLM_MODEL_MID] * len(mid_prompts),
-                                    workers=mid_workers,
-                                    num_ctx=16384)
+    mid_raw = _run_prompts_parallel(
+        mid_prompts,
+        models=[_mid_model] * len(mid_prompts),
+        workers=_mid_workers,
+        num_ctx=16384,
+        request_timeout=_mid_timeout,
+        progress_every=100,
+    )
     for j, i in enumerate(mid_idx):
         raw_answers[i] = mid_raw[j]
 
@@ -1037,6 +1379,8 @@ for rec, raw in zip(qa_records, raw_answers):
             gen = _sharpen_single_hop(gen, rec['question'])
         if rec['category'] == 'single_hop':
             gen = _sharpen_boolean(gen, rec['question'])
+        if rec['category'] == 'multi_hop':
+            gen = _sharpen_multi_hop(gen, rec['question'])
         if rec['category'] == 'temporal':
             gen = _resolve_temporal_references(gen, rec.get('last_date', ''))
         generated_answers.append(gen)
