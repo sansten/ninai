@@ -4,15 +4,23 @@ Tenant Context Dependency
 
 FastAPI dependency for extracting and validating tenant context
 from JWT tokens and setting up database session variables.
+
+Also provides get_requester_context() — a richer dependency that layers
+job profile, timezone, and location on top of the authenticated identity.
+Every cognitive gateway call uses this so the intelligence stack knows
+who is asking, when, and from where without callers having to self-describe.
 """
 
+import json
+from datetime import datetime, timezone
 from typing import Optional
 from dataclasses import dataclass
 
-from fastapi import Depends, HTTPException, status, Header
+from fastapi import Depends, HTTPException, Request, status, Header
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.requester_context import RequesterContext
 from app.core.security import verify_token
 from app.core.database import get_db, set_tenant_context
 from app.services.api_key_service import ApiKeyService
@@ -40,6 +48,8 @@ class TenantContext:
     """
     user_id: str
     org_id: str
+    group_id: Optional[str] = None
+    team_id: Optional[str] = None
     roles: list[str] = None
     clearance_level: int = 0
     is_authenticated: bool = True
@@ -166,6 +176,8 @@ async def get_optional_tenant_context(
     return TenantContext(
         user_id=token_data.user_id,
         org_id=token_data.org_id,
+            group_id=token_data.group_id,
+            team_id=token_data.team_id,
         roles=token_data.roles,
     )
 
@@ -209,6 +221,8 @@ async def get_tenant_context(
     return TenantContext(
         user_id=token_data.user_id,
         org_id=token_data.org_id,
+        group_id=token_data.group_id,
+        team_id=token_data.team_id,
         roles=token_data.roles,
     )
 
@@ -298,6 +312,137 @@ def require_knowledge_reviewer():
     knowledge submissions without having access to admin settings.
     """
     return require_roles("knowledge_reviewer", "org_admin", "system_admin")
+
+
+# ---------------------------------------------------------------------------
+# Requester context — richer caller envelope for cognitive gateway calls
+# ---------------------------------------------------------------------------
+
+_PROFILE_CACHE_TTL = 300   # seconds — profile re-fetched at most once per 5 min per user
+
+
+async def get_requester_context(
+    request: Request,
+    tenant: TenantContext = Depends(get_tenant_context),
+    db: AsyncSession = Depends(get_db),
+) -> RequesterContext:
+    """Build the request-time context envelope for cognitive gateway calls.
+
+    Layers three information sources on top of the authenticated identity:
+
+    1. Request headers (optional, client-supplied)
+       X-Timezone   — IANA timezone name, e.g. "America/New_York"
+       X-Location   — city or region string, e.g. "Singapore"
+       X-Org-Context — freeform hint, e.g. "board_prep", "incident_response"
+
+    2. UserActivityProfile (async DB lookup, Redis-cached 5 min per user)
+       Provides job_role, dominant_domains, expertise_signals inferred from
+       the user's historical activity patterns.  Degrades gracefully when the
+       profile hasn't been synthesised yet.
+
+    3. Server clock + timezone
+       Derives local_hour and urgency_signal so agents can adjust response
+       depth and tone without callers having to explain their situation.
+
+    Never raises — returns a minimally-populated context on any failure.
+    """
+    from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+    # ── 1. Temporal ───────────────────────────────────────────────────────
+    tz_header = request.headers.get("X-Timezone", "UTC").strip()
+    try:
+        tz = ZoneInfo(tz_header)
+    except (ZoneInfoNotFoundError, KeyError, Exception):
+        tz = ZoneInfo("UTC")
+        tz_header = "UTC"
+
+    now_utc = datetime.now(timezone.utc)
+    local_now = now_utc.astimezone(tz)
+    local_hour = local_now.hour
+
+    # ── 2. Location ───────────────────────────────────────────────────────
+    location: str | None = request.headers.get("X-Location") or None
+    org_context: str = request.headers.get("X-Org-Context", "").lower()
+
+    # ── 3. Urgency inference ──────────────────────────────────────────────
+    meeting_words = {"board", "exec", "meeting", "prep", "briefing", "review"}
+    if org_context and meeting_words.intersection(org_context.split()):
+        urgency = "pre_meeting"
+    elif local_hour < 6 or local_hour >= 22:
+        urgency = "crisis"        # outside business hours → treat as urgent
+    elif local_hour < 9:
+        urgency = "pre_meeting"   # early morning → preparing for the day
+    elif local_hour >= 17:
+        urgency = "end_of_day"    # late afternoon → wrap-up mode
+    else:
+        urgency = "routine"
+
+    # ── 4. Job profile (Redis cache → DB fallback) ────────────────────────
+    job_role: str | None = None
+    dominant_domains: list[str] = []
+    expertise_signals: dict[str, float] = {}
+    profile_confidence: float = 0.0
+
+    cache_key = f"requester_profile:{tenant.user_id}:{tenant.org_id}"
+    try:
+        from app.core.redis import get_redis_client
+        r = get_redis_client()
+        cached = r.get(cache_key)
+        if cached:
+            p = json.loads(cached)
+            job_role = p.get("job_role")
+            dominant_domains = list(p.get("dominant_domains") or [])
+            expertise_signals = dict(p.get("expertise_signals") or {})
+            profile_confidence = float(p.get("profile_confidence") or 0.0)
+        else:
+            # DB lookup — UserActivityProfile lives in ninai-enterprise; import
+            # conditionally so core runs without the enterprise package.
+            try:
+                from sqlalchemy import select
+                from ninai_enterprise.models.user_activity_profile import UserActivityProfile
+                await set_tenant_context(
+                    db, tenant.user_id, tenant.org_id,
+                    tenant.roles_string, tenant.clearance_level,
+                )
+                profile = await db.scalar(
+                    select(UserActivityProfile).where(
+                        UserActivityProfile.user_id == tenant.user_id,
+                        UserActivityProfile.organization_id == tenant.org_id,
+                    )
+                )
+                if profile:
+                    job_role = profile.primary_job_role
+                    dominant_domains = list(profile.dominant_domains or [])
+                    expertise_signals = {
+                        str(k): float(v)
+                        for k, v in (profile.expertise_signals or {}).items()
+                    }
+                    profile_confidence = float(profile.profile_confidence or 0.0)
+                    r.set(cache_key, json.dumps({
+                        "job_role": job_role,
+                        "dominant_domains": dominant_domains,
+                        "expertise_signals": expertise_signals,
+                        "profile_confidence": profile_confidence,
+                    }), ex=_PROFILE_CACHE_TTL)
+            except ImportError:
+                pass   # enterprise package not installed — run without job profile
+    except Exception:
+        pass   # Redis unavailable or any other error — continue without profile
+
+    return RequesterContext(
+        user_id=tenant.user_id,
+        org_id=tenant.org_id,
+        roles=list(tenant.roles or []),
+        request_utc=now_utc,
+        timezone=tz_header,
+        local_hour=local_hour,
+        location=location,
+        job_role=job_role,
+        dominant_domains=dominant_domains,
+        expertise_signals=expertise_signals,
+        profile_confidence=profile_confidence,
+        urgency_signal=urgency,
+    )
 
 
 def require_capability(*required_capabilities: str):

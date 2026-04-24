@@ -15,7 +15,7 @@ import {
 } from '@heroicons/react/24/outline';
 import clsx from 'clsx';
 import { apiClient } from '@/lib/api';
-import { useCurrentOrg } from '@/stores/auth';
+import { useCurrentOrg, useCurrentUser } from '@/stores/auth';
 import type { Memory, MemorySearchResult, MemoryType, VisibilityLevel } from '@/types/api';
 
 // Memory type colors
@@ -98,6 +98,7 @@ function MemoryCard({ memory, score }: MemoryCardProps) {
  */
 export function MemoriesPage() {
   const org = useCurrentOrg();
+  const user = useCurrentUser();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedType, setSelectedType] = useState<MemoryType | ''>('');
   const [selectedVisibility, setSelectedVisibility] = useState<VisibilityLevel | ''>('');
@@ -105,16 +106,23 @@ export function MemoriesPage() {
 
   // Search query
   const { data: searchResults, isLoading } = useQuery<{ items: MemorySearchResult[] }>({
-    queryKey: ['memories', org.id, searchQuery, selectedType, selectedVisibility],
+    queryKey: ['memories', org.id, user.id, user.roles, searchQuery, selectedType, selectedVisibility],
     queryFn: async () => {
+      const primaryRole = user.roles?.[0] || 'anonymous';
+      const isAnonymous = !user.id;
+
       const params: Record<string, unknown> = {
         query: searchQuery || '*',
         limit: 50,
+        read_actor_id: isAnonymous ? 'anonymous' : user.id,
+        read_actor_type: isAnonymous ? 'anonymous' : 'employee',
+        read_role: isAnonymous ? 'anonymous' : primaryRole,
+        read_responsibility: isAnonymous ? 'anonymous' : primaryRole,
       };
       if (selectedType) params.memory_types = [selectedType];
       if (selectedVisibility) params.visibility_levels = [selectedVisibility];
 
-      const response = await apiClient.post('/memories/search', params);
+      const response = await apiClient.get('/memories/search', { params });
       return response.data;
     },
     staleTime: 1000 * 30, // 30 seconds

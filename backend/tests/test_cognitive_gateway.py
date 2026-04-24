@@ -425,11 +425,33 @@ class TestGatewayRead:
         assert result_vector.memories[0]["id"] == "B"
 
     @pytest.mark.asyncio
-    async def test_self_rag_filters_irrelevant_memories(self):
+    async def test_self_rag_passes_grounded_memories(self):
+        # SelfRAG uses non-strict mode: keeps any memory with sufficient content,
+        # regardless of keyword overlap with the query.  This prevents over-filtering
+        # when callers pass a pre-scoped candidate pool where paraphrasing is common.
         gw = _full_gateway()
         mems = [
             {"id": "keep", "content": "auth login failure on gateway"},
-            {"id": "drop", "content": "finance planning note"},
+            {"id": "also_kept", "content": "finance planning note"},
+        ]
+
+        result = await gw.read(query="auth failure", memories=mems)
+
+        # Both are grounded (≥3 tokens) and score ≥ 0.35 on useful_score, so both pass.
+        assert result.total == 2
+        ids = [m["id"] for m in result.memories]
+        assert "keep" in ids
+        assert "also_kept" in ids
+        # Reasoning steps are still present for explainability
+        assert len(result.reasoning_steps) == 2
+
+    @pytest.mark.asyncio
+    async def test_self_rag_filters_empty_memories(self):
+        # Memories with too little content (< 3 tokens) are still filtered.
+        gw = _full_gateway()
+        mems = [
+            {"id": "keep", "content": "auth login failure on gateway"},
+            {"id": "drop", "content": "hi"},
         ]
 
         result = await gw.read(query="auth failure", memories=mems)

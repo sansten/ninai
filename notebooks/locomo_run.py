@@ -31,10 +31,12 @@ LLM_WORKERS       = 12
 INGEST_WORKERS    = 16  # more parallelism for 5882 turns
 
 # Enrichment barrier — wait for Celery fanout agents before retrieval.
-ENRICH_WAIT_MIN_S = 600   # minimum wait regardless of signal (10 min)
-ENRICH_WAIT_MAX_S = 1200  # hard cap (20 min)
-ENRICH_SAMPLE_N   = 20    # memories to track
-ENRICH_READY_PCT  = 0.75  # fraction that must be enriched before min_wait allows proceed
+# 5882 memories × 3 pipeline chains × ~6 stages = ~105K tasks.
+# Stage 3 (entity_resolution) completes ~30-40 min after ingest on a loaded cluster.
+ENRICH_WAIT_MIN_S = 1800  # minimum wait regardless of signal (30 min)
+ENRICH_WAIT_MAX_S = 5400  # hard cap (90 min)
+ENRICH_SAMPLE_N   = 30    # memories to track — larger sample = better signal
+ENRICH_READY_PCT  = 0.80  # 80% of sampled memories must have entities populated
 
 # ── Run mode ─────────────────────────────────────────────────────────────
 # QUICK_VALIDATE = True  →  smoke-test specific categories against existing
@@ -43,8 +45,8 @@ ENRICH_READY_PCT  = 0.75  # fraction that must be enriched before min_wait allow
 # QUICK_VALIDATE = False →  full run: purge stale data, fresh ingest,
 #                            enrichment barrier, all 1986 QA pairs (~2.5h).
 # ─────────────────────────────────────────────────────────────────────────
-QUICK_VALIDATE = True
-QUICK_CATS     = {'adversarial', 'multi_hop'}
+QUICK_VALIDATE = False
+QUICK_CATS     = {'adversarial'}   # unused in full mode
 
 if QUICK_VALIDATE:
     LOCOMO_SEED = 99                          # original seed — reuses existing run_tag
@@ -182,7 +184,10 @@ def _wait_for_enrichment(sample_ids, client, min_s=ENRICH_WAIT_MIN_S,
         for mid, created_at in baseline.items():
             try:
                 m = client.memories.get(mid)
-                if m.updated_at > created_at or bool(m.entities):
+                # require entity_resolution (stage 3) to have written back,
+                # not just any pipeline write — this ensures graph/temporal
+                # enrichment has also had time to start
+                if bool(m.entities):
                     enriched += 1
             except Exception:
                 enriched += 1  # can't fetch = assume done, don't block indefinitely
@@ -818,7 +823,7 @@ def _retrieve(question, mem_dicts, mems_obj, category, limit,
               client=None, run_tag=None, conv_id=None):
     # Primary: Ninai semantic search (hybrid lexical+vector)
     if client is not None and run_tag is not None and conv_id is not None:
-        k = limit if category not in ('multi_hop',) else min(limit * 2, 120)
+        k = limit if category not in ('multi_hop',) else min(limit * 3, 150)
         # QueryIntelligenceAgent: entity/intent-expanded query for stage-1 search
         search_q = _query_expand(question, category)
         hits = _search_semantic(search_q, conv_id, run_tag, client, k, use_graph=True)
@@ -832,7 +837,7 @@ def _retrieve(question, mem_dicts, mems_obj, category, limit,
                 stage1_text = ' '.join(h['content'] for h in hits[:10])
                 key_terms   = _extract_key_terms(stage1_text)
                 expanded_q  = question + ' ' + ' '.join(key_terms[:5])
-                hits2 = _search_semantic(expanded_q, conv_id, run_tag, client, min(limit * 2, 120), use_graph=False)
+                hits2 = _search_semantic(expanded_q, conv_id, run_tag, client, min(limit * 2, 120), use_graph=True)
                 # Stage 3: proper noun bridge terms
                 all_text = ' '.join(h['content'] for h in hits + hits2)
                 proper_nouns = []
@@ -884,6 +889,17 @@ def _retrieve(question, mem_dicts, mems_obj, category, limit,
                 return _sort_by_date(merged[:k_adv])
 
             hits = _top_k_bm25(question, hits, limit)
+            if category == 'single_hop' and len(hits) < limit:
+                # Entity-anchored second pass: if semantic search returned a thin pool,
+                # supplement with BM25 over the full conversation corpus.
+                # Single-hop answers are always in exactly one turn; broader sweep helps.
+                unique_all = _dedup_by_content(mem_dicts)
+                extra = _top_k_bm25(question, unique_all, limit)
+                seen_ids = {h['id'] for h in hits}
+                for h in extra:
+                    if h['id'] not in seen_ids and len(hits) < limit:
+                        hits.append(h)
+                        seen_ids.add(h['id'])
             return _sort_by_date(hits)
     # ── Fallback: stemmed BM25 ───────────────────────────────────────────
     unique = _dedup_by_content(mem_dicts)
