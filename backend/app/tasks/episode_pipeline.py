@@ -28,6 +28,8 @@ from app.models.memory import MemoryMetadata
 
 logger = get_task_logger(__name__)
 
+_ASYNC_LOOP: asyncio.AbstractEventLoop | None = None
+
 ROUTER_CANDIDATE_LIMIT = 50
 ROUTER_MATCH_THRESHOLD = 0.42
 ROUTER_OWNER_BOOST = 0.18
@@ -36,20 +38,15 @@ SUMMARY_MAX_EVENTS = 8
 
 
 def _run_async(coro):
-    """Run an async coroutine from a synchronous Celery task."""
-    try:
-        loop = asyncio.get_event_loop()
-    except RuntimeError:
-        loop = None
+    """Run async code on a single per-process loop.
 
-    if loop is not None and loop.is_running():
-        new_loop = asyncio.new_event_loop()
-        try:
-            return new_loop.run_until_complete(coro)
-        finally:
-            new_loop.close()
-
-    return asyncio.run(coro)
+    Celery prefork workers can reuse module globals, and asyncpg connections are
+    loop-bound. Recreating loops per task causes cross-loop Future errors.
+    """
+    global _ASYNC_LOOP
+    if _ASYNC_LOOP is None or _ASYNC_LOOP.is_closed():
+        _ASYNC_LOOP = asyncio.new_event_loop()
+    return _ASYNC_LOOP.run_until_complete(coro)
 
 
 def _text_tokens(*parts: Any) -> set[str]:

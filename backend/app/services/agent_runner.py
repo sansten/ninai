@@ -97,6 +97,13 @@ class AgentRunner:
         m = str(settings.get_ollama_model("agents") or "").strip()
         return m or "default"
 
+    @staticmethod
+    def _as_db_timestamp(dt: datetime) -> datetime:
+        """Normalize timestamps for TIMESTAMP WITHOUT TIME ZONE columns."""
+        if dt.tzinfo is None:
+            return dt
+        return dt.astimezone(timezone.utc).replace(tzinfo=None)
+
     def _should_cache_agent(self, agent_name: str) -> bool:
         # Only cache deterministic enrichment agents.
         return agent_name in {
@@ -1311,8 +1318,8 @@ class AgentRunner:
             # Otherwise update inputs_hash/trace and reset timestamps for a new attempt.
             existing.inputs_hash = inputs_hash
             existing.trace_id = trace_id
-            existing.started_at = started_at
-            existing.finished_at = started_at
+            existing.started_at = self._as_db_timestamp(started_at)
+            existing.finished_at = self._as_db_timestamp(started_at)
 
             await self._append_trajectory_event(
                 session=session,
@@ -1343,8 +1350,8 @@ class AgentRunner:
             outputs={},
             warnings=[],
             errors=[],
-            started_at=started_at,
-            finished_at=started_at,
+            started_at=self._as_db_timestamp(started_at),
+            finished_at=self._as_db_timestamp(started_at),
             trace_id=trace_id,
         )
         session.add(row)
@@ -1375,8 +1382,8 @@ class AgentRunner:
         row.outputs = result.outputs or {}
         row.warnings = result.warnings or []
         row.errors = result.errors or []
-        row.started_at = result.started_at
-        row.finished_at = result.finished_at
+        row.started_at = self._as_db_timestamp(result.started_at)
+        row.finished_at = self._as_db_timestamp(result.finished_at)
         row.trace_id = result.trace_id
         row.provenance = list(getattr(result, "provenance", []) or [])
         await session.flush()

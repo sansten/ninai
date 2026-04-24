@@ -26,22 +26,19 @@ from app.services.agent_runner import AgentRunner, PipelineContext
 
 logger = get_task_logger(__name__)
 
+_ASYNC_LOOP: asyncio.AbstractEventLoop | None = None
+
 
 def _run_async(coro):
-    """Run an async coroutine from a synchronous Celery task."""
-    try:
-        loop = asyncio.get_event_loop()
-    except RuntimeError:
-        loop = None
+    """Run async code on a single per-process loop.
 
-    if loop is not None and loop.is_running():
-        new_loop = asyncio.new_event_loop()
-        try:
-            return new_loop.run_until_complete(coro)
-        finally:
-            new_loop.close()
-
-    return asyncio.run(coro)
+    Reusing one loop avoids asyncpg connection pool objects crossing event loops
+    across retries in Celery prefork workers.
+    """
+    global _ASYNC_LOOP
+    if _ASYNC_LOOP is None or _ASYNC_LOOP.is_closed():
+        _ASYNC_LOOP = asyncio.new_event_loop()
+    return _ASYNC_LOOP.run_until_complete(coro)
 
 
 def build_memory_dag(

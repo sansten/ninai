@@ -19,21 +19,14 @@ from app.models.memory_fact import MemoryFact, MemoryFactStatus
 
 logger = get_task_logger(__name__)
 
+_ASYNC_LOOP: asyncio.AbstractEventLoop | None = None
+
 
 def _run_async(coro):
-    try:
-        loop = asyncio.get_event_loop()
-    except RuntimeError:
-        loop = None
-
-    if loop is not None and loop.is_running():
-        new_loop = asyncio.new_event_loop()
-        try:
-            return new_loop.run_until_complete(coro)
-        finally:
-            new_loop.close()
-
-    return asyncio.run(coro)
+    global _ASYNC_LOOP
+    if _ASYNC_LOOP is None or _ASYNC_LOOP.is_closed():
+        _ASYNC_LOOP = asyncio.new_event_loop()
+    return _ASYNC_LOOP.run_until_complete(coro)
 
 
 def _extract_fact_candidates(text: str) -> list[tuple[str, str, str, float]]:
