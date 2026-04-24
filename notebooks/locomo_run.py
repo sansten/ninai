@@ -28,7 +28,7 @@ LLM_TIMEOUT_QWEN  = 15
 LLM_TIMEOUT_DEEP  = 25
 LLM_TIMEOUT_MID   = 90   # for gemma4 on GPU; probe-based adaptive fallback handles CPU mode
 LLM_WORKERS       = 12
-INGEST_WORKERS    = 16  # more parallelism for 5882 turns
+INGEST_WORKERS    = 4   # lower concurrency to reduce API timeout failures on loaded clusters
 
 # Enrichment barrier — wait for Celery fanout agents before retrieval.
 # 5882 memories × 3 pipeline chains × ~6 stages = ~105K tasks.
@@ -326,17 +326,25 @@ else:
     print(f'Turns to ingest: {len(to_ingest)}')
 
     def _create_one(item):
-        try:
-            mem = client.memories.create(
-                content=item['content'],
-                source_type='locomo_benchmark',
-                tags=item['tags'],
-                occurred_at=item['occurred_at'],
-            )
-            return {'conv_id': item['conv_id'], 'memory_id': mem.id, 'ok': True}
-        except Exception as e:
-            return {'conv_id': item['conv_id'], 'memory_id': None,
-                    'ok': False, 'error': str(e)}
+        last_error = None
+        for attempt in range(1, 4):
+            try:
+                mem = client.memories.create(
+                    content=item['content'],
+                    source_type='locomo_benchmark',
+                    tags=item['tags'],
+                    occurred_at=item['occurred_at'],
+                )
+                return {'conv_id': item['conv_id'], 'memory_id': mem.id, 'ok': True}
+            except Exception as e:
+                last_error = e
+                # Retry transient network/read timeouts with short backoff.
+                if attempt < 3 and 'timed out' in str(e).lower():
+                    time.sleep(0.5 * attempt)
+                    continue
+                break
+        return {'conv_id': item['conv_id'], 'memory_id': None,
+                'ok': False, 'error': str(last_error)}
 
     import concurrent.futures as _cf
     print(f'Ingesting with {INGEST_WORKERS} workers...')
