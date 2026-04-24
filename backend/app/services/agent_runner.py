@@ -1055,6 +1055,43 @@ class AgentRunner:
                 ),
             )
 
+        if agent_name == "EntityResolutionAgent":
+            await _run_side_effect(
+                tool_name="MemoryMetadata.update_entities",
+                call_payload={
+                    "agent": agent_name,
+                    "memory_id": ctx.memory_id,
+                    "resolved_count": len(result.outputs.get("resolved_entities", [])),
+                },
+                op_coro=self._apply_entity_resolution(
+                    session=session,
+                    memory_id=ctx.memory_id,
+                    outputs=result.outputs,
+                ),
+            )
+
+    async def _apply_entity_resolution(
+        self,
+        *,
+        session: AsyncSession,
+        memory_id: str,
+        outputs: dict,
+    ) -> dict:
+        mem = await session.get(MemoryMetadata, memory_id)
+        if mem is None:
+            return {"updated": False}
+        resolved = outputs.get("resolved_entities", [])
+        # Build a dict keyed by canonical name for storage
+        entities: dict = {}
+        for ent in resolved:
+            if isinstance(ent, dict) and ent.get("canonical"):
+                entities[ent["canonical"]] = {
+                    k: v for k, v in ent.items() if k != "canonical"
+                }
+        if entities:
+            mem.entities = entities
+        return {"updated": True, "entity_count": len(entities)}
+
     async def _apply_semantic_normalization(
         self,
         *,
