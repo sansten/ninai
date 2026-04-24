@@ -6,6 +6,8 @@ Client for Qdrant vector database operations with built-in
 organization filtering for multi-tenant security.
 """
 
+import asyncio
+import logging
 from typing import Optional, List, Dict, Any
 from uuid import UUID
 
@@ -25,6 +27,9 @@ from qdrant_client.http.models import (
 from app.core.config import settings
 
 
+logger = logging.getLogger(__name__)
+
+
 class QdrantService:
     """
     Qdrant vector database service.
@@ -36,6 +41,7 @@ class QdrantService:
     """
     
     _client: Optional[QdrantClient] = None
+    _collection_ready: bool = False
     
     @classmethod
     def get_client(cls) -> QdrantClient:
@@ -50,8 +56,17 @@ class QdrantService:
                 host=settings.QDRANT_HOST,
                 port=settings.QDRANT_PORT,
                 api_key=settings.QDRANT_API_KEY if settings.QDRANT_API_KEY else None,
+                timeout=float(getattr(settings, "QDRANT_TIMEOUT_SECONDS", 2.5) or 2.5),
             )
         return cls._client
+
+    @classmethod
+    async def _run_sync_with_timeout(cls, fn, *args, timeout: float = 2.5, **kwargs):
+        """Run blocking qdrant-client calls off the event loop with a hard timeout."""
+        return await asyncio.wait_for(
+            asyncio.to_thread(fn, *args, **kwargs),
+            timeout=timeout,
+        )
     
     @classmethod
     async def ensure_collection(cls) -> None:
@@ -61,20 +76,25 @@ class QdrantService:
         Creates the collection if it doesn't exist with appropriate
         vector dimensions and distance metric.
         """
+        if cls._collection_ready:
+            return
+
         client = cls.get_client()
         collection_name = settings.QDRANT_COLLECTION_NAME
-        
-        collections = client.get_collections()
+
+        collections = await cls._run_sync_with_timeout(client.get_collections)
         collection_names = [c.name for c in collections.collections]
-        
+
         if collection_name not in collection_names:
-            client.create_collection(
+            await cls._run_sync_with_timeout(
+                client.create_collection,
                 collection_name=collection_name,
                 vectors_config=VectorParams(
                     size=settings.EMBEDDING_DIMENSIONS,
                     distance=Distance.COSINE,
                 ),
             )
+        cls._collection_ready = True
     
     @classmethod
     def build_org_filter(
@@ -146,7 +166,8 @@ class QdrantService:
         # Always include organization_id in payload for filtering
         payload["organization_id"] = org_id
         
-        client.upsert(
+        await cls._run_sync_with_timeout(
+            client.upsert,
             collection_name=settings.QDRANT_COLLECTION_NAME,
             points=[
                 PointStruct(

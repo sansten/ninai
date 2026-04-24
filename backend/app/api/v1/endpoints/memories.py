@@ -206,27 +206,18 @@ async def create_memory(
                 pass
             await db.commit()
 
-        enqueue_memory_pipeline(
-            org_id=tenant.org_id,
-            memory_id=memory.id,
-            initiator_user_id=tenant.user_id,
-            trace_id=request_id,
-            storage="long_term",
-        )
-        enqueue_episode_pipeline(
-            org_id=tenant.org_id,
-            memory_id=memory.id,
-            initiator_user_id=tenant.user_id,
-            trace_id=request_id,
-            storage="long_term",
-        )
-        enqueue_fact_pipeline(
-            org_id=tenant.org_id,
-            memory_id=memory.id,
-            initiator_user_id=tenant.user_id,
-            trace_id=request_id,
-            storage="long_term",
-        )
+        # Pipelines are best-effort and must never block the write response.
+        for enqueue_fn in (enqueue_memory_pipeline, enqueue_episode_pipeline, enqueue_fact_pipeline):
+            try:
+                enqueue_fn(
+                    org_id=tenant.org_id,
+                    memory_id=memory.id,
+                    initiator_user_id=tenant.user_id,
+                    trace_id=request_id,
+                    storage="long_term",
+                )
+            except Exception:
+                pass
         
         return MemoryResponse.model_validate(memory)
     

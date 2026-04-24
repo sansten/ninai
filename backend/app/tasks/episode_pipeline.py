@@ -323,10 +323,14 @@ def enqueue_episode_pipeline(
     if not broker or str(broker).startswith("memory://"):
         return None
 
-    return episode_router_task.si(
-        org_id=org_id,
-        memory_id=memory_id,
-        initiator_user_id=initiator_user_id,
-        trace_id=trace_id,
-        storage=storage,
-    ).apply_async()
+    try:
+        return episode_router_task.si(
+            org_id=org_id,
+            memory_id=memory_id,
+            initiator_user_id=initiator_user_id,
+            trace_id=trace_id,
+            storage=storage,
+        ).apply_async(retry=False)
+    except Exception as exc:
+        logger.warning("episode pipeline enqueue failed for memory_id=%s: %s", memory_id, exc)
+        return None
