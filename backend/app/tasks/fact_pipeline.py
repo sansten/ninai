@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import re
 from datetime import datetime, timezone
 from uuid import uuid4
@@ -15,18 +14,10 @@ from app.core.database import async_session_factory, set_tenant_context
 from app.models.contradiction import Contradiction, ContradictionSeverity
 from app.models.memory import MemoryMetadata
 from app.models.memory_fact import MemoryFact, MemoryFactStatus
+from app.tasks.async_runtime import run_async
 
 
 logger = get_task_logger(__name__)
-
-_ASYNC_LOOP: asyncio.AbstractEventLoop | None = None
-
-
-def _run_async(coro):
-    global _ASYNC_LOOP
-    if _ASYNC_LOOP is None or _ASYNC_LOOP.is_closed():
-        _ASYNC_LOOP = asyncio.new_event_loop()
-    return _ASYNC_LOOP.run_until_complete(coro)
 
 
 def _extract_fact_candidates(text: str) -> list[tuple[str, str, str, float]]:
@@ -191,8 +182,8 @@ def fact_extractor_task(
         return {"status": "skipped", "reason": "memory_not_long_term", "memory_id": memory_id}
 
     actor_user_id = initiator_user_id or "00000000-0000-0000-0000-000000000001"
-    extraction = _run_async(extract_facts_from_memory(org_id=org_id, memory_id=memory_id, actor_user_id=actor_user_id))
-    contradiction = _run_async(detect_contradictions(org_id=org_id, fact_ids=extraction["fact_ids"], actor_user_id=actor_user_id))
+    extraction = run_async(extract_facts_from_memory(org_id=org_id, memory_id=memory_id, actor_user_id=actor_user_id))
+    contradiction = run_async(detect_contradictions(org_id=org_id, fact_ids=extraction["fact_ids"], actor_user_id=actor_user_id))
 
     return {
         "status": "ok",
