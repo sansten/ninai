@@ -837,7 +837,7 @@ def _retrieve(question, mem_dicts, mems_obj, category, limit,
               client=None, run_tag=None, conv_id=None):
     # Primary: Ninai semantic search (hybrid lexical+vector)
     if client is not None and run_tag is not None and conv_id is not None:
-        k = limit if category not in ('multi_hop',) else min(limit * 3, 150)
+        k = limit if category not in ('multi_hop', 'adversarial') else min(limit * 3, 150)
         # QueryIntelligenceAgent: entity/intent-expanded query for stage-1 search
         search_q = _query_expand(question, category)
         hits = _search_semantic(search_q, conv_id, run_tag, client, k, use_graph=False)
@@ -881,23 +881,23 @@ def _retrieve(question, mem_dicts, mems_obj, category, limit,
             # cognitive_rerank (AttentionRetrievalService) is recency-biased and
             # discards answer-bearing turns from older sessions. BM25 is query-centric.
             if category == 'adversarial':
-                # V4: Skip the Qdrant hits pool for adversarial — Qdrant embedding similarity
-                # is weak for peripheral named-entity facts (specific product names, styles,
-                # preferences). Full-corpus BM25 on ALL conversation turns is more reliable.
                 unique_all = _dedup_by_content(mem_dicts)
                 k_adv = max(limit, 80)
-
-                # Stage 1: BM25 over full corpus with the raw question
-                stage1 = _top_k_bm25(question, unique_all, min(k_adv * 3, 200))
-
-                # Stage 2: extract key terms from stage-1 hits and re-run BM25
-                stage1_text = ' '.join(m.get('content', '') for m in stage1[:30])
-                key_terms = _extract_key_terms(stage1_text)
-                stage2 = _top_k_bm25(question, unique_all, min(k_adv * 2, 150),
-                                     extra_terms=' '.join(key_terms[:8]))
-
+                # Qdrant semantic retrieval is still the best primary signal for adversarial
+                # paraphrases. We widen the fetch limit and then supplement with corpus-wide
+                # BM25 expansion for the smaller named-entity minority.
+                sem_ranked = _top_k_bm25(question, hits, min(k_adv * 2, 160))
+                key_terms = _extract_key_terms(
+                    ' '.join(m.get('content', '') for m in sem_ranked[:20])
+                )
+                bm_supplement = _top_k_bm25(
+                    question,
+                    unique_all,
+                    min(k_adv, 80),
+                    extra_terms=' '.join(key_terms[:6]),
+                )
                 seen_ids, merged = set(), []
-                for m in stage1 + stage2:
+                for m in sem_ranked + bm_supplement:
                     mid = m.get('id', '')
                     if mid and mid not in seen_ids:
                         seen_ids.add(mid)
@@ -1011,13 +1011,13 @@ def _build_prompt(category, question, context, last_date='', session_overview=''
             )
         else:
             inst = (
-                'RULE: Find the date or time when this event occurred.\n'
-                'Output it EXACTLY as it is expressed in the conversation — preserve relative phrases '
-                'like "the week before 9 June 2023" or "10 years ago" verbatim.\n'
-                'Do NOT convert or simplify relative expressions to absolute dates.\n'
-                'Use session date headers only to resolve which calendar date a relative phrase maps to '
-                'if the text says things like "last Saturday" without a nearby anchor.\n'
-                'Reply with ONLY the date or time expression. No full sentence. No explanation.\n'
+                'RULE: Use the session date headers (the [YYYY-MM-DD] lines) to compute when this event occurred.\n'
+                'If the text says "last week" in a session dated [2023-06-09], the event was "the week before 9 June 2023".\n'
+                'If the text says "yesterday" in a session dated [2023-05-25], the event was "24 May 2023".\n'
+                'If the text gives an explicit date like "25 May 2023", use that directly.\n'
+                'For duration questions ("how long"), output only the duration: "4 years", "6 months".\n'
+                'Do NOT output session headers like "[2023-06-09]" or "Session" — compute the answer from them.\n'
+                'Reply with ONLY the resulting date or duration expression. No full sentence. No explanation.\n'
             )
         return (
             _overview_block + 'Conversation turns with ISO dates:\n' + context + '\n\n'
@@ -1453,7 +1453,6 @@ for rec, gen in zip(qa_records, generated_answers):
             gen_norm = _years[0]
     score = scorer.score(gold_norm, gen_norm)
     f1    = score[ROUGE_TYPE].fmeasure * 100
-    judge = _llm_judge(rec['question'], rec['gold_answer'], gen)
     results.append({
         'conv_id'          : rec['conv_id'],
         'qa_id'            : rec['qa_id'],
@@ -1463,8 +1462,33 @@ for rec, gen in zip(qa_records, generated_answers):
         'generated_answer' : gen[:200],
         'retrieved_count'  : rec['retrieved'],
         'rouge1_f1'        : round(f1, 2),
-        'semantic_correct' : judge,
     })
+
+print(f'Phase 4b: semantic judging ({len(results)} prompts)...')
+judge_prompts = [
+    (
+        'Question: ' + row['question'] + '\n'
+        'Gold answer: ' + row['gold_answer'] + '\n'
+        'System answer: ' + row['generated_answer'] + '\n'
+        'Is the system answer semantically equivalent to the gold answer for this question? '
+        'Reply with only "yes" or "no". No explanation.\n'
+        'Answer:'
+    )
+    for row in results
+]
+judge_raw = _run_prompts_parallel(
+    judge_prompts,
+    models=[LLM_MODEL] * len(judge_prompts),
+    workers=min(LLM_WORKERS, 8),
+    num_ctx=512,
+    request_timeout=10,
+    progress_every=100,
+)
+for row, raw in zip(results, judge_raw):
+    if not raw:
+        row['semantic_correct'] = -1
+    else:
+        row['semantic_correct'] = 1 if raw.strip().lower().startswith('y') else 0
 
 df_results = pd.DataFrame(results)
 overall = df_results['rouge1_f1'].mean()
