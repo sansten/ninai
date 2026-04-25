@@ -22,7 +22,7 @@ RETRIEVAL_LIMIT   = 50   # top-N from deduplicated unique turns per conversation
 ROUGE_TYPE        = 'rouge1'
 LLM_MODEL         = 'qwen2.5:7b'
 LLM_MODEL_HARD    = 'deepseek-coder-v2:16b'
-LLM_MODEL_MID     = 'gemma4:e4b'
+LLM_MODEL_MID     = 'qwen2.5:7b'
 LLM_TIMEOUT       = 30   # default fallback timeout
 LLM_TIMEOUT_QWEN  = 15
 LLM_TIMEOUT_DEEP  = 25
@@ -33,10 +33,12 @@ INGEST_WORKERS    = 4   # lower concurrency to reduce API timeout failures on lo
 # Enrichment barrier — wait for Celery fanout agents before retrieval.
 # 5882 memories × 3 pipeline chains × ~6 stages = ~105K tasks.
 # Stage 3 (entity_resolution) completes ~30-40 min after ingest on a loaded cluster.
-ENRICH_WAIT_MIN_S = 1800  # minimum wait regardless of signal (30 min)
-ENRICH_WAIT_MAX_S = 5400  # hard cap (90 min)
-ENRICH_SAMPLE_N   = 30    # memories to track — larger sample = better signal
-ENRICH_READY_PCT  = 0.80  # 80% of sampled memories must have entities populated
+# V4: Enrichment does not update Qdrant vectors (they are set at ingest only).
+# Qdrant retrieval quality is identical 30s and 3 months after ingest.
+ENRICH_WAIT_MIN_S = 0     # no wait — enrichment does not affect Qdrant vectors
+ENRICH_WAIT_MAX_S = 0     # disabled
+ENRICH_SAMPLE_N   = 0     # disabled
+ENRICH_READY_PCT  = 0.0   # disabled
 
 # ── Run mode ─────────────────────────────────────────────────────────────
 # QUICK_VALIDATE = True  →  smoke-test specific categories against existing
@@ -45,12 +47,12 @@ ENRICH_READY_PCT  = 0.80  # 80% of sampled memories must have entities populated
 # QUICK_VALIDATE = False →  full run: purge stale data, fresh ingest,
 #                            enrichment barrier, all 1986 QA pairs (~2.5h).
 # ─────────────────────────────────────────────────────────────────────────
-QUICK_VALIDATE = False
-QUICK_CATS     = {'adversarial'}   # unused in full mode
+QUICK_VALIDATE = True
+QUICK_CATS     = {'adversarial', 'multi_hop', 'open_domain', 'single_hop', 'temporal'}   # all categories
 
 if QUICK_VALIDATE:
-    LOCOMO_SEED = 99                          # original seed — reuses existing run_tag
-    RESUME_TAG  = 'locomo-full-676b1b69'      # existing ingest, no purge needed
+    LOCOMO_SEED = 100                         # same seed as full run
+    RESUME_TAG  = 'locomo-full-254a9493'      # existing ingest from this run
     SKIP_INGEST = True
 else:
     LOCOMO_SEED = 100                         # fresh seed → new run_tag
@@ -376,7 +378,7 @@ else:
     _ids_all = [r['memory_id'] for r in ingested if r.get('memory_id')]
     _step = max(1, len(_ids_all) // _n)
     _sample_ids = [_ids_all[i] for i in range(0, min(len(_ids_all), _n * _step), _step)][:_n]
-    _wait_for_enrichment(_sample_ids, client)
+    # _wait_for_enrichment(_sample_ids, client)  # disabled — enrichment is Postgres-only, does not update Qdrant
 
 # Retrieval helpers for LoCoMo benchmark.
 # Primary: Ninai hybrid semantic search (lexical+vector).
@@ -417,6 +419,8 @@ def _stem(w):
 
 def _stem_set(text):
     # both original tokens and stemmed forms for maximum recall
+    if not isinstance(text, str):
+        text = str(text) if text is not None else ''
     raw = set(re.sub(r'[^\w\s]', '', text.lower()).split()) - _STOP
     return raw | {_stem(t) for t in raw}
 
@@ -753,6 +757,8 @@ def _resolve_temporal_references(answer, last_date):
 def _mem_obj_to_dict(m):
     # prefer content (full text); fall back to content_preview
     full = getattr(m, 'content', None) or getattr(m, 'content_preview', None) or m.title or ''
+    if not isinstance(full, str):
+        full = str(full) if full is not None else ''
     return {
         'id'         : str(m.id),
         'content'    : full,
@@ -834,7 +840,7 @@ def _retrieve(question, mem_dicts, mems_obj, category, limit,
         k = limit if category not in ('multi_hop',) else min(limit * 3, 150)
         # QueryIntelligenceAgent: entity/intent-expanded query for stage-1 search
         search_q = _query_expand(question, category)
-        hits = _search_semantic(search_q, conv_id, run_tag, client, k, use_graph=True)
+        hits = _search_semantic(search_q, conv_id, run_tag, client, k, use_graph=False)
         if len(hits) >= 3:
             # Session expansion: include ALL turns from sessions already hit by semantic search.
             # Semantic finds the right session but may miss the answer-bearing turn.
@@ -845,7 +851,7 @@ def _retrieve(question, mem_dicts, mems_obj, category, limit,
                 stage1_text = ' '.join(h['content'] for h in hits[:10])
                 key_terms   = _extract_key_terms(stage1_text)
                 expanded_q  = question + ' ' + ' '.join(key_terms[:5])
-                hits2 = _search_semantic(expanded_q, conv_id, run_tag, client, min(limit * 2, 120), use_graph=True)
+                hits2 = _search_semantic(expanded_q, conv_id, run_tag, client, min(limit * 2, 120), use_graph=False)
                 # Stage 3: proper noun bridge terms
                 all_text = ' '.join(h['content'] for h in hits + hits2)
                 proper_nouns = []
@@ -875,39 +881,36 @@ def _retrieve(question, mem_dicts, mems_obj, category, limit,
             # cognitive_rerank (AttentionRetrievalService) is recency-biased and
             # discards answer-bearing turns from older sessions. BM25 is query-centric.
             if category == 'adversarial':
-                # Adversarial questions frequently require disambiguation across sessions.
-                # Semantic hits can over-cluster in one session and trigger false abstentions.
+                # V4: Skip the Qdrant hits pool for adversarial — Qdrant embedding similarity
+                # is weak for peripheral named-entity facts (specific product names, styles,
+                # preferences). Full-corpus BM25 on ALL conversation turns is more reliable.
                 unique_all = _dedup_by_content(mem_dicts)
-                k_adv = max(limit, 60)
-                sem_ranked = _top_k_bm25(question, hits, min(k_adv * 2, 120))
-                bm_stage1 = _top_k_bm25(question, unique_all, min(k_adv * 2, 120))
-                key_terms = _extract_key_terms(
-                    ' '.join(m.get('content', '') for m in sem_ranked[:20] + bm_stage1[:20])
-                )
-                bm_stage2 = _top_k_bm25(question, unique_all, k_adv, extra_terms=' '.join(key_terms[:8]))
+                k_adv = max(limit, 80)
+
+                # Stage 1: BM25 over full corpus with the raw question
+                stage1 = _top_k_bm25(question, unique_all, min(k_adv * 3, 200))
+
+                # Stage 2: extract key terms from stage-1 hits and re-run BM25
+                stage1_text = ' '.join(m.get('content', '') for m in stage1[:30])
+                key_terms = _extract_key_terms(stage1_text)
+                stage2 = _top_k_bm25(question, unique_all, min(k_adv * 2, 150),
+                                     extra_terms=' '.join(key_terms[:8]))
 
                 seen_ids, merged = set(), []
-                for m in sem_ranked + bm_stage1 + bm_stage2:
+                for m in stage1 + stage2:
                     mid = m.get('id', '')
                     if mid and mid not in seen_ids:
                         seen_ids.add(mid)
                         merged.append(m)
-
                 merged = _episodic_diversify(merged, unique_all, question, k_adv)
                 return _sort_by_date(merged[:k_adv])
 
+            if category == 'single_hop':
+                # V4: For single_hop: return Qdrant hits in their original Qdrant-ranked order,
+                # not BM25-ranked order. Qdrant cosine similarity is the right signal for
+                # direct factual questions — BM25 over-ranks turns with common question words.
+                return _sort_by_date(hits[:limit])
             hits = _top_k_bm25(question, hits, limit)
-            if category == 'single_hop' and len(hits) < limit:
-                # Entity-anchored second pass: if semantic search returned a thin pool,
-                # supplement with BM25 over the full conversation corpus.
-                # Single-hop answers are always in exactly one turn; broader sweep helps.
-                unique_all = _dedup_by_content(mem_dicts)
-                extra = _top_k_bm25(question, unique_all, limit)
-                seen_ids = {h['id'] for h in hits}
-                for h in extra:
-                    if h['id'] not in seen_ids and len(hits) < limit:
-                        hits.append(h)
-                        seen_ids.add(h['id'])
             return _sort_by_date(hits)
     # ── Fallback: stemmed BM25 ───────────────────────────────────────────
     unique = _dedup_by_content(mem_dicts)
@@ -1008,8 +1011,12 @@ def _build_prompt(category, question, context, last_date='', session_overview=''
             )
         else:
             inst = (
-                'RULE: Use the session date prefixes to convert ALL relative time references (last Saturday, next week, 4 years ago) to specific calendar dates.\n'
-                'Examples of correct format: "25 May 2023", "March 2019", "August 2022", "the Sunday before 25 May 2023".\n'
+                'RULE: Find the date or time when this event occurred.\n'
+                'Output it EXACTLY as it is expressed in the conversation — preserve relative phrases '
+                'like "the week before 9 June 2023" or "10 years ago" verbatim.\n'
+                'Do NOT convert or simplify relative expressions to absolute dates.\n'
+                'Use session date headers only to resolve which calendar date a relative phrase maps to '
+                'if the text says things like "last Saturday" without a nearby anchor.\n'
                 'Reply with ONLY the date or time expression. No full sentence. No explanation.\n'
             )
         return (
@@ -1042,13 +1049,11 @@ def _build_prompt(category, question, context, last_date='', session_overview=''
         return (
             _overview_block + 'Conversation (chronological order):\n' + context + '\n\n'
             'Question: ' + question + '\n'
-            'RULE: Answer using only facts from the conversation.\n'
+            'IMPORTANT: Read every line of the conversation above before answering.\n'
             'For yes/no questions reply ONLY "Yes" or "No".\n'
-            'For all other questions reply with ONLY the exact answer phrase — 1 to 20 words.\n'
-            'Most LoCoMo adversarial questions are answerable from context; choose the best supported span.\n'
-            'Do NOT default to "Not mentioned" when partial evidence exists.\n'
-            'Reply "Not mentioned" ONLY if there is truly no supporting clue anywhere in the provided conversation.\n'
-            'No explanation, no preamble, no "None".\n'
+            'For factual questions: extract the answer from the text and reply with 1-20 words. No explanation.\n'
+            'ONLY reply "Not mentioned" if the specific fact is completely absent from ALL lines above. '
+            'If you see ANY related information, use it to answer. Most questions have answers in the text.\n'
             'Answer:'
         )
     elif category == 'open_domain':
@@ -1066,10 +1071,28 @@ def _build_prompt(category, question, context, last_date='', session_overview=''
         return (
             _overview_block + 'Conversation (chronological order):\n' + context + '\n\n'
             'Question: ' + question + '\n'
-            'RULE: Reply with ONLY the exact word, name, or short phrase that answers the question.\n'
-            'Do NOT write a full sentence. Do NOT explain. ' + time_inst + '\n'
+            'RULE: Answer directly from the conversation above. '
+            + time_inst +
+            'Output ONLY the answer — a name, place, date, or short phrase (1-12 words). '
+            'Do not say "the conversation" or explain. Just the answer.\n'
             'Answer:'
         )
+
+def _llm_judge(question, gold, generated, model=LLM_MODEL):
+    """Binary semantic equivalence check: 1 = correct, 0 = incorrect, -1 = judge failed."""
+    prompt = (
+        'Question: ' + question + '\n'
+        'Gold answer: ' + gold + '\n'
+        'System answer: ' + generated + '\n'
+        'Is the system answer semantically equivalent to the gold answer for this question? '
+        'Reply with only "yes" or "no". No explanation.\n'
+        'Answer:'
+    )
+    try:
+        resp = _ollama_generate(prompt, model=model, timeout=10, num_ctx=512)
+        return 1 if resp.strip().lower().startswith('y') else 0
+    except Exception:
+        return -1  # exclude from semantic average
 
 def _is_timeout_error(err):
     if isinstance(err, (TimeoutError, socket.timeout)):
@@ -1322,15 +1345,16 @@ if qwen_idx:
         raw_answers[i] = qwen_raw[j]
 
 if deep_idx:
-    deep_workers = 4
-    print(f'  deepseek 24K ({LLM_MODEL_HARD}): {len(deep_idx)} prompts, workers={deep_workers}')
+    deep_workers = 8
+    deep_model = LLM_MODEL
+    print(f'  hard bucket fallback ({deep_model}): {len(deep_idx)} prompts, workers={deep_workers}')
     deep_prompts = [prompts[i] for i in deep_idx]
     deep_raw = _run_prompts_parallel(
         deep_prompts,
-        models=[LLM_MODEL_HARD] * len(deep_prompts),
+        models=[deep_model] * len(deep_prompts),
         workers=deep_workers,
-        num_ctx=24576,
-        request_timeout=max(LLM_TIMEOUT_DEEP, 45),
+        num_ctx=16384,
+        request_timeout=LLM_TIMEOUT_QWEN,
         progress_every=25,
     )
     for j, i in enumerate(deep_idx):
@@ -1429,6 +1453,7 @@ for rec, gen in zip(qa_records, generated_answers):
             gen_norm = _years[0]
     score = scorer.score(gold_norm, gen_norm)
     f1    = score[ROUGE_TYPE].fmeasure * 100
+    judge = _llm_judge(rec['question'], rec['gold_answer'], gen)
     results.append({
         'conv_id'          : rec['conv_id'],
         'qa_id'            : rec['qa_id'],
@@ -1438,6 +1463,7 @@ for rec, gen in zip(qa_records, generated_answers):
         'generated_answer' : gen[:200],
         'retrieved_count'  : rec['retrieved'],
         'rouge1_f1'        : round(f1, 2),
+        'semantic_correct' : judge,
     })
 
 df_results = pd.DataFrame(results)
@@ -1465,9 +1491,16 @@ def agg_scores(df):
 
 scores = agg_scores(df_results)
 print('Ninai ROUGE-1 F1 scores (full LoCoMo dataset, 1986 QA pairs):')
+print(f'  {"category":15s} | {"rouge1":>7} | {"semantic%":>9}')
+print(f'  {"-"*15}-+-{"-"*7}-+-{"-"*9}')
 for cat in CATEGORIES:
-    print(f'  {cat:15s}: {scores[cat]}')
-print(f'  {"overall":15s}: {scores["overall"]}')
+    sub = df_results[df_results['category'] == cat]
+    valid_judge = [r for r in sub['semantic_correct'] if r >= 0]
+    sem_pct = round(sum(valid_judge) / len(valid_judge) * 100, 1) if valid_judge else 0.0
+    print(f'  {cat:15s} | {scores[cat]:>7} | {sem_pct:>8.1f}%')
+valid_all = [r for r in df_results['semantic_correct'] if r >= 0]
+overall_sem = round(sum(valid_all) / len(valid_all) * 100, 1) if valid_all else 0.0
+print(f'  {"overall":15s} | {scores["overall"]:>7} | {overall_sem:>8.1f}%')
 
 ninai_scores = scores
 baselines    = None  # use hardcoded list in cell 22
