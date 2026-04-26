@@ -9,7 +9,6 @@ All heavy work is async-capable and runs via Celery task wrappers.
 
 from __future__ import annotations
 
-import asyncio
 import math
 import re
 from datetime import datetime, timezone
@@ -24,6 +23,7 @@ from app.core.database import async_session_factory, set_tenant_context
 from app.models.episode import Episode, EpisodeStatus
 from app.models.episode_event import EpisodeActorType, EpisodeEvent, EpisodeEventType
 from app.models.memory import MemoryMetadata
+from app.tasks.async_runtime import run_async
 
 
 logger = get_task_logger(__name__)
@@ -33,23 +33,6 @@ ROUTER_MATCH_THRESHOLD = 0.42
 ROUTER_OWNER_BOOST = 0.18
 ROUTER_TIME_WEIGHT = 0.22
 SUMMARY_MAX_EVENTS = 8
-
-
-def _run_async(coro):
-    """Run an async coroutine from a synchronous Celery task."""
-    try:
-        loop = asyncio.get_event_loop()
-    except RuntimeError:
-        loop = None
-
-    if loop is not None and loop.is_running():
-        new_loop = asyncio.new_event_loop()
-        try:
-            return new_loop.run_until_complete(coro)
-        finally:
-            new_loop.close()
-
-    return asyncio.run(coro)
 
 
 def _text_tokens(*parts: Any) -> set[str]:
@@ -269,8 +252,8 @@ def episode_router_task(
         }
 
     actor_user_id = initiator_user_id or "00000000-0000-0000-0000-000000000001"
-    route_result = _run_async(route_memory_to_episode(org_id=org_id, memory_id=memory_id, actor_user_id=actor_user_id))
-    summary_result = _run_async(
+    route_result = run_async(route_memory_to_episode(org_id=org_id, memory_id=memory_id, actor_user_id=actor_user_id))
+    summary_result = run_async(
         summarize_episode(org_id=org_id, episode_id=route_result["episode_id"], actor_user_id=actor_user_id)
     )
 
@@ -300,7 +283,7 @@ def episode_summarizer_task(
     """Refresh summary for an existing episode."""
 
     actor_user_id = initiator_user_id or "00000000-0000-0000-0000-000000000001"
-    summary_result = _run_async(summarize_episode(org_id=org_id, episode_id=episode_id, actor_user_id=actor_user_id))
+    summary_result = run_async(summarize_episode(org_id=org_id, episode_id=episode_id, actor_user_id=actor_user_id))
     return {
         "status": "ok",
         "org_id": org_id,
@@ -323,10 +306,14 @@ def enqueue_episode_pipeline(
     if not broker or str(broker).startswith("memory://"):
         return None
 
-    return episode_router_task.si(
-        org_id=org_id,
-        memory_id=memory_id,
-        initiator_user_id=initiator_user_id,
-        trace_id=trace_id,
-        storage=storage,
-    ).apply_async()
+    try:
+        return episode_router_task.si(
+            org_id=org_id,
+            memory_id=memory_id,
+            initiator_user_id=initiator_user_id,
+            trace_id=trace_id,
+            storage=storage,
+        ).apply_async(retry=False)
+    except Exception as exc:
+        logger.warning("episode pipeline enqueue failed for memory_id=%s: %s", memory_id, exc)
+        return None

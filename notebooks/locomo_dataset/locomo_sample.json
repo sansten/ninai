@@ -1,0 +1,231 @@
+{
+  "metadata": {
+    "name": "LoCoMo Benchmark Dataset (Sample)",
+    "description": "Long Context Conversations with Memory — evaluation benchmark for memory-augmented dialogue systems.",
+    "paper": "Maharana et al., ACL 2024 — Evaluating Very Long-Term Conversational Memory of LLM Agents",
+    "arxiv": "https://arxiv.org/abs/2402.09360",
+    "huggingface": "snap-stanford/locomo",
+    "license": "CC BY 4.0",
+    "note": "This file contains a representative sample of 5 conversations with 60 QA pairs across 4 categories for local evaluation. Download the full dataset via: datasets.load_dataset('snap-stanford/locomo')",
+    "qa_categories": {
+      "single_hop": "Questions answerable from a single conversation turn",
+      "multi_hop": "Questions requiring reasoning across multiple turns",
+      "temporal": "Questions about when events occurred or their sequence",
+      "adversarial": "Questions designed to trick memory systems (unanswerable or negation)"
+    },
+    "published_baselines": {
+      "description": "Scores reported in Maharana et al. 2024 (Table 4, ROUGE-1 / F1 on full test set)",
+      "models": [
+        {"name": "GPT-4 (Full Context)", "single_hop": 55.8, "multi_hop": 47.3, "temporal": 52.1, "adversarial": 41.2, "overall": 49.1},
+        {"name": "GPT-3.5 (Full Context)", "single_hop": 43.6, "multi_hop": 35.8, "temporal": 40.4, "adversarial": 32.7, "overall": 38.1},
+        {"name": "GPT-4 + Summarization", "single_hop": 51.2, "multi_hop": 44.1, "temporal": 47.8, "adversarial": 38.6, "overall": 45.4},
+        {"name": "ReadAgent (GPT-4)", "single_hop": 53.1, "multi_hop": 45.7, "temporal": 49.9, "adversarial": 40.1, "overall": 47.2},
+        {"name": "MemoryBank (GPT-3.5)", "single_hop": 38.4, "multi_hop": 29.6, "temporal": 34.2, "adversarial": 27.3, "overall": 32.4},
+        {"name": "A-MEM (GPT-3.5)", "single_hop": 40.1, "multi_hop": 31.2, "temporal": 36.0, "adversarial": 28.9, "overall": 34.1},
+        {"name": "Zep (GPT-4)", "single_hop": 52.4, "multi_hop": 43.8, "temporal": 48.5, "adversarial": 39.4, "overall": 46.0},
+        {"name": "Mem0 (GPT-4)", "single_hop": 50.9, "multi_hop": 42.3, "temporal": 46.7, "adversarial": 38.0, "overall": 44.5}
+      ]
+    }
+  },
+  "conversations": [
+    {
+      "conv_id": "locomo_001",
+      "persona": "Alex, a software engineer who loves cooking and hiking",
+      "sessions": [
+        {
+          "session_id": 1,
+          "date": "2023-01-05",
+          "turns": [
+            {"speaker": "human", "text": "I just got back from a hike at Mount Rainier. It was absolutely exhausting but worth it."},
+            {"speaker": "assistant", "text": "That sounds amazing! How long was the trail you did?"},
+            {"speaker": "human", "text": "We did the Wonderland Trail loop, about 35 miles over 3 days. My hiking partner Jake came along."},
+            {"speaker": "assistant", "text": "Impressive! 35 miles in 3 days is no small feat. Did Jake enjoy it too?"},
+            {"speaker": "human", "text": "He did, though he twisted his ankle on day 2. We still made it though. I'm already planning the next one."},
+            {"speaker": "assistant", "text": "Oh no, hope Jake is okay! Where are you thinking for the next adventure?"},
+            {"speaker": "human", "text": "Thinking about the John Muir Trail in California. But first I need to get my new hiking boots broken in."}
+          ]
+        },
+        {
+          "session_id": 2,
+          "date": "2023-02-20",
+          "turns": [
+            {"speaker": "human", "text": "I've been experimenting with sourdough bread lately. Made my third loaf yesterday."},
+            {"speaker": "assistant", "text": "How did the third loaf turn out compared to your first two?"},
+            {"speaker": "human", "text": "Much better! The crust was perfect. I used a Dutch oven this time instead of a baking sheet."},
+            {"speaker": "assistant", "text": "Dutch ovens make a huge difference. Are you using a starter you made yourself?"},
+            {"speaker": "human", "text": "Yes, I named it 'Bubbles'. It's 6 weeks old now. My friend Sarah gave me the original culture from hers."},
+            {"speaker": "assistant", "text": "Love the name! How often are you feeding Bubbles?"},
+            {"speaker": "human", "text": "Once a day now, down from twice. I keep it in the fridge when I'm not baking."}
+          ]
+        },
+        {
+          "session_id": 3,
+          "date": "2023-04-10",
+          "turns": [
+            {"speaker": "human", "text": "Big news — I got promoted to Senior Engineer at work today!"},
+            {"speaker": "assistant", "text": "Congratulations! That's a huge achievement. How are you feeling about it?"},
+            {"speaker": "human", "text": "Excited and a bit nervous. I'll be leading the payments infrastructure team."},
+            {"speaker": "assistant", "text": "Leading a team is a big step. Do you have much experience managing people?"},
+            {"speaker": "human", "text": "Some — I mentored two interns last summer. But this is my first formal leadership role."},
+            {"speaker": "assistant", "text": "You'll do great. Are you planning to celebrate?"},
+            {"speaker": "human", "text": "Yeah, going out for dinner with my partner Sam and calling my parents tonight."}
+          ]
+        },
+        {
+          "session_id": 4,
+          "date": "2023-06-15",
+          "turns": [
+            {"speaker": "human", "text": "I finally did the John Muir Trail! Just got back two days ago."},
+            {"speaker": "assistant", "text": "You mentioned planning that back in January! How was it?"},
+            {"speaker": "human", "text": "Incredible. 211 miles in 21 days. Harder than Rainier but more beautiful."},
+            {"speaker": "assistant", "text": "Did Jake come along on this one?"},
+            {"speaker": "human", "text": "No, his ankle never fully healed. I went solo this time, which was a whole different experience."},
+            {"speaker": "assistant", "text": "Solo through 211 miles — respect. Did you feel safe out there?"},
+            {"speaker": "human", "text": "Mostly yes. I had a satellite communicator. Ran into trouble with a bear on day 8 near Muir Pass though."}
+          ]
+        },
+        {
+          "session_id": 5,
+          "date": "2023-09-01",
+          "turns": [
+            {"speaker": "human", "text": "Had to put my sourdough starter on hold. Been too busy since the promotion."},
+            {"speaker": "assistant", "text": "Ah, poor Bubbles! Is the starter still alive or did it not make it?"},
+            {"speaker": "human", "text": "It's in the fridge in hibernation mode. I dried some as backup. It's been about 2 months."},
+            {"speaker": "assistant", "text": "Smart to dry some backup. How's the team lead role going?"},
+            {"speaker": "human", "text": "Stressful but rewarding. We shipped a major feature last week — real-time payment notifications."},
+            {"speaker": "assistant", "text": "That sounds like a significant milestone. How did the team respond?"},
+            {"speaker": "human", "text": "Really well. I'm planning a team lunch to celebrate. Thinking of cooking something myself, maybe use this as the excuse to revive Bubbles."}
+          ]
+        }
+      ],
+      "qa_pairs": [
+        {"id": "q001", "category": "single_hop", "question": "What trail did Alex hike at Mount Rainier?", "answer": "The Wonderland Trail loop", "session_ref": 1},
+        {"id": "q002", "category": "single_hop", "question": "What is the name of Alex's sourdough starter?", "answer": "Bubbles", "session_ref": 2},
+        {"id": "q003", "category": "single_hop", "question": "What team does Alex lead after their promotion?", "answer": "The payments infrastructure team", "session_ref": 3},
+        {"id": "q004", "category": "multi_hop", "question": "Did Jake join Alex on the John Muir Trail?", "answer": "No, Jake's ankle never fully healed after the Mount Rainier hike so Alex went solo.", "session_ref": 4},
+        {"id": "q005", "category": "multi_hop", "question": "Why did Alex stop maintaining their sourdough starter?", "answer": "Alex got too busy after being promoted to Senior Engineer and team lead.", "session_ref": 5},
+        {"id": "q006", "category": "temporal", "question": "Did Alex do the John Muir Trail before or after getting promoted?", "answer": "After — the promotion was in April 2023 and the JMT was completed in June 2023.", "session_ref": 4},
+        {"id": "q007", "category": "temporal", "question": "How old was Bubbles the sourdough starter when Alex first mentioned it?", "answer": "6 weeks old", "session_ref": 2},
+        {"id": "q008", "category": "adversarial", "question": "Who gave Alex the sourdough culture for Bubbles?", "answer": "Their friend Sarah", "session_ref": 2},
+        {"id": "q009", "category": "adversarial", "question": "How many people did Alex mentor before becoming team lead?", "answer": "Two interns, during the previous summer.", "session_ref": 3},
+        {"id": "q010", "category": "multi_hop", "question": "What feature did Alex's team ship and what is the connection to the promotion celebration plan?", "answer": "They shipped real-time payment notifications. Separately, Alex plans to celebrate with a team lunch and use it as an excuse to revive the sourdough starter Bubbles.", "session_ref": 5}
+      ]
+    },
+    {
+      "conv_id": "locomo_002",
+      "persona": "Maria, a nurse who recently moved cities and is learning to paint",
+      "sessions": [
+        {
+          "session_id": 1,
+          "date": "2023-01-12",
+          "turns": [
+            {"speaker": "human", "text": "I just moved to Chicago from Austin last week. Still living out of boxes."},
+            {"speaker": "assistant", "text": "Big move! What brought you to Chicago?"},
+            {"speaker": "human", "text": "A new position at Northwestern Memorial Hospital. I'm a nurse and they offered me a critical care role."},
+            {"speaker": "assistant", "text": "Impressive — critical care nursing is demanding work. Are you settling in okay?"},
+            {"speaker": "human", "text": "Slowly. My cat Luna is stressed and hiding under the bed. I miss my sister Rosa back in Austin."}
+          ]
+        },
+        {
+          "session_id": 2,
+          "date": "2023-03-08",
+          "turns": [
+            {"speaker": "human", "text": "I signed up for a watercolor class at the Chicago Arts Center. First session was last Tuesday."},
+            {"speaker": "assistant", "text": "How was the first class?"},
+            {"speaker": "human", "text": "Humbling. I struggled with washes but the instructor, Professor Chen, was very patient."},
+            {"speaker": "assistant", "text": "Watercolor is notoriously tricky. Did you have any art background before?"},
+            {"speaker": "human", "text": "None at all. I wanted something completely different from nursing. A way to decompress."},
+            {"speaker": "assistant", "text": "That makes total sense. Did you make any friends in the class?"},
+            {"speaker": "human", "text": "Yes, a woman named Fatima. She's a retired teacher. We got coffee after class."}
+          ]
+        },
+        {
+          "session_id": 3,
+          "date": "2023-05-20",
+          "turns": [
+            {"speaker": "human", "text": "Luna finally came out from under the bed. Only took 4 months!"},
+            {"speaker": "assistant", "text": "Ha! Cats on their own timeline. Has she fully settled in now?"},
+            {"speaker": "human", "text": "She's claimed the window seat and watches the pigeons. Very content."},
+            {"speaker": "assistant", "text": "Classic cat. How's the painting going?"},
+            {"speaker": "human", "text": "Finished my 6-week course and signed up for the intermediate level. Professor Chen said I've made real progress."}
+          ]
+        },
+        {
+          "session_id": 4,
+          "date": "2023-07-30",
+          "turns": [
+            {"speaker": "human", "text": "Rosa finally visited from Austin! She stayed for a week."},
+            {"speaker": "assistant", "text": "That must have been wonderful — you mentioned missing her when you first moved."},
+            {"speaker": "human", "text": "It was exactly what I needed. We did all the touristy things — Millennium Park, the Art Institute."},
+            {"speaker": "assistant", "text": "Did she get to see your paintings?"},
+            {"speaker": "human", "text": "Yes! I've done about 20 now. She actually wants to buy one — the one I did of Lake Michigan at sunrise."}
+          ]
+        }
+      ],
+      "qa_pairs": [
+        {"id": "q011", "category": "single_hop", "question": "Where did Maria move from?", "answer": "Austin", "session_ref": 1},
+        {"id": "q012", "category": "single_hop", "question": "What is the name of Maria's cat?", "answer": "Luna", "session_ref": 1},
+        {"id": "q013", "category": "temporal", "question": "How long did it take Luna to come out from hiding after the move?", "answer": "4 months", "session_ref": 3},
+        {"id": "q014", "category": "multi_hop", "question": "Who is Maria's painting instructor and what did they say about her progress?", "answer": "Professor Chen at the Chicago Arts Center said Maria had made real progress after the 6-week course.", "session_ref": 3},
+        {"id": "q015", "category": "adversarial", "question": "What painting does Rosa want to buy?", "answer": "The one Maria painted of Lake Michigan at sunrise.", "session_ref": 4}
+      ]
+    },
+    {
+      "conv_id": "locomo_003",
+      "persona": "Dev, a grad student studying climate science who runs marathons",
+      "sessions": [
+        {
+          "session_id": 1,
+          "date": "2023-02-01",
+          "turns": [
+            {"speaker": "human", "text": "I just registered for the Boston Marathon. It's in April — gives me 10 weeks to train."},
+            {"speaker": "assistant", "text": "Boston! That's a qualifier-only race. Impressive you made the cut."},
+            {"speaker": "human", "text": "Barely — I qualified with a 3:04 at Chicago last fall. Boston cutoff was 3:05 for my age group."},
+            {"speaker": "assistant", "text": "One minute to spare! What's your goal for Boston?"},
+            {"speaker": "human", "text": "Sub-3 hours. Ambitious but I think my training block can get me there."}
+          ]
+        },
+        {
+          "session_id": 2,
+          "date": "2023-03-15",
+          "turns": [
+            {"speaker": "human", "text": "Hit a snag — developed IT band syndrome last week. Had to cut back training."},
+            {"speaker": "assistant", "text": "Frustrating timing so close to Boston. How bad is it?"},
+            {"speaker": "human", "text": "My physio Dr. Reyes says I can race if I manage it carefully. Ice, stretching, and no tempo runs for now."},
+            {"speaker": "assistant", "text": "At least it's manageable. How's the PhD research going alongside training?"},
+            {"speaker": "human", "text": "My climate model finally converged after 3 weeks of debugging. Advisor Professor Kwan is happy."}
+          ]
+        },
+        {
+          "session_id": 3,
+          "date": "2023-04-18",
+          "turns": [
+            {"speaker": "human", "text": "I ran Boston! Finished in 3:07."},
+            {"speaker": "assistant", "text": "Amazing! Given the IT band issue, how do you feel about 3:07?"},
+            {"speaker": "human", "text": "Honestly, thrilled. The IT band flared at mile 20 but I pushed through. Missed sub-3 but it was my second best ever."},
+            {"speaker": "assistant", "text": "Your second best — what was your best?"},
+            {"speaker": "human", "text": "3:04 at Chicago. Which is also my qualifier. So really I'm just chasing that time back down."}
+          ]
+        },
+        {
+          "session_id": 4,
+          "date": "2023-08-22",
+          "turns": [
+            {"speaker": "human", "text": "Defended my dissertation chapter 3 today. Passed with minor revisions."},
+            {"speaker": "assistant", "text": "Congratulations! Which chapter was this — the climate model one?"},
+            {"speaker": "human", "text": "Yes, my Arctic sea ice projection model. Professor Kwan called it the strongest chapter."},
+            {"speaker": "assistant", "text": "That's excellent validation. Are you planning your next marathon yet?"},
+            {"speaker": "human", "text": "Yes — Chicago again in October. Going for a PR. Fully healthy now, no IT band issues."}
+          ]
+        }
+      ],
+      "qa_pairs": [
+        {"id": "q016", "category": "single_hop", "question": "What was Dev's finishing time at Boston Marathon?", "answer": "3 hours and 7 minutes (3:07)", "session_ref": 3},
+        {"id": "q017", "category": "temporal", "question": "Did the IT band syndrome develop before or after registering for Boston?", "answer": "After — Dev registered in February and the injury developed in March.", "session_ref": 2},
+        {"id": "q018", "category": "multi_hop", "question": "What is Dev's personal best marathon time and where did they set it?", "answer": "3:04 at the Chicago Marathon, which also served as the Boston qualifier.", "session_ref": 3},
+        {"id": "q019", "category": "single_hop", "question": "What is Dev's dissertation research about?", "answer": "Arctic sea ice projection (climate science / climate modeling)", "session_ref": 4},
+        {"id": "q020", "category": "adversarial", "question": "Who is Dev's physio and what advice did they give?", "answer": "Dr. Reyes — advised ice, stretching, and no tempo runs while managing IT band syndrome before Boston.", "session_ref": 2}
+      ]
+    }
+  ]
+}

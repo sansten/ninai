@@ -23,6 +23,8 @@ class TokenPayload(BaseModel):
     """JWT token payload schema."""
     sub: str  # Subject (user_id)
     org_id: Optional[str] = None
+    group_id: Optional[str] = None
+    team_id: Optional[str] = None
     exp: datetime
     iat: datetime
     type: str  # "access" or "refresh"
@@ -33,6 +35,8 @@ class TokenData(BaseModel):
     """Decoded token data for request context."""
     user_id: str
     org_id: Optional[str] = None
+    group_id: Optional[str] = None
+    team_id: Optional[str] = None
     roles: list[str] = []
 
 
@@ -65,8 +69,10 @@ def get_password_hash(password: str) -> str:
 
 def create_access_token(
     user_id: str,
-    org_id: str,
+    org_id: Optional[str],
     roles: list[str] = [],
+    group_id: Optional[str] = None,
+    team_id: Optional[str] = None,
     expires_delta: Optional[timedelta] = None,
 ) -> str:
     """
@@ -74,8 +80,10 @@ def create_access_token(
     
     Args:
         user_id: User's UUID
-        org_id: Organization's UUID
+        org_id: Organization's UUID (optional for standalone mode)
         roles: List of role names for the user
+        group_id: Optional group context claim
+        team_id: Optional team context claim
         expires_delta: Optional custom expiration time
     
     Returns:
@@ -91,6 +99,8 @@ def create_access_token(
     payload = {
         "sub": user_id,
         "org_id": org_id,
+        "group_id": group_id,
+        "team_id": team_id,
         "roles": roles,
         "exp": expire,
         "iat": datetime.now(timezone.utc),
@@ -106,7 +116,10 @@ def create_access_token(
 
 def create_refresh_token(
     user_id: str,
-    org_id: str,
+    org_id: Optional[str],
+    roles: list[str] = [],
+    group_id: Optional[str] = None,
+    team_id: Optional[str] = None,
 ) -> str:
     """
     Create a JWT refresh token.
@@ -116,7 +129,10 @@ def create_refresh_token(
     
     Args:
         user_id: User's UUID
-        org_id: Organization's UUID
+        org_id: Organization's UUID (optional for standalone mode)
+        roles: Optional role list for parity with access-token claims
+        group_id: Optional group context claim
+        team_id: Optional team context claim
     
     Returns:
         str: Encoded JWT refresh token
@@ -128,6 +144,9 @@ def create_refresh_token(
     payload = {
         "sub": user_id,
         "org_id": org_id,
+        "group_id": group_id,
+        "team_id": team_id,
+        "roles": roles,
         "exp": expire,
         "iat": datetime.now(timezone.utc),
         "type": "refresh",
@@ -158,7 +177,9 @@ def decode_token(token: str) -> Optional[TokenPayload]:
         )
         return TokenPayload(
             sub=payload["sub"],
-            org_id=payload["org_id"],
+            org_id=payload.get("org_id"),
+            group_id=payload.get("group_id"),
+            team_id=payload.get("team_id"),
             exp=datetime.fromtimestamp(payload["exp"], tz=timezone.utc),
             iat=datetime.fromtimestamp(payload["iat"], tz=timezone.utc),
             type=payload.get("type", "access"),
@@ -193,5 +214,7 @@ def verify_token(token: str, token_type: str = "access") -> Optional[TokenData]:
     return TokenData(
         user_id=payload.sub,
         org_id=payload.org_id,
+        group_id=payload.group_id,
+        team_id=payload.team_id,
         roles=payload.roles,
     )

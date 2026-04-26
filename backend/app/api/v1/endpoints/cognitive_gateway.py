@@ -22,7 +22,8 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Path, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db, set_tenant_context
-from app.middleware.tenant_context import TenantContext, require_org_admin
+from app.core.requester_context import RequesterContext
+from app.middleware.tenant_context import TenantContext, get_requester_context, require_org_admin
 from app.services.usage_service import UsageService
 from app.services.cognitive_gateway_service import (
     CognitiveGatewayCapabilities,
@@ -61,6 +62,7 @@ async def _context_working_set_summary(context_id: str | None, org_id: str) -> d
 async def gateway_write(
     payload: dict[str, Any] = Body(...),
     tenant: TenantContext = Depends(require_org_admin()),
+    requester: RequesterContext = Depends(get_requester_context),
     gateway: CognitiveGatewayService = Depends(_get_gateway),
 ) -> dict[str, Any]:
     """Store and enrich a memory record.
@@ -88,6 +90,7 @@ async def gateway_write(
             metadata=dict(payload.get("metadata") or {}),
             context_id=context_id,
             org_id=tenant.org_id if context_id else None,
+            requester=requester,
         )
     except PermissionError as exc:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
@@ -111,6 +114,7 @@ async def gateway_write(
 async def gateway_read(
     payload: dict[str, Any] = Body(...),
     tenant: TenantContext = Depends(require_org_admin()),
+    requester: RequesterContext = Depends(get_requester_context),
     gateway: CognitiveGatewayService = Depends(_get_gateway),
 ) -> dict[str, Any]:
     """Retrieve and rank memories for a query.
@@ -129,13 +133,19 @@ async def gateway_read(
         )
     context_id = payload.get("context_id") or None
 
+    filter_tags = payload.get("filter_tags") or None
+    if filter_tags and not isinstance(filter_tags, list):
+        filter_tags = None
+
     try:
         result = await gateway.read(
             query=query,
             memories=list(payload.get("memories") or []),
             limit=int(payload.get("limit") or 10),
+            filter_tags=filter_tags,
             context_id=context_id,
             org_id=tenant.org_id if context_id else None,
+            requester=requester,
         )
     except PermissionError as exc:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
@@ -163,6 +173,7 @@ async def gateway_read(
 async def gateway_decide(
     payload: dict[str, Any] = Body(...),
     tenant: TenantContext = Depends(require_org_admin()),
+    requester: RequesterContext = Depends(get_requester_context),
     db: AsyncSession = Depends(get_db),
     gateway: CognitiveGatewayService = Depends(_get_gateway),
 ) -> dict[str, Any]:
@@ -188,6 +199,7 @@ async def gateway_decide(
             enrichment=dict(payload.get("enrichment") or {}),
             context_id=context_id,
             org_id=tenant.org_id if context_id else None,
+            requester=requester,
         )
     except PermissionError as exc:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
@@ -218,6 +230,7 @@ async def gateway_decide(
 async def gateway_plan(
     payload: dict[str, Any] = Body(...),
     tenant: TenantContext = Depends(require_org_admin()),
+    requester: RequesterContext = Depends(get_requester_context),
     db: AsyncSession = Depends(get_db),
     gateway: CognitiveGatewayService = Depends(_get_gateway),
 ) -> dict[str, Any]:
@@ -243,6 +256,7 @@ async def gateway_plan(
             context=dict(payload.get("context") or {}),
             context_id=context_id,
             org_id=tenant.org_id if context_id else None,
+            requester=requester,
         )
     except PermissionError as exc:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))

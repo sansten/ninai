@@ -20,7 +20,7 @@ import {
   XMarkIcon,
 } from '@heroicons/react/24/outline';
 import { apiClient, getErrorMessage } from '@/lib/api';
-import { useCurrentOrg } from '@/stores/auth';
+import { useCurrentOrg, useCurrentUser } from '@/stores/auth';
 import type { Memory, AccessExplanation } from '@/types/api';
 
 type MemoryAttachment = {
@@ -39,6 +39,7 @@ export function MemoryDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const org = useCurrentOrg();
+  const user = useCurrentUser();
   const queryClient = useQueryClient();
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState('');
@@ -56,11 +57,21 @@ export function MemoryDetailPage() {
     []
   );
 
+  const primaryRole = user.roles?.[0] || 'anonymous';
+  const readerContext = {
+    read_actor_id: user.id || 'anonymous',
+    read_actor_type: user.id ? 'employee' : 'anonymous',
+    read_role: user.id ? primaryRole : 'anonymous',
+    read_responsibility: user.id ? primaryRole : 'anonymous',
+  };
+
   // Fetch memory
   const { data: memory, isLoading, error } = useQuery<Memory>({
     queryKey: ['memory', id, org.id],
     queryFn: async () => {
-      const response = await apiClient.get(`/memories/${id}`);
+      const response = await apiClient.get(`/memories/${id}`, {
+        params: readerContext,
+      });
       return response.data;
     },
     enabled: !!id,
@@ -70,7 +81,9 @@ export function MemoryDetailPage() {
   const { data: accessInfo } = useQuery<AccessExplanation>({
     queryKey: ['memory-access', id, org.id],
     queryFn: async () => {
-      const response = await apiClient.get(`/memories/${id}/explain`);
+      const response = await apiClient.get(`/memories/${id}/explain`, {
+        params: readerContext,
+      });
       return response.data;
     },
     enabled: !!id,
@@ -80,7 +93,9 @@ export function MemoryDetailPage() {
   const { data: attachmentsData } = useQuery<{ items: MemoryAttachment[]; total: number }>({
     queryKey: ['memory-attachments', id, org.id],
     queryFn: async () => {
-      const response = await apiClient.get(`/memories/${id}/attachments`);
+      const response = await apiClient.get(`/memories/${id}/attachments`, {
+        params: readerContext,
+      });
       return response.data;
     },
     enabled: !!id,
@@ -125,6 +140,7 @@ export function MemoryDetailPage() {
     try {
       const response = await apiClient.get(`/memories/${id}/attachments/${attachment.id}`, {
         responseType: 'blob',
+        params: readerContext,
       });
       const blobUrl = window.URL.createObjectURL(response.data);
       const a = document.createElement('a');

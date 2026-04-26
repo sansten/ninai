@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import hashlib
 import json
 import re
@@ -16,23 +15,10 @@ from app.core.celery_app import celery_app
 from app.core.database import async_session_factory, set_tenant_context
 from app.models.agent_run import AgentRun
 from app.models.playbook import Playbook, PlaybookScopeType
+from app.tasks.async_runtime import run_async
 
 
 logger = get_task_logger(__name__)
-
-
-def _run_async(coro):
-    try:
-        loop = asyncio.get_event_loop()
-    except RuntimeError:
-        loop = None
-    if loop is not None and loop.is_running():
-        new_loop = asyncio.new_event_loop()
-        try:
-            return new_loop.run_until_complete(coro)
-        finally:
-            new_loop.close()
-    return asyncio.run(coro)
 
 
 def _stable_hash(payload: dict) -> str:
@@ -151,7 +137,7 @@ def playbook_extractor_task(
     initiator_user_id: str | None = None,
 ):
     actor_user_id = initiator_user_id or "00000000-0000-0000-0000-000000000001"
-    result = _run_async(extract_playbook_from_run(org_id=org_id, agent_run_id=agent_run_id, actor_user_id=actor_user_id))
+    result = run_async(extract_playbook_from_run(org_id=org_id, agent_run_id=agent_run_id, actor_user_id=actor_user_id))
     return {"status": "ok", "org_id": org_id, "agent_run_id": agent_run_id, "result": result}
 
 

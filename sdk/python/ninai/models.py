@@ -101,6 +101,7 @@ class Memory(BaseModel):
     tags: List[str] = []
     entities: Dict[str, Any] = {}
     extra_metadata: Dict[str, Any] = {}
+    occurred_at: Optional[datetime] = None
     source_type: Optional[str] = None
     source_id: Optional[str] = None
     access_count: int = 0

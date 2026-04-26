@@ -45,7 +45,7 @@ from ninai.exceptions import (
 from ninai import adapters   # noqa: F401 — makes `ninai.adapters` accessible
 from ninai import streaming  # noqa: F401 — makes `ninai.streaming` accessible
 
-__version__ = "0.0.1b1"
+__version__ = "0.1.0"
 __all__ = [
     # Client
     "NinaiClient",

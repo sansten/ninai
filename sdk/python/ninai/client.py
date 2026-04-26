@@ -40,6 +40,7 @@ from ninai.resources import (
     MetaCognitiveResource,
     CompositionResource,
     ProofResource,
+    CognitiveGatewayResource,
 )
 from ninai.agents import GoalPlannerAgent, GoalLinkingAgent, MetaAgent
 from ninai.models import AuthTokens, User
@@ -131,6 +132,7 @@ class NinaiClient:
         self.digest = DigestResource(self)           # Phase 46: Intelligence Digest
         self.compliance = ComplianceResource(self)   # Phase 46: GDPR Compliance
         self.proof = ProofResource(self)             # Phase 54: Proof scorecard + ROI
+        self.cognitive = type('CognitiveGateway', (), {'gateway': CognitiveGatewayResource(self)})()
 
         # Typed agent helpers
         self._goal_planner_agent: GoalPlannerAgent | None = None

@@ -10,7 +10,10 @@ Outputs reasoning steps suitable for explainable response payloads.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
+
+_PUNCT = re.compile(r"[^\w\s]")
 
 
 @dataclass
@@ -20,7 +23,8 @@ class SelfRagVerificationResult:
 
 
 def _tokens(value: str) -> set[str]:
-    return {t for t in str(value or "").lower().split() if t}
+    """Tokenise text into a lowercase word set, stripping punctuation."""
+    return {t for t in _PUNCT.sub(" ", str(value or "")).lower().split() if t}
 
 
 class SelfRagService:

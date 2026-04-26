@@ -243,6 +243,10 @@ export interface MemorySearchRequest {
   limit?: number;
   offset?: number;
   use_vector_search?: boolean;
+  read_actor_id?: string;
+  read_actor_type?: 'employee' | 'bot' | 'anonymous';
+  read_role?: string;
+  read_responsibility?: string;
 }
 
 export interface MemorySearchResult {

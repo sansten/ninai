@@ -102,9 +102,9 @@ class MemoryMetadata(Base, UUIDMixin, TimestampMixin):
         doc="Optional title for the memory",
     )
     content_preview: Mapped[str] = mapped_column(
-        String(500),
+        Text(),
         nullable=False,
-        doc="Short preview of memory content",
+        doc="Preview of memory content (up to 2000 chars)",
     )
     content_hash: Mapped[str] = mapped_column(
         String(64),
@@ -132,6 +132,40 @@ class MemoryMetadata(Base, UUIDMixin, TimestampMixin):
         nullable=False,
         doc="Additional metadata (JSON)",
     )
+
+    @property
+    def occurred_at(self) -> Optional[datetime]:
+        """Structured event timestamp stored in extra_metadata['event_time']."""
+        raw = (self.extra_metadata or {}).get("event_time")
+        if raw is None:
+            return None
+        if isinstance(raw, datetime):
+            return raw
+        if isinstance(raw, str):
+            value = raw.strip()
+            if value.endswith("Z"):
+                value = value[:-1] + "+00:00"
+            try:
+                return datetime.fromisoformat(value)
+            except ValueError:
+                return None
+        return None
+
+    @property
+    def write_actor_id(self) -> Optional[str]:
+        return (self.extra_metadata or {}).get("write_actor_id")
+
+    @property
+    def write_actor_type(self) -> Optional[str]:
+        return (self.extra_metadata or {}).get("write_actor_type")
+
+    @property
+    def write_role(self) -> Optional[str]:
+        return (self.extra_metadata or {}).get("write_role")
+
+    @property
+    def write_responsibility(self) -> Optional[str]:
+        return (self.extra_metadata or {}).get("write_responsibility")
     
     # Source tracking
     source_type: Mapped[Optional[str]] = mapped_column(

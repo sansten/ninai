@@ -14,34 +14,16 @@ Missing agents are recorded as skipped via AgentRunner.
 
 from __future__ import annotations
 
-import asyncio
-
 from celery import chain, group
 from celery.utils.log import get_task_logger
 
 from app.core.celery_app import celery_app
 from app.core.config import settings
 from app.services.agent_runner import AgentRunner, PipelineContext
+from app.tasks.async_runtime import run_async
 
 
 logger = get_task_logger(__name__)
-
-
-def _run_async(coro):
-    """Run an async coroutine from a synchronous Celery task."""
-    try:
-        loop = asyncio.get_event_loop()
-    except RuntimeError:
-        loop = None
-
-    if loop is not None and loop.is_running():
-        new_loop = asyncio.new_event_loop()
-        try:
-            return new_loop.run_until_complete(coro)
-        finally:
-            new_loop.close()
-
-    return asyncio.run(coro)
 
 
 def build_memory_dag(
@@ -106,7 +88,11 @@ def enqueue_memory_pipeline(**kwargs):
         return None
 
     sig = build_memory_dag(**kwargs)
-    return sig.apply_async()
+    try:
+        return sig.apply_async(retry=False)
+    except Exception as exc:
+        logger.warning("memory pipeline enqueue failed for memory_id=%s: %s", kwargs.get("memory_id"), exc)
+        return None
 
 
 def enqueue_feedback_learning(
@@ -123,13 +109,17 @@ def enqueue_feedback_learning(
     if not broker or str(broker).startswith("memory://"):
         return None
 
-    return feedback_learning_task.si(
-        org_id=org_id,
-        memory_id=memory_id,
-        initiator_user_id=initiator_user_id,
-        trace_id=trace_id,
-        storage=storage,
-    ).apply_async()
+    try:
+        return feedback_learning_task.si(
+            org_id=org_id,
+            memory_id=memory_id,
+            initiator_user_id=initiator_user_id,
+            trace_id=trace_id,
+            storage=storage,
+        ).apply_async(retry=False)
+    except Exception as exc:
+        logger.warning("feedback pipeline enqueue failed for memory_id=%s: %s", memory_id, exc)
+        return None
 
 
 @celery_app.task(
@@ -142,7 +132,7 @@ def enqueue_feedback_learning(
 def classification_task(self, org_id: str, memory_id: str, initiator_user_id: str | None = None, trace_id: str | None = None, storage: str = "long_term"):
     runner = AgentRunner(service_user_id=getattr(settings, "SYSTEM_TASK_USER_ID", None) or None)
     ctx = PipelineContext(org_id=org_id, memory_id=memory_id, initiator_user_id=initiator_user_id, trace_id=trace_id, storage=storage)
-    res = _run_async(runner.run_agent(ctx=ctx, agent_name="classification", attempt=self.request.retries + 1))
+    res = run_async(runner.run_agent(ctx=ctx, agent_name="classification", attempt=self.request.retries + 1))
     return res.model_dump(mode="json") if hasattr(res, "model_dump") else res
 
 
@@ -156,7 +146,7 @@ def classification_task(self, org_id: str, memory_id: str, initiator_user_id: st
 def metadata_task(self, org_id: str, memory_id: str, initiator_user_id: str | None = None, trace_id: str | None = None, storage: str = "long_term"):
     runner = AgentRunner(service_user_id=getattr(settings, "SYSTEM_TASK_USER_ID", None) or None)
     ctx = PipelineContext(org_id=org_id, memory_id=memory_id, initiator_user_id=initiator_user_id, trace_id=trace_id, storage=storage)
-    res = _run_async(runner.run_agent(ctx=ctx, agent_name="metadata", attempt=self.request.retries + 1))
+    res = run_async(runner.run_agent(ctx=ctx, agent_name="metadata", attempt=self.request.retries + 1))
     return res.model_dump(mode="json") if hasattr(res, "model_dump") else res
 
 
@@ -170,7 +160,7 @@ def metadata_task(self, org_id: str, memory_id: str, initiator_user_id: str | No
 def topic_modeling_task(self, org_id: str, memory_id: str, initiator_user_id: str | None = None, trace_id: str | None = None, storage: str = "long_term"):
     runner = AgentRunner(service_user_id=getattr(settings, "SYSTEM_TASK_USER_ID", None) or None)
     ctx = PipelineContext(org_id=org_id, memory_id=memory_id, initiator_user_id=initiator_user_id, trace_id=trace_id, storage=storage)
-    res = _run_async(runner.run_agent(ctx=ctx, agent_name="topics", attempt=self.request.retries + 1))
+    res = run_async(runner.run_agent(ctx=ctx, agent_name="topics", attempt=self.request.retries + 1))
     return res.model_dump(mode="json") if hasattr(res, "model_dump") else res
 
 
@@ -184,7 +174,7 @@ def topic_modeling_task(self, org_id: str, memory_id: str, initiator_user_id: st
 def pattern_detection_task(self, org_id: str, memory_id: str, initiator_user_id: str | None = None, trace_id: str | None = None, storage: str = "long_term"):
     runner = AgentRunner(service_user_id=getattr(settings, "SYSTEM_TASK_USER_ID", None) or None)
     ctx = PipelineContext(org_id=org_id, memory_id=memory_id, initiator_user_id=initiator_user_id, trace_id=trace_id, storage=storage)
-    res = _run_async(runner.run_agent(ctx=ctx, agent_name="patterns", attempt=self.request.retries + 1))
+    res = run_async(runner.run_agent(ctx=ctx, agent_name="patterns", attempt=self.request.retries + 1))
     return res.model_dump(mode="json") if hasattr(res, "model_dump") else res
 
 
@@ -198,7 +188,7 @@ def pattern_detection_task(self, org_id: str, memory_id: str, initiator_user_id:
 def promotion_task(self, org_id: str, memory_id: str, initiator_user_id: str | None = None, trace_id: str | None = None, storage: str = "long_term"):
     runner = AgentRunner(service_user_id=getattr(settings, "SYSTEM_TASK_USER_ID", None) or None)
     ctx = PipelineContext(org_id=org_id, memory_id=memory_id, initiator_user_id=initiator_user_id, trace_id=trace_id, storage=storage)
-    res = _run_async(runner.run_agent(ctx=ctx, agent_name="promotion", attempt=self.request.retries + 1))
+    res = run_async(runner.run_agent(ctx=ctx, agent_name="promotion", attempt=self.request.retries + 1))
     return res.model_dump(mode="json") if hasattr(res, "model_dump") else res
 
 
@@ -212,7 +202,21 @@ def promotion_task(self, org_id: str, memory_id: str, initiator_user_id: str | N
 def graph_linking_task(self, org_id: str, memory_id: str, initiator_user_id: str | None = None, trace_id: str | None = None, storage: str = "long_term"):
     runner = AgentRunner(service_user_id=getattr(settings, "SYSTEM_TASK_USER_ID", None) or None)
     ctx = PipelineContext(org_id=org_id, memory_id=memory_id, initiator_user_id=initiator_user_id, trace_id=trace_id, storage=storage)
-    res = _run_async(runner.run_agent(ctx=ctx, agent_name="graph", attempt=self.request.retries + 1))
+    res = run_async(runner.run_agent(ctx=ctx, agent_name="graph", attempt=self.request.retries + 1))
+
+    # Fire realtime edge sync immediately after node creation if enabled.
+    # This ensures use_graph=True can surface the new memory within seconds
+    # rather than waiting for the nightly graph_population batch.
+    if getattr(settings, "GRAPH_REALTIME_SYNC", True):
+        try:
+            from app.tasks.graph_population import graph_realtime_sync_task
+            graph_realtime_sync_task.apply_async(
+                kwargs={"org_id": org_id, "memory_id": memory_id},
+                countdown=2,  # slight delay so Qdrant indexing settles
+            )
+        except Exception as exc:
+            logger.warning("graph_realtime_sync enqueue failed for %s: %s", memory_id, exc)
+
     return res.model_dump(mode="json") if hasattr(res, "model_dump") else res
 
 
@@ -226,7 +230,7 @@ def graph_linking_task(self, org_id: str, memory_id: str, initiator_user_id: str
 def logseq_export_task(self, org_id: str, memory_id: str, initiator_user_id: str | None = None, trace_id: str | None = None, storage: str = "long_term"):
     runner = AgentRunner(service_user_id=getattr(settings, "SYSTEM_TASK_USER_ID", None) or None)
     ctx = PipelineContext(org_id=org_id, memory_id=memory_id, initiator_user_id=initiator_user_id, trace_id=trace_id, storage=storage)
-    res = _run_async(runner.run_agent(ctx=ctx, agent_name="logseq_export", attempt=self.request.retries + 1))
+    res = run_async(runner.run_agent(ctx=ctx, agent_name="logseq_export", attempt=self.request.retries + 1))
     return res.model_dump(mode="json") if hasattr(res, "model_dump") else res
 
 
@@ -240,7 +244,7 @@ def logseq_export_task(self, org_id: str, memory_id: str, initiator_user_id: str
 def semantic_normalization_task(self, org_id: str, memory_id: str, initiator_user_id: str | None = None, trace_id: str | None = None, storage: str = "long_term"):
     runner = AgentRunner(service_user_id=getattr(settings, "SYSTEM_TASK_USER_ID", None) or None)
     ctx = PipelineContext(org_id=org_id, memory_id=memory_id, initiator_user_id=initiator_user_id, trace_id=trace_id, storage=storage)
-    res = _run_async(runner.run_agent(ctx=ctx, agent_name="semantic_normalization", attempt=self.request.retries + 1))
+    res = run_async(runner.run_agent(ctx=ctx, agent_name="semantic_normalization", attempt=self.request.retries + 1))
     return res.model_dump(mode="json") if hasattr(res, "model_dump") else res
 
 
@@ -254,7 +258,7 @@ def semantic_normalization_task(self, org_id: str, memory_id: str, initiator_use
 def feedback_learning_task(self, org_id: str, memory_id: str, initiator_user_id: str | None = None, trace_id: str | None = None, storage: str = "long_term"):
     runner = AgentRunner(service_user_id=getattr(settings, "SYSTEM_TASK_USER_ID", None) or None)
     ctx = PipelineContext(org_id=org_id, memory_id=memory_id, initiator_user_id=initiator_user_id, trace_id=trace_id, storage=storage)
-    res = _run_async(runner.run_agent(ctx=ctx, agent_name="feedback", attempt=self.request.retries + 1))
+    res = run_async(runner.run_agent(ctx=ctx, agent_name="feedback", attempt=self.request.retries + 1))
     return res.model_dump(mode="json") if hasattr(res, "model_dump") else res
 
 
@@ -268,7 +272,7 @@ def feedback_learning_task(self, org_id: str, memory_id: str, initiator_user_id:
 def entity_resolution_task(self, org_id: str, memory_id: str, initiator_user_id: str | None = None, trace_id: str | None = None, storage: str = "long_term"):
     runner = AgentRunner(service_user_id=getattr(settings, "SYSTEM_TASK_USER_ID", None) or None)
     ctx = PipelineContext(org_id=org_id, memory_id=memory_id, initiator_user_id=initiator_user_id, trace_id=trace_id, storage=storage)
-    res = _run_async(runner.run_agent(ctx=ctx, agent_name="entity_resolution", attempt=self.request.retries + 1))
+    res = run_async(runner.run_agent(ctx=ctx, agent_name="entity_resolution", attempt=self.request.retries + 1))
     return res.model_dump(mode="json") if hasattr(res, "model_dump") else res
 
 
@@ -282,7 +286,7 @@ def entity_resolution_task(self, org_id: str, memory_id: str, initiator_user_id:
 def world_model_task(self, org_id: str, memory_id: str, initiator_user_id: str | None = None, trace_id: str | None = None, storage: str = "long_term"):
     runner = AgentRunner(service_user_id=getattr(settings, "SYSTEM_TASK_USER_ID", None) or None)
     ctx = PipelineContext(org_id=org_id, memory_id=memory_id, initiator_user_id=initiator_user_id, trace_id=trace_id, storage=storage)
-    res = _run_async(runner.run_agent(ctx=ctx, agent_name="world_model", attempt=self.request.retries + 1))
+    res = run_async(runner.run_agent(ctx=ctx, agent_name="world_model", attempt=self.request.retries + 1))
     return res.model_dump(mode="json") if hasattr(res, "model_dump") else res
 
 
@@ -296,7 +300,7 @@ def world_model_task(self, org_id: str, memory_id: str, initiator_user_id: str |
 def temporal_reasoning_task(self, org_id: str, memory_id: str, initiator_user_id: str | None = None, trace_id: str | None = None, storage: str = "long_term"):
     runner = AgentRunner(service_user_id=getattr(settings, "SYSTEM_TASK_USER_ID", None) or None)
     ctx = PipelineContext(org_id=org_id, memory_id=memory_id, initiator_user_id=initiator_user_id, trace_id=trace_id, storage=storage)
-    res = _run_async(runner.run_agent(ctx=ctx, agent_name="temporal_reasoning", attempt=self.request.retries + 1))
+    res = run_async(runner.run_agent(ctx=ctx, agent_name="temporal_reasoning", attempt=self.request.retries + 1))
     return res.model_dump(mode="json") if hasattr(res, "model_dump") else res
 
 
@@ -310,7 +314,7 @@ def temporal_reasoning_task(self, org_id: str, memory_id: str, initiator_user_id
 def episodic_grouping_task(self, org_id: str, memory_id: str, initiator_user_id: str | None = None, trace_id: str | None = None, storage: str = "long_term"):
     runner = AgentRunner(service_user_id=getattr(settings, "SYSTEM_TASK_USER_ID", None) or None)
     ctx = PipelineContext(org_id=org_id, memory_id=memory_id, initiator_user_id=initiator_user_id, trace_id=trace_id, storage=storage)
-    res = _run_async(runner.run_agent(ctx=ctx, agent_name="episodic_grouping", attempt=self.request.retries + 1))
+    res = run_async(runner.run_agent(ctx=ctx, agent_name="episodic_grouping", attempt=self.request.retries + 1))
     return res.model_dump(mode="json") if hasattr(res, "model_dump") else res
 
 
@@ -324,5 +328,5 @@ def episodic_grouping_task(self, org_id: str, memory_id: str, initiator_user_id:
 def causal_reasoning_task(self, org_id: str, memory_id: str, initiator_user_id: str | None = None, trace_id: str | None = None, storage: str = "long_term"):
     runner = AgentRunner(service_user_id=getattr(settings, "SYSTEM_TASK_USER_ID", None) or None)
     ctx = PipelineContext(org_id=org_id, memory_id=memory_id, initiator_user_id=initiator_user_id, trace_id=trace_id, storage=storage)
-    res = _run_async(runner.run_agent(ctx=ctx, agent_name="causal_reasoning", attempt=self.request.retries + 1))
+    res = run_async(runner.run_agent(ctx=ctx, agent_name="causal_reasoning", attempt=self.request.retries + 1))
     return res.model_dump(mode="json") if hasattr(res, "model_dump") else res
