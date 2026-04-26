@@ -1531,8 +1531,89 @@ baselines    = None  # use hardcoded list in cell 22
 
 # Export all results to JSON for offline analysis
 import json as _json
-_export = df_results[['qa_id','category','question','gold_answer','generated_answer','rouge1_f1','retrieved_count']].to_dict(orient='records')
+from datetime import datetime as _dt
+_export = df_results[['qa_id','category','question','gold_answer','generated_answer','rouge1_f1','retrieved_count','semantic_correct']].to_dict(orient='records')
+_payload = {'run_tag': run_tag, 'scores': scores, 'results': _export,
+            'timestamp': _dt.now().isoformat(), 'n_questions': len(_export)}
 with open('locomo_results_latest.json', 'w', encoding='utf-8') as _f:
-    _json.dump({'scores': scores, 'results': _export}, _f, indent=2)
-print('Results exported to locomo_results_latest.json')
+    _json.dump(_payload, _f, indent=2)
+_mode = 'full' if not QUICK_VALIDATE else f'quick_{len(_export)}q'
+_versioned = f'locomo_results_{_dt.now().strftime("%Y%m%d_%H%M")}_{_mode}.json'
+with open(_versioned, 'w', encoding='utf-8') as _f:
+    _json.dump(_payload, _f, indent=2)
+print(f'Results exported to locomo_results_latest.json + {_versioned}')
+
+# ── Excel export ──────────────────────────────────────────────────────────────
+try:
+    import openpyxl as _xl
+    from openpyxl.styles import PatternFill as _Fill, Font as _Font, Alignment as _Align
+    _RED    = _Fill('solid', fgColor='FFCCCC')
+    _AMBER  = _Fill('solid', fgColor='FFE599')
+    _GREEN  = _Fill('solid', fgColor='B6D7A8')
+    _HDR_BG = _Fill('solid', fgColor='4472C4')
+    _HDR_FT = _Font(bold=True, color='FFFFFF')
+    _CATS   = ['single_hop', 'multi_hop', 'temporal', 'adversarial', 'open_domain']
+    _COLS   = ['qa_id', 'category', 'question', 'gold_answer', 'generated_answer',
+               'rouge1_f1', 'semantic', 'retrieved_count', 'verdict']
+
+    def _verdict(r1, sem):
+        if r1 >= 0.5 or sem == 1: return 'CORRECT'
+        if r1 == 0 and sem != 1:  return 'MISS'
+        return 'PARTIAL'
+
+    def _row_fill(r1, sem):
+        v = _verdict(r1, sem)
+        if v == 'CORRECT': return _GREEN
+        if v == 'MISS':    return _RED
+        return _AMBER
+
+    def _write_sheet(ws, rows):
+        ws.append(_COLS)
+        for c in range(1, len(_COLS) + 1):
+            cell = ws.cell(1, c)
+            cell.fill = _HDR_BG; cell.font = _HDR_FT
+            cell.alignment = _Align(horizontal='center')
+        for row in rows:
+            r1  = row.get('rouge1_f1', 0) or 0
+            sem = row.get('semantic_correct', -1)
+            ws.append([row['qa_id'], row['category'], row['question'],
+                       row['gold_answer'], row['generated_answer'],
+                       round(r1, 4), 'yes' if sem == 1 else ('no' if sem == 0 else '?'),
+                       row.get('retrieved_count', ''), _verdict(r1, sem)])
+            fill = _row_fill(r1, sem)
+            for c in range(1, len(_COLS) + 1):
+                ws.cell(ws.max_row, c).fill = fill
+        ws.column_dimensions['C'].width = 55
+        ws.column_dimensions['D'].width = 30
+        ws.column_dimensions['E'].width = 40
+        for col in ['A', 'B', 'F', 'G', 'H', 'I']:
+            ws.column_dimensions[col].width = 14
+
+    _wb = _xl.Workbook()
+    _by_cat = {}
+    for _r in _export:
+        _by_cat.setdefault(_r['category'], []).append(_r)
+    from collections import Counter as _Counter
+    _ws0 = _wb.active
+    _ws0.title = 'Summary'
+    _ws0.append(['Run tag', run_tag])
+    _ws0.append(['Timestamp', _payload['timestamp']])
+    _ws0.append(['Total questions', len(_export)])
+    _ws0.append([])
+    _ws0.append(['Category', 'ROUGE-1 F1', '#Questions', '#MISS', '#PARTIAL', '#CORRECT'])
+    for _cat in _CATS + ['overall']:
+        _rows_c = _export if _cat == 'overall' else _by_cat.get(_cat, [])
+        _cnt = _Counter(_verdict(_r.get('rouge1_f1', 0) or 0, _r.get('semantic_correct', -1)) for _r in _rows_c)
+        _ws0.append([_cat, scores.get(_cat, 0), len(_rows_c),
+                     _cnt['MISS'], _cnt['PARTIAL'], _cnt['CORRECT']])
+    for col in ['A', 'B', 'C', 'D', 'E', 'F']:
+        _ws0.column_dimensions[col].width = 14
+    for _cat in _CATS:
+        _write_sheet(_wb.create_sheet(_cat), _by_cat.get(_cat, []))
+    _write_sheet(_wb.create_sheet('All_1986'), _export)
+    _xlsx = _versioned.replace('.json', '.xlsx')
+    _wb.save(_xlsx)
+    print(f'Excel  exported to {_xlsx}')
+except Exception as _e:
+    print(f'Excel export skipped: {_e}')
 
