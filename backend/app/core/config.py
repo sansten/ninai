@@ -196,6 +196,12 @@ class Settings(BaseSettings):
     # Falls back to REDIS_URL when not provided.
     GRAPH_REDIS_URL: str | None = None
 
+    # When True, graph edges are created immediately after each memory write
+    # via graph_realtime_sync_task fired at the end of graph_linking_task.
+    # Nightly graph_population still runs as a full-org reconciliation pass.
+    # Set to False to revert to nightly-only behaviour.
+    GRAPH_REALTIME_SYNC: bool = True
+
     # -------------------------------------------------------------------------
     # Qdrant
     # -------------------------------------------------------------------------

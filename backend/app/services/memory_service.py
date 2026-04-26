@@ -28,6 +28,8 @@ from app.core.qdrant import QdrantService
 from app.agents.registry import get_agent
 from app.models.memory import MemoryMetadata, MemorySharing
 from app.models.memory_feedback import MemoryFeedback
+from app.models.graph_relationship import GraphRelationship
+from app.services.graph_service import get_graph_service
 from app.services.permission_checker import PermissionChecker, AccessDecision
 from app.services.audit_service import AuditService
 from app.services.short_term_memory import ShortTermMemory, ShortTermMemoryService
@@ -765,37 +767,69 @@ class MemoryService:
         result = await self.session.execute(query)
         memories = result.scalars().all()
 
+        # graph_scores holds relationship-weight scores for graph-expanded neighbors.
+        # Populated here; consumed in the scoring loop below.
+        graph_scores: dict[str, float] = {}
+
         if getattr(request, "use_graph", False) and memories:
-            # Graph expansion is best-effort and must never break search.
             try:
-                wm_agent = get_agent("world_model")
-                if wm_agent is not None and hasattr(wm_agent, "get_neighbours"):
-                    entity_ids: set[str] = set()
-                    for mem in memories[:5]:
-                        ents = getattr(mem, "entities", None) or {}
-                        if isinstance(ents, dict):
-                            entity_ids.update(str(k) for k in ents.keys())
+                seed_ids = [str(m.id) for m in memories[:10]]
+                neighbour_weights: dict[str, float] = {}
 
-                    if entity_ids:
-                        neighbour_ids = await wm_agent.get_neighbours(
-                            org_id=self.org_id,
-                            entity_ids=list(entity_ids),
-                            db=self.session,
-                            limit=20,
+                # Primary: FalkorDB Cypher query (real graph DB, relationship-aware)
+                try:
+                    gservice = get_graph_service()
+                    falkor_rows = await gservice.get_neighbours_with_scores(
+                        memory_ids=seed_ids,
+                        org_id=str(self.org_id),
+                        limit=40,
+                    )
+                    for row in falkor_rows:
+                        nid, score = row["neighbor_id"], row["score"]
+                        if nid not in neighbour_weights or score > neighbour_weights[nid]:
+                            neighbour_weights[nid] = score
+                except Exception:
+                    pass
+
+                # Fallback: PostgreSQL mirror if FalkorDB returned nothing
+                if not neighbour_weights:
+                    rel_stmt = (
+                        select(
+                            GraphRelationship.to_memory_id,
+                            GraphRelationship.similarity_score,
                         )
-                        if neighbour_ids:
-                            nb_stmt = select(MemoryMetadata).where(
-                                MemoryMetadata.id.in_(list(neighbour_ids)),
-                                MemoryMetadata.is_active.is_(True),
-                                MemoryMetadata.organization_id == self.org_id,
-                            )
-                            if request.tags:
-                                nb_stmt = nb_stmt.where(MemoryMetadata.tags.contains(request.tags))
+                        .where(
+                            GraphRelationship.organization_id == self.org_id,
+                            GraphRelationship.from_memory_id.in_(seed_ids),
+                            GraphRelationship.similarity_score.isnot(None),
+                        )
+                        .order_by(GraphRelationship.similarity_score.desc())
+                        .limit(40)
+                    )
+                    for to_id, sim in (await self.session.execute(rel_stmt)).all():
+                        if to_id not in neighbour_weights or sim > neighbour_weights[to_id]:
+                            neighbour_weights[to_id] = float(sim)
 
-                            nb_result = await self.session.execute(nb_stmt)
-                            neighbours = nb_result.scalars().all()
-                            existing_ids = {m.id for m in memories}
-                            memories += [m for m in neighbours if m.id not in existing_ids]
+                if neighbour_weights:
+                    existing_ids = {str(m.id) for m in memories}
+                    new_ids = [nid for nid in neighbour_weights if nid not in existing_ids]
+
+                    if new_ids:
+                        nb_stmt = select(MemoryMetadata).where(
+                            MemoryMetadata.id.in_(new_ids),
+                            MemoryMetadata.is_active.is_(True),
+                            MemoryMetadata.organization_id == self.org_id,
+                        )
+                        if request.tags:
+                            nb_stmt = nb_stmt.where(
+                                MemoryMetadata.tags.contains(request.tags)
+                            )
+                        neighbours = (await self.session.execute(nb_stmt)).scalars().all()
+
+                        for nb in neighbours:
+                            graph_scores[str(nb.id)] = neighbour_weights[str(nb.id)]
+
+                        memories = list(memories) + neighbours
             except Exception:
                 pass
 
@@ -856,14 +890,22 @@ class MemoryService:
             if access.allowed:
                 vec = vector_scores.get(memory.id, 0.0)
                 lex = lexical_scores.get(memory.id, 0.0)
+                graph_rel = graph_scores.get(str(memory.id), 0.0)
 
                 vec_norm = (vec / max_vec) if max_vec > 0 else 0.0
                 lex_norm = (lex / max_lex) if max_lex > 0 else 0.0
 
                 normalized_similarities[str(memory.id)] = float(vec_norm)
 
-                if getattr(request, "hybrid", False):
-                    memory.score = (vec_weight * vec_norm) + (lex_weight * lex_norm)
+                if graph_rel > 0.0 and vec == 0.0 and lex == 0.0:
+                    # Pure graph neighbor: score by relationship weight scaled to
+                    # sit just below genuine semantic hits (max graph contribution = 0.6).
+                    memory.score = graph_rel * 0.6
+                elif getattr(request, "hybrid", False):
+                    base = (vec_weight * vec_norm) + (lex_weight * lex_norm)
+                    # Blend in relationship weight as a small boost for memories
+                    # that appear in both semantic results and the graph.
+                    memory.score = base + (graph_rel * 0.1) if graph_rel > 0.0 else base
                 else:
                     memory.score = vec
 
