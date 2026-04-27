@@ -35,7 +35,9 @@ from typing import Any, Callable
 
 from app.agents.anomaly_detection_agent import run_heuristic as _anomaly_detect
 from app.agents.debate_ensemble_agent import DebateEnsembleAgent
+from app.agents.llm.ollama_breaker import create_ollama_client
 from app.agents.memory_tier_manager_agent import MemoryTierManagerAgent
+from app.core.config import settings
 from app.core.requester_context import RequesterContext
 from app.services.cognitive_fingerprint_service import CognitiveFingerprintService
 from app.services.context_compression_service import ContextCompressionService
@@ -53,7 +55,7 @@ from app.services.self_rag_service import SelfRagService
 # Capability gating
 # ---------------------------------------------------------------------------
 
-ALL_VERBS = frozenset({"write", "read", "decide", "plan", "explain"})
+ALL_VERBS = frozenset({"write", "read", "decide", "plan", "explain", "answer"})
 
 
 @dataclass
@@ -72,7 +74,7 @@ class CognitiveGatewayCapabilities:
     @classmethod
     def standard(cls) -> "CognitiveGatewayCapabilities":
         """All verbs except plan — for most enterprise plans."""
-        return cls(enabled_verbs=frozenset({"read", "write", "decide", "explain"}))
+        return cls(enabled_verbs=frozenset({"read", "write", "decide", "explain", "answer"}))
 
     @classmethod
     def full(cls) -> "CognitiveGatewayCapabilities":
@@ -134,6 +136,21 @@ class GatewayExplainResult:
     agents: list[str]
     confidence: float
     explainability_summary: str
+
+
+@dataclass
+class GatewayAnswerResult:
+    answer: str
+    model: str
+    context_turns: int
+    used_llm: bool
+
+
+@dataclass
+class GatewayJudgeResult:
+    equivalent: bool | None  # None = judge failed
+    raw: str
+    model: str
 
 
 # ---------------------------------------------------------------------------
@@ -508,6 +525,22 @@ def _is_float(v: Any) -> bool:
         return False
 
 
+def _heuristic_answer(question: str, memories: list[dict]) -> str:
+    """Best-effort keyword-overlap answer extraction when Ollama is unavailable."""
+    q_tokens = _normalise_tokens(question)
+    best_score = -1
+    best_snippet = ""
+    for m in memories:
+        content = str(m.get("content") or "")
+        tokens = _normalise_tokens(content)
+        score = len(q_tokens & tokens)
+        if score > best_score:
+            best_score = score
+            # Return first sentence of best-matching memory
+            best_snippet = content.split(".")[0].strip()
+    return best_snippet or "Not mentioned"
+
+
 # ---------------------------------------------------------------------------
 # Gateway context chain (stateful multi-call sessions via Redis)
 # ---------------------------------------------------------------------------
@@ -865,6 +898,113 @@ class CognitiveGatewayService:
             await save_gateway_context(ctx)
 
         return result
+
+    # ------------------------------------------------------------------
+    # answer
+    # ------------------------------------------------------------------
+
+    async def answer(
+        self,
+        *,
+        question: str,
+        memories: list[dict],
+        model: str | None = None,
+        num_ctx: int = 32768,
+    ) -> GatewayAnswerResult:
+        """Generate an answer to a question using retrieved memory context.
+
+        Calls the server-side Ollama instance so LLM inference stays in-cluster.
+        Falls back to keyword-overlap extraction if Ollama is unavailable.
+        """
+        self._check("answer")
+
+        context_lines = [
+            str(m.get("content") or "").strip()
+            for m in memories[:80]
+            if str(m.get("content") or "").strip()
+        ]
+        context_text = "\n".join(context_lines)
+
+        prompt = (
+            "Answer the question using only the conversation turns below.\n"
+            "Output ONLY the answer — a name, place, date, or short phrase (1-12 words).\n"
+            "Do not say 'the conversation' or explain. Just the answer.\n\n"
+            f"Conversation:\n{context_text}\n\n"
+            f"Question: {question}\nAnswer:"
+        )
+
+        _model = model or str(settings.get_ollama_model("agents"))
+        used_llm = False
+        answer_text = ""
+
+        try:
+            client = create_ollama_client(
+                base_url=str(getattr(settings, "OLLAMA_BASE_URL", "http://localhost:11434")),
+                model=_model,
+                timeout_seconds=float(getattr(settings, "OLLAMA_TIMEOUT_SECONDS", 30.0)),
+                max_concurrency=8,
+            )
+            answer_text = await client.complete_text(prompt=prompt, num_ctx=num_ctx)
+            used_llm = bool(answer_text)
+        except Exception:
+            pass
+
+        if not answer_text:
+            answer_text = _heuristic_answer(question, memories)
+            _model = "heuristic"
+
+        return GatewayAnswerResult(
+            answer=answer_text,
+            model=_model,
+            context_turns=len(context_lines),
+            used_llm=used_llm,
+        )
+
+    # ------------------------------------------------------------------
+    # judge
+    # ------------------------------------------------------------------
+
+    async def judge(
+        self,
+        *,
+        question: str,
+        gold: str,
+        generated: str,
+        model: str | None = None,
+    ) -> GatewayJudgeResult:
+        """Semantic equivalence check: is generated answer correct for question?
+
+        Returns equivalent=True/False, or None if the judge call fails.
+        """
+        self._check("answer")  # same capability gate as answer
+
+        prompt = (
+            f"Question: {question}\n"
+            f"Gold answer: {gold}\n"
+            f"System answer: {generated}\n"
+            "Is the system answer semantically equivalent to the gold answer for this question? "
+            "Reply with only \"yes\" or \"no\". No explanation.\nAnswer:"
+        )
+
+        _model = model or str(settings.get_ollama_model("agents"))
+        raw = ""
+
+        try:
+            client = create_ollama_client(
+                base_url=str(getattr(settings, "OLLAMA_BASE_URL", "http://localhost:11434")),
+                model=_model,
+                timeout_seconds=10.0,
+                max_concurrency=8,
+            )
+            raw = await client.complete_text(prompt=prompt, num_ctx=512, temperature=0.0)
+        except Exception:
+            pass
+
+        if not raw:
+            return GatewayJudgeResult(equivalent=None, raw="", model=_model)
+
+        equivalent = raw.strip().lower().startswith("y")
+        return GatewayJudgeResult(equivalent=equivalent, raw=raw, model=_model)
 
     # ------------------------------------------------------------------
     # explain
