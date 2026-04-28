@@ -380,3 +380,102 @@ async def get_cognitive_state(
             "message": "No heartbeat has run yet for this org.",
         }
     return state.to_dict()
+
+
+# ---------------------------------------------------------------------------
+# POST /cognitive/gateway/answer
+# ---------------------------------------------------------------------------
+
+@router.post("/answer")
+async def gateway_answer(
+    payload: dict[str, Any] = Body(...),
+    tenant: TenantContext = Depends(require_org_admin()),
+    gateway: CognitiveGatewayService = Depends(_get_gateway),
+) -> dict[str, Any]:
+    """Generate an answer to a question using pre-fetched memory context.
+
+    LLM inference runs server-side against the in-cluster Ollama instance.
+
+    Request body:
+      question  (str, required)
+      memories  (list[dict], required — each with a "content" field)
+      model     (str, optional — defaults to OLLAMA_MODEL_AGENTS)
+      num_ctx   (int, optional, default 32768)
+    """
+    question = str(payload.get("question") or "")
+    if not question.strip():
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="question is required",
+        )
+    memories = list(payload.get("memories") or [])
+    prompt_override = payload.get("prompt_override") or None
+    if not memories and not prompt_override:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="memories or prompt_override is required",
+        )
+
+    try:
+        result = await gateway.answer(
+            question=question,
+            memories=memories,
+            model=payload.get("model") or None,
+            num_ctx=int(payload.get("num_ctx") or 32768),
+            prompt_override=prompt_override,
+        )
+    except PermissionError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
+
+    return {
+        "answer": result.answer,
+        "model": result.model,
+        "context_turns": result.context_turns,
+        "used_llm": result.used_llm,
+    }
+
+
+# ---------------------------------------------------------------------------
+# POST /cognitive/gateway/judge
+# ---------------------------------------------------------------------------
+
+@router.post("/judge")
+async def gateway_judge(
+    payload: dict[str, Any] = Body(...),
+    tenant: TenantContext = Depends(require_org_admin()),
+    gateway: CognitiveGatewayService = Depends(_get_gateway),
+) -> dict[str, Any]:
+    """Semantic equivalence check between a generated answer and a gold answer.
+
+    Used by benchmark runners to score answers server-side.
+
+    Request body:
+      question   (str, required)
+      gold       (str, required)
+      generated  (str, required)
+      model      (str, optional)
+    """
+    question = str(payload.get("question") or "")
+    gold = str(payload.get("gold") or "")
+    generated = str(payload.get("generated") or "")
+    if not question.strip() or not gold.strip() or not generated.strip():
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="question, gold, and generated are all required",
+        )
+
+    try:
+        result = await gateway.judge(
+            question=question,
+            gold=gold,
+            generated=generated,
+            model=payload.get("model") or None,
+        )
+    except PermissionError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
+
+    return {
+        "equivalent": result.equivalent,
+        "raw": result.raw,
+        "model": result.model,
+    }

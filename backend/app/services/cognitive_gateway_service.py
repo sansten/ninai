@@ -910,28 +910,35 @@ class CognitiveGatewayService:
         memories: list[dict],
         model: str | None = None,
         num_ctx: int = 32768,
+        prompt_override: str | None = None,
     ) -> GatewayAnswerResult:
         """Generate an answer to a question using retrieved memory context.
 
         Calls the server-side Ollama instance so LLM inference stays in-cluster.
         Falls back to keyword-overlap extraction if Ollama is unavailable.
+
+        If prompt_override is provided it is sent to Ollama directly, bypassing
+        the default context-assembly and prompt template.
         """
         self._check("answer")
 
-        context_lines = [
-            str(m.get("content") or "").strip()
-            for m in memories[:80]
-            if str(m.get("content") or "").strip()
-        ]
-        context_text = "\n".join(context_lines)
-
-        prompt = (
-            "Answer the question using only the conversation turns below.\n"
-            "Output ONLY the answer — a name, place, date, or short phrase (1-12 words).\n"
-            "Do not say 'the conversation' or explain. Just the answer.\n\n"
-            f"Conversation:\n{context_text}\n\n"
-            f"Question: {question}\nAnswer:"
-        )
+        if prompt_override:
+            prompt = prompt_override
+            context_lines: list[str] = []
+        else:
+            context_lines = [
+                str(m.get("content") or "").strip()
+                for m in memories[:80]
+                if str(m.get("content") or "").strip()
+            ]
+            context_text = "\n".join(context_lines)
+            prompt = (
+                "Answer the question using only the conversation turns below.\n"
+                "Output ONLY the answer — a name, place, date, or short phrase (1-12 words).\n"
+                "Do not say 'the conversation' or explain. Just the answer.\n\n"
+                f"Conversation:\n{context_text}\n\n"
+                f"Question: {question}\nAnswer:"
+            )
 
         _model = model or str(settings.get_ollama_model("agents"))
         used_llm = False
@@ -993,7 +1000,7 @@ class CognitiveGatewayService:
             client = create_ollama_client(
                 base_url=str(getattr(settings, "OLLAMA_BASE_URL", "http://localhost:11434")),
                 model=_model,
-                timeout_seconds=10.0,
+                timeout_seconds=60.0,
                 max_concurrency=8,
             )
             raw = await client.complete_text(prompt=prompt, num_ctx=512, temperature=0.0)
