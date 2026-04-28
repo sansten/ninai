@@ -203,6 +203,20 @@ def graph_linking_task(self, org_id: str, memory_id: str, initiator_user_id: str
     runner = AgentRunner(service_user_id=getattr(settings, "SYSTEM_TASK_USER_ID", None) or None)
     ctx = PipelineContext(org_id=org_id, memory_id=memory_id, initiator_user_id=initiator_user_id, trace_id=trace_id, storage=storage)
     res = run_async(runner.run_agent(ctx=ctx, agent_name="graph", attempt=self.request.retries + 1))
+
+    # Fire realtime edge sync immediately after node creation if enabled.
+    # This ensures use_graph=True can surface the new memory within seconds
+    # rather than waiting for the nightly graph_population batch.
+    if getattr(settings, "GRAPH_REALTIME_SYNC", True):
+        try:
+            from app.tasks.graph_population import graph_realtime_sync_task
+            graph_realtime_sync_task.apply_async(
+                kwargs={"org_id": org_id, "memory_id": memory_id},
+                countdown=2,  # slight delay so Qdrant indexing settles
+            )
+        except Exception as exc:
+            logger.warning("graph_realtime_sync enqueue failed for %s: %s", memory_id, exc)
+
     return res.model_dump(mode="json") if hasattr(res, "model_dump") else res
 
 

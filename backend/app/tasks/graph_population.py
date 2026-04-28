@@ -237,6 +237,49 @@ async def _recalculate_similarities_async(
         }
 
 
+@celery_app.task(
+    bind=True,
+    max_retries=2,
+    default_retry_delay=30,
+    time_limit=120,
+    name="graph.realtime_sync_memory",
+    queue="q.agent_graph",
+)
+def graph_realtime_sync_task(self, org_id: str, memory_id: str) -> Dict[str, Any]:
+    """
+    Realtime per-memory graph sync — fired immediately after graph_linking_task.
+
+    Finds Qdrant neighbours for the single new memory, creates FalkorDB edges,
+    and upserts into graph_relationships without touching other memories' rows.
+    Controlled by settings.GRAPH_REALTIME_SYNC (default True).
+    """
+    import asyncio
+
+    async def _run():
+        redis_url = (
+            getattr(settings, "GRAPH_REDIS_URL", None)
+            or getattr(settings, "REDIS_URL", "redis://localhost:6379/0")
+        )
+        redis_client = redis.Redis.from_url(redis_url, decode_responses=True)
+        try:
+            async with AsyncSessionLocal() as db:
+                svc = GraphRelationshipService(db, redis_client)
+                return await svc.sync_single_memory(org_id=org_id, memory_id=memory_id)
+        finally:
+            redis_client.close()
+
+    try:
+        return asyncio.run(_run())
+    except Exception as exc:
+        logger.warning(
+            "graph_realtime_sync_task failed for memory=%s: %s", memory_id, exc
+        )
+        try:
+            raise self.retry(exc=exc)
+        except self.MaxRetriesExceededError:
+            return {"created": 0, "error": str(exc)}
+
+
 # Schedule periodic tasks
 def setup_graph_tasks():
     """Setup Celery beat schedule for graph tasks."""

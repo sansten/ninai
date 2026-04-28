@@ -302,6 +302,123 @@ class GraphRelationshipService:
         logger.info(f"Stored {result.rowcount} relationships in PostgreSQL")
         return result.rowcount
 
+    async def sync_single_memory(
+        self,
+        org_id: str,
+        memory_id: str,
+        similarity_threshold: float = 0.75,
+        max_neighbours: int = 10,
+    ) -> Dict[str, Any]:
+        """
+        Realtime per-memory graph sync.
+
+        Finds Qdrant neighbours for one memory, creates FalkorDB edges, and
+        upserts into graph_relationships — without touching other memories' rows.
+        Safe to call immediately after every write.
+        """
+        from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+        try:
+            # Fetch the memory's vector_id
+            stmt = select(MemoryMetadata).where(
+                MemoryMetadata.id == uuid.UUID(memory_id),
+                MemoryMetadata.organization_id == org_id,
+                MemoryMetadata.is_active.is_(True),
+            )
+            result = await self.db.execute(stmt)
+            mem = result.scalar_one_or_none()
+            if mem is None or not mem.vector_id:
+                logger.warning(f"graph_realtime_sync: memory {memory_id} not found or has no vector")
+                return {"created": 0, "skipped": 1}
+
+            vector_id = str(mem.vector_id)
+
+            # Qdrant recommend: top-N similar memories in the same org
+            try:
+                candidates = await QdrantService.recommend_by_point_id(
+                    org_id=org_id,
+                    positive_point_id=vector_id,
+                    limit=max_neighbours,
+                    score_threshold=similarity_threshold,
+                    with_payload=True,
+                )
+            except Exception as e:
+                logger.warning(f"graph_realtime_sync Qdrant recommend failed: {e}")
+                return {"created": 0, "error": str(e)}
+
+            if not candidates:
+                return {"created": 0, "neighbours": 0}
+
+            # Resolve vector_id → memory_id for candidates
+            candidate_vector_ids = [str(c.get("id")) for c in candidates]
+            nb_stmt = select(MemoryMetadata.id, MemoryMetadata.vector_id).where(
+                MemoryMetadata.vector_id.in_(candidate_vector_ids),
+                MemoryMetadata.organization_id == org_id,
+                MemoryMetadata.is_active.is_(True),
+            )
+            nb_rows = (await self.db.execute(nb_stmt)).all()
+            vector_to_mem = {str(r.vector_id): str(r.id) for r in nb_rows}
+
+            relationships = []
+            for candidate in candidates:
+                cand_vec = str(candidate.get("id"))
+                cand_mem = vector_to_mem.get(cand_vec)
+                if not cand_mem or cand_mem == memory_id:
+                    continue
+                score = float(candidate.get("score") or 0.0)
+                if score < similarity_threshold:
+                    continue
+                from_id, to_id = sorted([memory_id, cand_mem])
+                relationships.append({
+                    "from_id": from_id,
+                    "to_id": to_id,
+                    "org_id": org_id,
+                    "similarity_score": score,
+                    "relationship_type": "RELATES_TO",
+                })
+
+            if not relationships:
+                return {"created": 0, "neighbours": len(candidates)}
+
+            # FalkorDB edges
+            created = await self._create_falkordb_relationships(relationships)
+
+            # PostgreSQL upsert — conflict on unique key, update score if higher
+            org_uuid = uuid.UUID(org_id)
+            now = datetime.utcnow()
+            rows = [
+                {
+                    "id": uuid.uuid4(),
+                    "organization_id": org_uuid,
+                    "from_memory_id": rel["from_id"],
+                    "to_memory_id": rel["to_id"],
+                    "relationship_type": rel["relationship_type"],
+                    "similarity_score": rel["similarity_score"],
+                    "auto_created": True,
+                    "created_at": now,
+                    "metadata_": {"algorithm": "cosine_similarity", "version": "1.0"},
+                }
+                for rel in relationships
+            ]
+            upsert = pg_insert(GraphRelationship).values(rows)
+            upsert = upsert.on_conflict_do_update(
+                constraint="uq_graph_rel_unique",
+                set_={"similarity_score": upsert.excluded.similarity_score, "updated_at": now},
+                where=upsert.excluded.similarity_score > GraphRelationship.similarity_score,
+            )
+            await self.db.execute(upsert)
+            await self.db.commit()
+
+            logger.info(
+                f"graph_realtime_sync: memory={memory_id} "
+                f"edges_created={created} pg_rows={len(rows)}"
+            )
+            return {"created": created, "neighbours": len(candidates), "relationships": len(rows)}
+
+        except Exception as e:
+            logger.error(f"graph_realtime_sync error for memory {memory_id}: {e}", exc_info=True)
+            return {"created": 0, "error": str(e)}
+
     async def get_relationship_stats(self, org_id: str) -> Dict[str, Any]:
         """
         Get statistics about relationships for an organization.
