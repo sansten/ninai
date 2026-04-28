@@ -30,10 +30,10 @@ ROUGE_TYPE        = 'rouge1'
 LLM_MODEL         = 'qwen2.5:1.5b'
 LLM_MODEL_HARD    = 'qwen2.5:1.5b'
 LLM_MODEL_MID     = 'qwen2.5:1.5b'
-LLM_TIMEOUT       = 120  # GCP Ollama cold-start can take 30-40s on CPU
-LLM_TIMEOUT_QWEN  = 120
-LLM_TIMEOUT_DEEP  = 120
-LLM_TIMEOUT_MID   = 120
+LLM_TIMEOUT       = 200  # GCP Ollama model-reload can take 60-90s on CPU; add inference margin
+LLM_TIMEOUT_QWEN  = 200
+LLM_TIMEOUT_DEEP  = 200
+LLM_TIMEOUT_MID   = 200
 LLM_WORKERS       = 4   # reduce parallelism for 1.5b to avoid OOM
 INGEST_WORKERS    = 4   # lower concurrency to reduce API timeout failures on loaded clusters
 
@@ -1299,6 +1299,9 @@ def _gateway_answer(question, memories, model=LLM_MODEL, num_ctx=32768, timeout=
     without the gateway rebuilding its own generic prompt.  This lets the benchmark's
     category-specific prompts (temporal date rules, multi-hop chaining, etc.) reach the
     model intact.
+
+    Retries on 401 (token refresh) and 502/503 (Ollama model-reload transient errors).
+    keep_alive=-1 is passed to prevent Ollama from unloading the model between batches.
     """
     def _build_req(tok):
         body = {
@@ -1306,6 +1309,7 @@ def _gateway_answer(question, memories, model=LLM_MODEL, num_ctx=32768, timeout=
             'memories': [{'content': m.get('content', '')} for m in memories],
             'model': model,
             'num_ctx': num_ctx,
+            'keep_alive': -1,
         }
         if prompt_override:
             body['prompt_override'] = prompt_override
@@ -1315,20 +1319,27 @@ def _gateway_answer(question, memories, model=LLM_MODEL, num_ctx=32768, timeout=
             data=payload,
             headers={'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tok},
         )
-    try:
-        with urllib.request.urlopen(_build_req(_token), timeout=timeout) as resp:
+    def _do_request(tok, attempt_timeout):
+        with urllib.request.urlopen(_build_req(tok), timeout=attempt_timeout) as resp:
             return json.loads(resp.read().decode()).get('answer', '')
-    except urllib.error.HTTPError as e:
-        if e.code == 401:
-            tok = _refresh_token()
-            try:
-                with urllib.request.urlopen(_build_req(tok), timeout=timeout) as resp:
-                    return json.loads(resp.read().decode()).get('answer', '')
-            except Exception:
-                return ''
-        return ''
-    except Exception:
-        return ''
+    for attempt in range(3):
+        try:
+            return _do_request(_token, timeout)
+        except urllib.error.HTTPError as e:
+            if e.code == 401:
+                tok = _refresh_token()
+                try:
+                    return _do_request(tok, timeout)
+                except Exception:
+                    return ''
+            if e.code in (502, 503):
+                # Ollama reloading model — wait and retry
+                import time as _t; _t.sleep(15 * (attempt + 1))
+                continue
+            return ''
+        except Exception:
+            return ''
+    return ''
 
 
 def _gateway_judge(question, gold, generated, model=LLM_MODEL, timeout=75):
@@ -1596,6 +1607,24 @@ for r in qa_records:
                                  last_date=r.get('last_date', ''),
                                  session_overview=r.get('session_overview', '')))
 
+# ── Phase 3 warmup: ensure Ollama model is loaded before batch starts ──────
+# Ollama unloads the model after 5 min idle. Phase 1+2 take ~30 min, so the
+# model is always unloaded before Phase 3 starts. A single warmup call reloads
+# it (~60-90s on CPU). keep_alive=-1 tells Ollama to never unload mid-run.
+print('Phase 3 warmup: preloading Ollama model via gateway...')
+import time as _time
+_warmup_ok = False
+for _w in range(5):
+    _wans = _gateway_answer('What year is it?', [], prompt_override='Answer with a year only: what year is it?\nAnswer:', timeout=240)
+    if _wans.strip():
+        print(f'  Warmup ok ({_w+1}/5 attempt): "{_wans.strip()}"')
+        _warmup_ok = True
+        break
+    print(f'  Warmup attempt {_w+1}/5 returned empty, waiting 30s...')
+    _time.sleep(30)
+if not _warmup_ok:
+    print('  WARNING: warmup failed after 5 attempts — proceeding anyway')
+
 # ── Phase 3: model-routed LLM inference ───────────────────────────────
 # Answer generation is routed through /cognitive/gateway/answer so that
 # LLM inference runs server-side on the GCP Ollama instance.
@@ -1617,15 +1646,21 @@ mid_idx  = [i for i, r in enumerate(qa_records) if r['category'] in mid_cats]
 def _run_gateway_batch(indices, model, num_ctx=32768, timeout=LLM_TIMEOUT + 10, workers=LLM_WORKERS):
     """Call _gateway_answer in parallel for a batch of QA record indices.
     Returns list of answer strings aligned to indices.
-    Passes the pre-built category-specific prompt as prompt_override so the gateway
-    uses it directly instead of rebuilding a generic prompt from raw memories.
+
+    Passes prompt_override (the pre-built category-specific prompt) when the backend
+    supports it (038ae8f+).  For older backends that ignore prompt_override, also passes
+    the pre-formatted context as a single memory so temporal questions get session-date
+    headers and other categories get a cleaner context block.
     """
     results = [''] * len(indices)
     def _call(j_i):
         j, i = j_i
         r = qa_records[i]
+        # Pre-formatted context (with session headers for temporal, etc.) as single memory.
+        # This improves over raw hits even when the backend ignores prompt_override.
+        context_mem = [{'content': r.get('context', '')}] if r.get('context') else r.get('hits', [])
         ans = _gateway_answer(
-            r['question'], r.get('hits', []),
+            r['question'], context_mem,
             model=model, num_ctx=num_ctx, timeout=timeout,
             prompt_override=prompts[i],
         )
@@ -1633,9 +1668,14 @@ def _run_gateway_batch(indices, model, num_ctx=32768, timeout=LLM_TIMEOUT + 10, 
     pool = concurrent.futures.ThreadPoolExecutor(max_workers=workers)
     try:
         futs = {pool.submit(_call, (j, i)): j for j, i in enumerate(indices)}
-        for fut in concurrent.futures.as_completed(futs, timeout=max(300, len(indices) * timeout)):
-            j, ans = fut.result()
-            results[j] = ans
+        for fut in concurrent.futures.as_completed(futs, timeout=max(600, len(indices) * timeout)):
+            try:
+                j, ans = fut.result()
+                results[j] = ans
+            except Exception:
+                pass  # individual future failure — leave as '' and continue
+    except concurrent.futures.TimeoutError:
+        print(f'    WARN: batch as_completed timeout, some answers left empty')
     except Exception:
         pass
     finally:

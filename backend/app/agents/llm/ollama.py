@@ -19,11 +19,13 @@ class OllamaClient(LLMClient):
         model: str = "llama3.1:8b",
         timeout_seconds: float = 30.0,
         max_concurrency: int | None = None,
+        auth_token: str | None = None,
     ):
         self._base_url = base_url.rstrip("/")
         self._model = model
         self._timeout = timeout_seconds
         self._max_concurrency = int(max_concurrency) if max_concurrency is not None else None
+        self._auth_token = auth_token or None
 
     async def complete_json(
         self,
@@ -38,6 +40,7 @@ class OllamaClient(LLMClient):
             "prompt": prompt,
             "stream": False,
             "format": "json",
+            "keep_alive": -1,
             "options": {
                 "temperature": 0.2,
             },
@@ -66,6 +69,10 @@ class OllamaClient(LLMClient):
             except Exception:
                 pass
 
+        headers: dict[str, str] = {"Content-Type": "application/json"}
+        if self._auth_token:
+            headers["Authorization"] = f"Bearer {self._auth_token}"
+
         max_retries = 3
         last_exc: Exception | None = None
         data: dict = {}
@@ -73,13 +80,13 @@ class OllamaClient(LLMClient):
             try:
                 if sem is None:
                     async with httpx.AsyncClient(timeout=self._timeout) as client:
-                        r = await client.post(f"{self._base_url}/api/generate", json=payload)
+                        r = await client.post(f"{self._base_url}/api/generate", json=payload, headers=headers)
                         r.raise_for_status()
                         data = r.json()
                 else:
                     async with sem:
                         async with httpx.AsyncClient(timeout=self._timeout) as client:
-                            r = await client.post(f"{self._base_url}/api/generate", json=payload)
+                            r = await client.post(f"{self._base_url}/api/generate", json=payload, headers=headers)
                             r.raise_for_status()
                             data = r.json()
                 last_exc = None
@@ -156,6 +163,64 @@ class OllamaClient(LLMClient):
                     pass
             # Best-effort: if it returned already-parsed object or non-json, fail closed.
             return {}
+
+    async def complete_text(
+        self,
+        *,
+        prompt: str,
+        num_ctx: int = 32768,
+        temperature: float = 0.1,
+    ) -> str:
+        """Plain-text completion — returns the raw response string.
+
+        Unlike complete_json, no format:json is set, so the model outputs
+        natural language suitable for answer generation and judging tasks.
+        Returns empty string on any failure (fail-closed).
+        """
+        payload = {
+            "model": self._model,
+            "prompt": prompt,
+            "stream": False,
+            "keep_alive": -1,
+            "options": {
+                "temperature": temperature,
+                "num_ctx": num_ctx,
+            },
+        }
+        sem = None
+        if self._max_concurrency is not None:
+            sem = await _get_semaphore(self._max_concurrency)
+
+        headers: dict[str, str] = {"Content-Type": "application/json"}
+        if self._auth_token:
+            headers["Authorization"] = f"Bearer {self._auth_token}"
+
+        max_retries = 3
+        last_exc: Exception | None = None
+        data: dict = {}
+        for attempt in range(max_retries):
+            try:
+                if sem is None:
+                    async with httpx.AsyncClient(timeout=self._timeout) as client:
+                        r = await client.post(f"{self._base_url}/api/generate", json=payload, headers=headers)
+                        r.raise_for_status()
+                        data = r.json()
+                else:
+                    async with sem:
+                        async with httpx.AsyncClient(timeout=self._timeout) as client:
+                            r = await client.post(f"{self._base_url}/api/generate", json=payload, headers=headers)
+                            r.raise_for_status()
+                            data = r.json()
+                last_exc = None
+                break
+            except (httpx.HTTPError, OSError, ValueError) as exc:
+                last_exc = exc
+                if attempt < max_retries - 1:
+                    await asyncio.sleep(0.5 * (2 ** attempt))
+
+        if last_exc is not None:
+            return ""
+        return str(data.get("response") or "").strip()
 
 
 _semaphore_lock = asyncio.Lock()
