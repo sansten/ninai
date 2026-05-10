@@ -262,3 +262,24 @@ class TestAttentionRetrievalService:
         m = self._memory(content="database", tags=[], created_at=now)
         s = svc.score(memory=m, active_goals=[], active_incidents=[], query_tokens=frozenset(), now=now)
         assert s == 0.2
+
+    def test_existing_retrieval_score_boosts_attention(self):
+        svc = self._svc()
+        now = datetime.now(timezone.utc)
+        high = {
+            "id": "high",
+            "content": "generic note",
+            "tags": [],
+            "created_at": now,
+            "score": 0.95,
+        }
+        low = {
+            "id": "low",
+            "content": "generic note",
+            "tags": [],
+            "created_at": now,
+            "score": 0.10,
+        }
+        s_high = svc.score(memory=high, active_goals=[], active_incidents=[], query_tokens=frozenset(), now=now)
+        s_low = svc.score(memory=low, active_goals=[], active_incidents=[], query_tokens=frozenset(), now=now)
+        assert s_high > s_low

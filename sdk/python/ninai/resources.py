@@ -227,7 +227,6 @@ class MemoriesResource:
         limit: int = 10,
         threshold: float = 0.7,
         hybrid: bool = False,
-        use_graph: bool = False,
         read_actor_id: Optional[str] = None,
         read_actor_type: Optional[str] = None,
         read_role: Optional[str] = None,
@@ -243,7 +242,6 @@ class MemoriesResource:
             limit: Maximum number of results
             threshold: Minimum similarity score (0-1)
             hybrid: Enable hybrid lexical+vector ranking
-            use_graph: Expand candidates using world-model entity graph links
             read_actor_id: Reader identity (employee ID, bot ID, or anonymous)
             read_actor_type: Reader type (employee|bot|anonymous)
             read_role: Reader role key
@@ -260,13 +258,11 @@ class MemoriesResource:
         if scope:
             params["scope"] = scope
         if tags:
-            params["tags"] = tags
+            params["tags"] = ",".join(tags)
         if threshold is not None:
             params["score_threshold"] = threshold
         if hybrid:
             params["hybrid"] = True
-        if use_graph:
-            params["use_graph"] = True
         if read_actor_id:
             params["read_actor_id"] = read_actor_id
         if read_actor_type:

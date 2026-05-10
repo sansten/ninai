@@ -19,6 +19,7 @@ from app.services.cognitive_gateway_service import (
     GatewayDecideResult,
     GatewayPlanResult,
     GatewayExplainResult,
+    GatewayAnswerResult,
     _enrich_write_heuristic,
     _assemble_read_context,
     _heuristic_decide,
@@ -425,6 +426,28 @@ class TestGatewayRead:
         assert result_vector.memories[0]["id"] == "B"
 
     @pytest.mark.asyncio
+    async def test_prefetched_search_scores_are_preserved(self):
+        gw = _full_gateway()
+        now = gateway_module.datetime.now(gateway_module.timezone.utc)
+        mems = [
+            {
+                "id": "hybrid-top-hit",
+                "content": "release notes from archived incident review",
+                "score": 0.96,
+                "created_at": now,
+            },
+            {
+                "id": "keyword-hit",
+                "content": "auth sso login token failure",
+                "score": 0.15,
+                "created_at": now,
+            },
+        ]
+
+        result = await gw.read(query="auth sso", memories=mems, limit=2)
+        assert result.memories[0]["id"] == "hybrid-top-hit"
+
+    @pytest.mark.asyncio
     async def test_self_rag_passes_grounded_memories(self):
         # SelfRAG uses non-strict mode: keeps any memory with sufficient content,
         # regardless of keyword overlap with the query.  This prevents over-filtering
@@ -443,7 +466,9 @@ class TestGatewayRead:
         assert "keep" in ids
         assert "also_kept" in ids
         # Reasoning steps are still present for explainability
-        assert len(result.reasoning_steps) == 2
+        assert len(result.reasoning_steps) >= 2
+        assert any(step.get("memory_id") == "keep" for step in result.reasoning_steps)
+        assert any(step.get("memory_id") == "also_kept" for step in result.reasoning_steps)
 
     @pytest.mark.asyncio
     async def test_self_rag_filters_empty_memories(self):
@@ -458,7 +483,7 @@ class TestGatewayRead:
 
         assert result.total == 1
         assert result.memories[0]["id"] == "keep"
-        assert any(step["decision"] == "filtered" for step in result.reasoning_steps)
+        assert any(step.get("decision") == "filtered" for step in result.reasoning_steps)
 
     @pytest.mark.asyncio
     async def test_corrective_rag_invokes_external_connector_on_low_confidence(self):
@@ -685,3 +710,62 @@ class TestGatewayExplain:
         gw = _standard_gateway()
         result = await gw.explain(memory_id="y")
         assert isinstance(result, GatewayExplainResult)
+
+
+class TestGatewayAnswer:
+    @pytest.mark.asyncio
+    async def test_gateway_answer_reports_gateway_source(self, monkeypatch):
+        class _FakeClient:
+            last_error = ""
+
+            async def complete_text(self, **kwargs):
+                return "Stockholm"
+
+        monkeypatch.setattr(gateway_module, "create_ollama_client", lambda **kwargs: _FakeClient())
+        gw = _full_gateway()
+        result = await gw.answer(question="Where?", memories=[{"content": "They moved to Stockholm."}])
+        assert isinstance(result, GatewayAnswerResult)
+        assert result.answer == "Stockholm"
+        assert result.used_llm is True
+        assert result.answer_source == "gateway"
+        assert result.llm_error is None
+
+    @pytest.mark.asyncio
+    async def test_gateway_answer_reports_heuristic_fallback_reason(self, monkeypatch):
+        class _FakeClient:
+            last_error = "HTTPError(404, 'model not found')"
+
+            async def complete_text(self, **kwargs):
+                return ""
+
+        monkeypatch.setattr(gateway_module, "create_ollama_client", lambda **kwargs: _FakeClient())
+        gw = _full_gateway()
+        result = await gw.answer(
+            question="Where did they move?",
+            memories=[{"content": "They moved to Stockholm last year."}],
+        )
+        assert result.used_llm is False
+        assert result.model == "heuristic"
+        assert result.answer_source == "heuristic"
+        assert result.llm_error == "HTTPError(404, 'model not found')"
+        assert result.answer
+
+    @pytest.mark.asyncio
+    async def test_gateway_answer_logs_llm_fallback_exception(self, monkeypatch, caplog):
+        class _FakeClient:
+            async def complete_text(self, **kwargs):
+                raise RuntimeError("model unavailable")
+
+        monkeypatch.setattr(gateway_module, "create_ollama_client", lambda **kwargs: _FakeClient())
+        gw = _full_gateway()
+
+        with caplog.at_level("WARNING"):
+            result = await gw.answer(
+                question="Where did they move?",
+                memories=[{"content": "They moved to Stockholm last year."}],
+            )
+
+        assert result.used_llm is False
+        assert result.model == "heuristic"
+        assert "ollama answer fallback" in caplog.text
+        assert "RuntimeError" in caplog.text

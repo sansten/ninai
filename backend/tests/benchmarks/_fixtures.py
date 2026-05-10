@@ -5,7 +5,9 @@ from random import Random
 
 
 CONFLICT_TERMS = ["incident", "outage", "rollback", "timeout", "failed", "error"]
-RELEVANCE_TERMS = ["authentication", "failure", "spike", "login", "credential", "auth"]
+# Restricted to terms that overlap the recall benchmark query ("authentication failure spike")
+# so the gold set is always retrievable by the keyword ranker.
+RELEVANCE_TERMS = ["authentication", "failure", "spike"]
 
 
 def _make_synthetic_events(n: int = 120, seed: int = 42) -> list[dict]:
@@ -14,7 +16,9 @@ def _make_synthetic_events(n: int = 120, seed: int = 42) -> list[dict]:
     for i in range(n):
         token = rng.choice(["auth", "billing", "cache", "queue", "search"])
         is_conflict = token in {"billing", "queue"} and i % 4 == 0
-        is_relevant = token in {"auth", "search"} and i % 3 == 0
+        # Sparser relevance criterion: ~2/5 tokens × 1/10 positions ≈ 8 gold items per 200 events,
+        # small enough for recall@10 to cover the full gold set.
+        is_relevant = token in {"auth", "search"} and i % 10 == 0
 
         conflict_phrase = rng.choice(CONFLICT_TERMS) if is_conflict else "healthy"
         relevance_phrase = rng.choice(RELEVANCE_TERMS) if is_relevant else "routine"

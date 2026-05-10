@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Awaitable, Callable
 
 from app.services.cognitive_gateway_service import CognitiveGatewayService
 
@@ -50,6 +50,7 @@ class ChainStep:
     content: str = ""
     enrichment: dict[str, Any] = field(default_factory=dict)
     memories: list[dict[str, Any]] = field(default_factory=list)
+    limit: int = 5
 
 
 @dataclass
@@ -103,11 +104,22 @@ class MultiHopReasoningService:
     def __init__(self, *, gateway: CognitiveGatewayService | None = None) -> None:
         self._gateway = gateway or CognitiveGatewayService()
 
+    async def execute_async(
+        self,
+        *,
+        goal: str,
+        steps: list[ChainStep],
+        read_fn: Callable[..., Awaitable[dict[str, Any]] | dict[str, Any]] | None = None,
+    ) -> ChainResult:
+        """Async entrypoint used by planner services."""
+        return await self._execute_async(goal=goal, steps=steps, read_fn=read_fn)
+
     def execute(
         self,
         *,
         goal: str,
         steps: list[ChainStep],
+        read_fn: Callable[..., Awaitable[dict[str, Any]] | dict[str, Any]] | None = None,
     ) -> ChainResult:
         """Execute the chain, bridging to async gateway calls.
 
@@ -126,16 +138,20 @@ class MultiHopReasoningService:
             # Schedule a coroutine and block via a thread so we don't nest loops.
             import concurrent.futures
             with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-                future = pool.submit(asyncio.run, self._execute_async(goal=goal, steps=steps))
+                future = pool.submit(
+                    asyncio.run,
+                    self._execute_async(goal=goal, steps=steps, read_fn=read_fn),
+                )
                 return future.result()
         else:
-            return asyncio.run(self._execute_async(goal=goal, steps=steps))
+            return asyncio.run(self._execute_async(goal=goal, steps=steps, read_fn=read_fn))
 
     async def _execute_async(
         self,
         *,
         goal: str,
         steps: list[ChainStep],
+        read_fn: Callable[..., Awaitable[dict[str, Any]] | dict[str, Any]] | None = None,
     ) -> ChainResult:
         if not steps:
             return ChainResult(
@@ -166,6 +182,7 @@ class MultiHopReasoningService:
                 step=step,
                 resolved_input=resolved_input,
                 resolved_content=resolved_content,
+                read_fn=read_fn,
             )
             step_results.append(sr)
             step_outputs.append(sr.output)
@@ -204,6 +221,7 @@ class MultiHopReasoningService:
         step: ChainStep,
         resolved_input: str,
         resolved_content: str,
+        read_fn: Callable[..., Awaitable[dict[str, Any]] | dict[str, Any]] | None = None,
     ) -> StepResult:
         step_type = step.step_type if step.step_type in _STEP_TYPES else "plan"
 
@@ -238,17 +256,40 @@ class MultiHopReasoningService:
             }
 
         else:  # "read"
-            call = read_method(
-                query=resolved_input,
-                memories=list(step.memories),
-                limit=5,
-            )
-            gw_result = (await call) if asyncio.iscoroutine(call) else call
-            output = "; ".join(
-                str(m.get("content", ""))[:120] for m in gw_result.memories[:3]
-            )
-            confidence = 0.70
-            raw = {"memories": gw_result.memories, "count": len(gw_result.memories)}
+            if read_fn is not None:
+                call = read_fn(
+                    query=resolved_input,
+                    memories=list(step.memories),
+                    limit=max(1, int(step.limit or 1)),
+                    step_index=index,
+                    enrichment=dict(step.enrichment),
+                )
+                read_payload = (await call) if asyncio.iscoroutine(call) else call
+                payload = dict(read_payload or {})
+                memories = list(payload.get("memories") or [])
+                output = str(payload.get("output") or self._summarize_read_memories(memories))
+                raw = dict(payload.get("raw") or {})
+                raw.setdefault("memories", memories)
+                raw.setdefault("count", len(memories))
+                confidence = self._safe_float(
+                    payload.get("confidence"),
+                    default=self._safe_float(raw.get("retrieval_confidence"), default=0.70),
+                )
+            else:
+                call = read_method(
+                    query=resolved_input,
+                    memories=list(step.memories),
+                    limit=max(1, int(step.limit or 1)),
+                )
+                gw_result = (await call) if asyncio.iscoroutine(call) else call
+                memories = list(gw_result.memories or [])
+                output = self._summarize_read_memories(memories)
+                confidence = self._safe_float(getattr(gw_result, "retrieval_confidence", None), default=0.70)
+                raw = {
+                    "memories": memories,
+                    "count": len(memories),
+                    "retrieval_confidence": confidence,
+                }
 
         return StepResult(
             index=index,
@@ -268,3 +309,36 @@ class MultiHopReasoningService:
         for sr in step_results:
             product *= max(0.01, sr.confidence)
         return round(product ** (1.0 / len(step_results)), 4)
+
+    @staticmethod
+    def _summarize_read_memories(memories: list[dict[str, Any]]) -> str:
+        segments: list[str] = []
+        for memory in memories[:3]:
+            title = str(memory.get("title") or "").strip()
+            preview = str(
+                memory.get("content_preview")
+                or memory.get("content")
+                or ""
+            ).strip()
+            entities = memory.get("entities")
+            parts = [part for part in [title, preview[:80]] if part]
+            if isinstance(entities, dict) and entities:
+                flat_entities: list[str] = []
+                for values in entities.values():
+                    if isinstance(values, list):
+                        flat_entities.extend(str(item).strip() for item in values if str(item).strip())
+                    elif values is not None:
+                        flat_entities.append(str(values).strip())
+                unique_entities = [item for item in dict.fromkeys(flat_entities) if item]
+                if unique_entities:
+                    parts.append("entities=" + ", ".join(unique_entities[:4]))
+            if parts:
+                segments.append(" | ".join(parts))
+        return "; ".join(segments)
+
+    @staticmethod
+    def _safe_float(value: Any, *, default: float = 0.0) -> float:
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return default

@@ -1,0 +1,565 @@
+{
+  "run_tag": "locomo-full-254a9493",
+  "scores": {
+    "single_hop": 0.0,
+    "multi_hop": 17.7,
+    "temporal": 0.0,
+    "adversarial": 22.7,
+    "open_domain": 0.0,
+    "overall": 20.5
+  },
+  "results": [
+    {
+      "qa_id": "locomo_001_q003",
+      "category": "multi_hop",
+      "question": "What fields would Caroline be likely to pursue in her educaton?",
+      "gold_answer": "Psychology, counseling certification",
+      "generated_answer": "Caroline would likely pursue education and career fields related to LGBTQ+ advocacy, mental health counseling, and art therapy.",
+      "rouge1_f1": 9.52,
+      "retrieved_count": 60,
+      "semantic_correct": 0
+    },
+    {
+      "qa_id": "locomo_001_q028",
+      "category": "multi_hop",
+      "question": "Would Caroline pursue writing as a career option?",
+      "gold_answer": "LIkely no; though she likes reading, she wants to be a counselor",
+      "generated_answer": "Yes",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 60,
+      "semantic_correct": 0
+    },
+    {
+      "qa_id": "locomo_001_q060",
+      "category": "multi_hop",
+      "question": "Would Caroline be considered religious?",
+      "gold_answer": "Somewhat, but not extremely religious",
+      "generated_answer": "Yes",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 60,
+      "semantic_correct": 0
+    },
+    {
+      "qa_id": "locomo_001_q070",
+      "category": "multi_hop",
+      "question": "What personality traits might Melanie say Caroline has?",
+      "gold_answer": "Thoughtful, authentic, driven",
+      "generated_answer": "Melanie might say Caroline has strong determination, self-expression through art, and a passion for helping others in need.",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 60,
+      "semantic_correct": 0
+    },
+    {
+      "qa_id": "locomo_001_q078",
+      "category": "multi_hop",
+      "question": "Would Melanie go on another roadtrip soon?",
+      "gold_answer": "Likely no; since this one went badly",
+      "generated_answer": "Yes",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 60,
+      "semantic_correct": 0
+    },
+    {
+      "qa_id": "locomo_001_q166",
+      "category": "adversarial",
+      "question": "What motivated Melanie to pursue counseling?",
+      "gold_answer": "her own journey and the support she received, and how counseling improved her life",
+      "generated_answer": "Melanie was motivated to pursue counseling because she wanted to help others who had gone through similar struggles and experiences, as it made a difference in her life.",
+      "rouge1_f1": 23.81,
+      "retrieved_count": 50,
+      "semantic_correct": 0
+    },
+    {
+      "qa_id": "locomo_001_q167",
+      "category": "adversarial",
+      "question": "What kind of place does Melanie want to create for people?",
+      "gold_answer": "a safe and inviting place for people to grow",
+      "generated_answer": "Melanie wants to create a safe and loving home for people, especially kids who haven't had that before.",
+      "rouge1_f1": 42.86,
+      "retrieved_count": 50,
+      "semantic_correct": 1
+    },
+    {
+      "qa_id": "locomo_001_q172",
+      "category": "adversarial",
+      "question": "What did Melanie see at the council meeting for adoption?",
+      "gold_answer": "many people wanting to create loving homes for children in need",
+      "generated_answer": "Caroline saw an LGBTQ+ adoption agency that helps LGBTQ+ folks at the council meeting for adoption.",
+      "rouge1_f1": 7.41,
+      "retrieved_count": 50,
+      "semantic_correct": 0
+    },
+    {
+      "qa_id": "locomo_001_q173",
+      "category": "adversarial",
+      "question": "What inspired Melanie's painting for the art show?",
+      "gold_answer": "visiting an LGBTQ center and wanting to capture unity and strength",
+      "generated_answer": "Caroline inspired Melanie to create a painting for her art show, as she mentioned that her art is about expressing her trans experience and helping people understand the trans community.",
+      "rouge1_f1": 9.76,
+      "retrieved_count": 50,
+      "semantic_correct": 0
+    },
+    {
+      "qa_id": "locomo_002_q088",
+      "category": "adversarial",
+      "question": "What did Jon find for his clothing store on 1 February, 2023?",
+      "gold_answer": "The perfect spot for her store",
+      "generated_answer": "Long time no see!",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 50,
+      "semantic_correct": 0
+    },
+    {
+      "qa_id": "locomo_002_q091",
+      "category": "adversarial",
+      "question": "What made Jon choose the furniture and decor for his store?",
+      "gold_answer": "personal style and customer comfort",
+      "generated_answer": "Jon chose the furniture and decor for his store because he wanted to make the place look like his own style and make customers feel cozy.",
+      "rouge1_f1": 19.35,
+      "retrieved_count": 50,
+      "semantic_correct": 1
+    },
+    {
+      "qa_id": "locomo_002_q096",
+      "category": "adversarial",
+      "question": "What did Gina receive from a dance contest?",
+      "gold_answer": "a trophy",
+      "generated_answer": "Gina received a trophy from a dance contest.",
+      "rouge1_f1": 40.0,
+      "retrieved_count": 50,
+      "semantic_correct": 1
+    },
+    {
+      "qa_id": "locomo_002_q101",
+      "category": "adversarial",
+      "question": "How does Gina use the clipboard with a notepad attached to it?",
+      "gold_answer": "To set goals, track achievements, and find areas for improvement",
+      "generated_answer": "Gina uses the clipboard with a notepad attached to it for planning and organizing her business, such as ordering advertising for her store and reaching out to potential wholesalers.",
+      "rouge1_f1": 15.38,
+      "retrieved_count": 50,
+      "semantic_correct": 0
+    },
+    {
+      "qa_id": "locomo_003_q018",
+      "category": "multi_hop",
+      "question": "What might John's degree be in?",
+      "gold_answer": "Political science, Public administration, Public affairs",
+      "generated_answer": "John's degree might be in policymaking, as he is inspired to pursue a career where he can use his degree to improve society and aims to join local politics to achieve this goal.",
+      "rouge1_f1": 5.0,
+      "retrieved_count": 60,
+      "semantic_correct": 0
+    },
+    {
+      "qa_id": "locomo_003_q166",
+      "category": "adversarial",
+      "question": "How often does Maria work out with her family?",
+      "gold_answer": "Three times a week",
+      "generated_answer": "John and his family workout together three times a week.",
+      "rouge1_f1": 57.14,
+      "retrieved_count": 50,
+      "semantic_correct": 0
+    },
+    {
+      "qa_id": "locomo_004_q001",
+      "category": "multi_hop",
+      "question": "Is it likely that Nate has friends besides Joanna?",
+      "gold_answer": "Yesteammates on hisvideo game team.",
+      "generated_answer": "Sounds like a fun experience, even if I'm not into games.",
+      "rouge1_f1": 11.76,
+      "retrieved_count": 60,
+      "semantic_correct": 0
+    },
+    {
+      "qa_id": "locomo_004_q015",
+      "category": "multi_hop",
+      "question": "What nickname does Nate use for Joanna?",
+      "gold_answer": "Jo",
+      "generated_answer": "Jo",
+      "rouge1_f1": 100.0,
+      "retrieved_count": 60,
+      "semantic_correct": 1
+    },
+    {
+      "qa_id": "locomo_004_q061",
+      "category": "multi_hop",
+      "question": "What Console does Nate own?",
+      "gold_answer": "A Nintendo Switch; since the game \"Xenoblade 2\" is made for this console.",
+      "generated_answer": "Nate owns a console for playing video games, as he participates in Counter Strike tournaments and has his own gaming setup at home where he practices and competes.",
+      "rouge1_f1": 19.51,
+      "retrieved_count": 60,
+      "semantic_correct": 0
+    },
+    {
+      "qa_id": "locomo_004_q085",
+      "category": "multi_hop",
+      "question": "Was the first half of September 2022 a good month career-wise for Nate and Joanna? Answer yes or no.",
+      "gold_answer": "No; because both of them faced setbacks in their career",
+      "generated_answer": "Yes",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 60,
+      "semantic_correct": 0
+    },
+    {
+      "qa_id": "locomo_004_q086",
+      "category": "multi_hop",
+      "question": "What kind of job is Joanna beginning to preform the duties of because of her movie scripts?",
+      "gold_answer": "filmmaker.",
+      "generated_answer": "Joanna is beginning to perform the duties of a screenwriter and filmmaker because of her movie scripts.",
+      "rouge1_f1": 11.11,
+      "retrieved_count": 60,
+      "semantic_correct": 1
+    },
+    {
+      "qa_id": "locomo_004_q206",
+      "category": "adversarial",
+      "question": "What type of movies does Nate hate watching the most?",
+      "gold_answer": "action and sci-fi",
+      "generated_answer": "No",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 50,
+      "semantic_correct": 0
+    },
+    {
+      "qa_id": "locomo_004_q216",
+      "category": "adversarial",
+      "question": "Which activity helps Nate escape and numbs his mind?",
+      "gold_answer": "watching fantasy and sci-fi movies",
+      "generated_answer": "Playing video games",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 50,
+      "semantic_correct": 0
+    },
+    {
+      "qa_id": "locomo_004_q217",
+      "category": "adversarial",
+      "question": "What filling did Nate use in the cake he made recently in May 2022?",
+      "gold_answer": "strawberry",
+      "generated_answer": "Yes",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 50,
+      "semantic_correct": 0
+    },
+    {
+      "qa_id": "locomo_004_q219",
+      "category": "adversarial",
+      "question": "What special items did Joanna get for everyone at her gaming party?",
+      "gold_answer": "Custom controller decorations",
+      "generated_answer": "Joanna got custom controller decorations for everyone attending her gaming party.",
+      "rouge1_f1": 42.86,
+      "retrieved_count": 50,
+      "semantic_correct": 1
+    },
+    {
+      "qa_id": "locomo_004_q225",
+      "category": "adversarial",
+      "question": "What did Joanna discover at the museum in Woodhaven?",
+      "gold_answer": "cool old book collection",
+      "generated_answer": "Cool old book collection",
+      "rouge1_f1": 100.0,
+      "retrieved_count": 50,
+      "semantic_correct": 0
+    },
+    {
+      "qa_id": "locomo_004_q231",
+      "category": "adversarial",
+      "question": "How did Joanna celebrate winning the international tournament?",
+      "gold_answer": "Taking time off to chill with pets",
+      "generated_answer": "Joanna made a dairy-free parfait to celebrate getting positive feedback from her local writers group about her book.",
+      "rouge1_f1": 7.69,
+      "retrieved_count": 50,
+      "semantic_correct": 0
+    },
+    {
+      "qa_id": "locomo_004_q248",
+      "category": "adversarial",
+      "question": "What type of diet do Joanna's turtles have?",
+      "gold_answer": "combination of vegetables, fruits, and insects",
+      "generated_answer": "Joanna's turtles have a varied diet, including insects.",
+      "rouge1_f1": 13.33,
+      "retrieved_count": 50,
+      "semantic_correct": 0
+    },
+    {
+      "qa_id": "locomo_005_q004",
+      "category": "multi_hop",
+      "question": "Would Tim enjoy reading books by C. S. Lewis or John Greene?",
+      "gold_answer": "C. S.Lewis",
+      "generated_answer": "Yes",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 60,
+      "semantic_correct": 0
+    },
+    {
+      "qa_id": "locomo_005_q009",
+      "category": "multi_hop",
+      "question": "Which outdoor gear company likely signed up John for an endorsement deal?",
+      "gold_answer": "Under Armour",
+      "generated_answer": "The renowned outdoor gear company that likely signed up John for an endorsement deal is Moxie.",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 60,
+      "semantic_correct": 0
+    },
+    {
+      "qa_id": "locomo_005_q054",
+      "category": "multi_hop",
+      "question": "What other exercises can help John with his basketball performance?",
+      "gold_answer": "Sprinting, long-distance running, and boxing.",
+      "generated_answer": "Strength training, physical therapy exercises, and yoga can help John with his basketball performance.",
+      "rouge1_f1": 10.0,
+      "retrieved_count": 60,
+      "semantic_correct": 0
+    },
+    {
+      "qa_id": "locomo_006_q034",
+      "category": "multi_hop",
+      "question": "What can Andrew potentially do to improve his stress and accomodate his living situation with his dogs?",
+      "gold_answer": "Change to a hybrid or remote job so he can move away from the city to the suburbs to have a larger living space and be closer to nature.",
+      "generated_answer": "Andrew can consider exploring more outdoor activities like hiking and fishing to compensate for missing nature within the city, as well as considering getting a smaller dog breed that requires less sp",
+      "rouge1_f1": 23.76,
+      "retrieved_count": 60,
+      "semantic_correct": 0
+    },
+    {
+      "qa_id": "locomo_006_q044",
+      "category": "multi_hop",
+      "question": "Which US state do Audrey and Andrew potentially live in?",
+      "gold_answer": "Minnesota",
+      "generated_answer": "Not mentioned",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 60,
+      "semantic_correct": 0
+    },
+    {
+      "qa_id": "locomo_006_q137",
+      "category": "adversarial",
+      "question": "What are some of the personalities of Andrew's four fur babies?",
+      "gold_answer": "oldest is relaxed, second is playful, third can be naughty but loves cuddles, youngest is full of life",
+      "generated_answer": "Not mentioned",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 50,
+      "semantic_correct": 0
+    },
+    {
+      "qa_id": "locomo_006_q140",
+      "category": "adversarial",
+      "question": "What did Audrey organize with the neighbors' cats?",
+      "gold_answer": "a doggy playdate",
+      "generated_answer": "Audrey organized a doggy playdate with the neighbors' dogs.",
+      "rouge1_f1": 50.0,
+      "retrieved_count": 50,
+      "semantic_correct": 0
+    },
+    {
+      "qa_id": "locomo_007_q001",
+      "category": "multi_hop",
+      "question": "What are John's suspected health problems?",
+      "gold_answer": "Obesity",
+      "generated_answer": "John's suspected health problems are stress and possibly some difficulties in coding, as indicated by his struggles with getting payments to work on a website for a local business during his freelance",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 60,
+      "semantic_correct": 0
+    },
+    {
+      "qa_id": "locomo_007_q018",
+      "category": "multi_hop",
+      "question": "What is the board game where you have to find the imposter that John mentions to James?",
+      "gold_answer": "Mafia",
+      "generated_answer": "The board game where you have to find the imposter is Among Us.",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 60,
+      "semantic_correct": 0
+    },
+    {
+      "qa_id": "locomo_007_q034",
+      "category": "multi_hop",
+      "question": "Did John and James study together?",
+      "gold_answer": "Yes",
+      "generated_answer": "Yes",
+      "rouge1_f1": 100.0,
+      "retrieved_count": 60,
+      "semantic_correct": 1
+    },
+    {
+      "qa_id": "locomo_007_q045",
+      "category": "multi_hop",
+      "question": "Why didn't John want to go to Starbucks?",
+      "gold_answer": "Possibly because he likes to drink beer on his days off.",
+      "generated_answer": "Hey!",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 60,
+      "semantic_correct": 0
+    },
+    {
+      "qa_id": "locomo_007_q181",
+      "category": "adversarial",
+      "question": "What does James feel about starting the journey as a programming mentor for game developers?",
+      "gold_answer": "excited and inspired",
+      "generated_answer": "John is excited about starting this journey as a programming mentor for game developers because it combines his two loves - gaming and helping others, which he finds fulfilling and motivating.",
+      "rouge1_f1": 12.12,
+      "retrieved_count": 50,
+      "semantic_correct": 0
+    },
+    {
+      "qa_id": "locomo_008_q029",
+      "category": "multi_hop",
+      "question": "In what country was Jolene during summer 2022?",
+      "gold_answer": "Colombia",
+      "generated_answer": "Colombia",
+      "rouge1_f1": 100.0,
+      "retrieved_count": 60,
+      "semantic_correct": 1
+    },
+    {
+      "qa_id": "locomo_008_q037",
+      "category": "multi_hop",
+      "question": "How old is Jolene?",
+      "gold_answer": "likely no more than 30; since she's in school",
+      "generated_answer": "Jolene's age is not explicitly mentioned in the provided conversation turns.",
+      "rouge1_f1": 18.18,
+      "retrieved_count": 60,
+      "semantic_correct": 0
+    },
+    {
+      "qa_id": "locomo_008_q076",
+      "category": "multi_hop",
+      "question": "What card game is Deborah talking about?",
+      "gold_answer": "Exploding Kittens",
+      "generated_answer": "The card game Deborah is talking about is \"Catan.\"",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 60,
+      "semantic_correct": 0
+    },
+    {
+      "qa_id": "locomo_008_q210",
+      "category": "adversarial",
+      "question": "What does Deborah find comforting about going to horror movie screenings?",
+      "gold_answer": "It makes her feel like she's still experiencing it with her mom",
+      "generated_answer": "Deborah finds comfort in escaping into a different world through horror movie screenings, as it provides a temporary distraction from her own life experiences and helps her cope with difficult emotion",
+      "rouge1_f1": 18.18,
+      "retrieved_count": 50,
+      "semantic_correct": 0
+    },
+    {
+      "qa_id": "locomo_008_q220",
+      "category": "adversarial",
+      "question": "What game did Deborah suggest as an awesome open-world game for the Nintendo Switch?",
+      "gold_answer": "Zelda BOTW",
+      "generated_answer": "Zelda BOTW",
+      "rouge1_f1": 100.0,
+      "retrieved_count": 50,
+      "semantic_correct": 0
+    },
+    {
+      "qa_id": "locomo_008_q237",
+      "category": "adversarial",
+      "question": "What food did Jolene's mom make for her on holidays?",
+      "gold_answer": "Pineapple cakes",
+      "generated_answer": "My mom would make a special dish for us on holidays, it was always so delicious and made our family feel close.",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 50,
+      "semantic_correct": 0
+    },
+    {
+      "qa_id": "locomo_009_q021",
+      "category": "multi_hop",
+      "question": "In light of the health and dietary changes discussed, what would be an appropriate gift for both Evan and Sam to encourage their healthy lifestyles?",
+      "gold_answer": "a cookbook with healthy recipes or a subscription to a healthy meal delivery service.",
+      "generated_answer": "A yoga mat and a set of healthy cookbooks",
+      "rouge1_f1": 34.78,
+      "retrieved_count": 60,
+      "semantic_correct": 0
+    },
+    {
+      "qa_id": "locomo_009_q162",
+      "category": "adversarial",
+      "question": "What habit is Evan trying to change in terms of diet?",
+      "gold_answer": "consuming soda and candy",
+      "generated_answer": "Evan is trying to change his diet by limiting himself to only two ginger snaps a day.",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 50,
+      "semantic_correct": 0
+    },
+    {
+      "qa_id": "locomo_009_q182",
+      "category": "adversarial",
+      "question": "What gift did Sam receive from a close friend?",
+      "gold_answer": "1968 Kustom K-200A vintage guitar",
+      "generated_answer": "Sam received a vintage 1968 Kustom K200-A guitar as a gift from a close friend.",
+      "rouge1_f1": 36.36,
+      "retrieved_count": 50,
+      "semantic_correct": 1
+    },
+    {
+      "qa_id": "locomo_009_q189",
+      "category": "adversarial",
+      "question": "How did Sam describe the process of creating the painting with the bird flying over it?",
+      "gold_answer": "embracing the creative process without restraint",
+      "generated_answer": "Sam described the process of creating the painting with the bird flying over it as a relaxing and creative activity that helps him take a break from everyday stress.",
+      "rouge1_f1": 17.14,
+      "retrieved_count": 50,
+      "semantic_correct": 0
+    },
+    {
+      "qa_id": "locomo_010_q040",
+      "category": "multi_hop",
+      "question": "Would Dave prefer working on a Dodge Charger or a Subaru Forester?",
+      "gold_answer": "Dodge Charger",
+      "generated_answer": "Yes",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 60,
+      "semantic_correct": 0
+    },
+    {
+      "qa_id": "locomo_010_q165",
+      "category": "adversarial",
+      "question": "What did Calvin open in May 2023?",
+      "gold_answer": "a car shop",
+      "generated_answer": "Calvin opened a recording studio in his Japanese mansion in May 2023.",
+      "rouge1_f1": 13.33,
+      "retrieved_count": 50,
+      "semantic_correct": 0
+    },
+    {
+      "qa_id": "locomo_010_q180",
+      "category": "adversarial",
+      "question": "What did Dave book a flight ticket for on 1st September 2023?",
+      "gold_answer": "Boston",
+      "generated_answer": "Calvin booked a flight ticket to Boston on 1st September 2023.",
+      "rouge1_f1": 16.67,
+      "retrieved_count": 50,
+      "semantic_correct": 0
+    },
+    {
+      "qa_id": "locomo_010_q187",
+      "category": "adversarial",
+      "question": "What did Calvin recently get that is a \"masterpiece on canvas\"?",
+      "gold_answer": "Ferrari",
+      "generated_answer": "Calvin recently got a new Ferrari, which is described as a masterpiece on wheels.",
+      "rouge1_f1": 13.33,
+      "retrieved_count": 50,
+      "semantic_correct": 0
+    },
+    {
+      "qa_id": "locomo_010_q201",
+      "category": "adversarial",
+      "question": "What new item did Calvin buy recently?",
+      "gold_answer": "A vintage camera",
+      "generated_answer": "Calvin bought a new Ferrari.",
+      "rouge1_f1": 25.0,
+      "retrieved_count": 50,
+      "semantic_correct": 0
+    },
+    {
+      "qa_id": "locomo_010_q204",
+      "category": "adversarial",
+      "question": "Where did Calvin take a stunning photo of a waterfall?",
+      "gold_answer": "Nearby park",
+      "generated_answer": "A lot's been happening since we last talked.",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 50,
+      "semantic_correct": 0
+    }
+  ],
+  "timestamp": "2026-04-26T22:46:10.870679",
+  "n_questions": 55
+}

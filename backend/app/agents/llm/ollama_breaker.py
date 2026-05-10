@@ -65,6 +65,32 @@ class OllamaClientWithCircuitBreaker(BaseOllamaClient):
             logger.error(f"Ollama call failed: {e}")
             raise
 
+    async def complete_text(
+        self,
+        *,
+        prompt: str,
+        num_ctx: int = 32768,
+        temperature: float = 0.1,
+    ) -> str:
+        """Complete plain-text prompt with circuit breaker protection."""
+        try:
+            result = await call_llm_with_breaker(
+                provider="ollama",
+                func=super().complete_text,
+                prompt=prompt,
+                num_ctx=num_ctx,
+                temperature=temperature,
+            )
+            return str(result or "")
+        except CircuitBreakerOpen as e:
+            logger.warning(f"Ollama circuit breaker open: {e}, failing closed")
+            self._last_error = f"circuit_breaker_open: {e}"
+            return ""
+        except Exception as e:
+            self._last_error = repr(e)
+            logger.error(f"Ollama text call failed: {e}")
+            raise
+
 
 def create_ollama_client(
     *,
@@ -74,6 +100,7 @@ def create_ollama_client(
     max_concurrency: int | None = None,
     use_circuit_breaker: bool = True,
     purpose: str | None = None,
+    auth_token: str | None = None,
 ) -> BaseOllamaClient:
     """
     Create an Ollama client with optional circuit breaker.
@@ -113,19 +140,43 @@ def create_ollama_client(
         use_circuit_breaker,
     )
 
+    cpu_base_url = str(getattr(settings, "OLLAMA_BASE_URL_CPU", "") or "").strip()
+    gpu_base_url = str(getattr(settings, "OLLAMA_BASE_URL_GPU", "") or "").strip()
+    overflow_enabled = bool(getattr(settings, "OLLAMA_OVERFLOW_ENABLED", False)) and bool(gpu_base_url)
+    overflow_primary_max_inflight = int(getattr(settings, "OLLAMA_OVERFLOW_PRIMARY_MAX_INFLIGHT", 0) or 0)
+
+    # Honor explicit caller intent first. If a specific base_url is passed
+    # (e.g., GPU service), do not silently override it with CPU defaults.
+    explicit_base_url = str(base_url or "").strip()
+    primary_base_url = explicit_base_url or cpu_base_url or "http://localhost:11434"
+
+    secondary_base_url = gpu_base_url or None
+    if secondary_base_url and secondary_base_url.rstrip("/") == primary_base_url.rstrip("/"):
+        secondary_base_url = None
+
+    resolved_token = auth_token or getattr(settings, "OLLAMA_AUTH_TOKEN", None) or None
+
     client = BaseOllamaClient(
-        base_url=base_url,
+        base_url=primary_base_url,
         model=model,
         timeout_seconds=timeout_seconds,
         max_concurrency=max_concurrency,
+        auth_token=resolved_token,
+        secondary_base_url=secondary_base_url,
+        overflow_enabled=overflow_enabled,
+        overflow_primary_max_inflight=overflow_primary_max_inflight,
     )
 
     if use_circuit_breaker:
         return OllamaClientWithCircuitBreaker(
-            base_url=base_url,
+            base_url=primary_base_url,
             model=model,
             timeout_seconds=timeout_seconds,
             max_concurrency=max_concurrency,
+            auth_token=resolved_token,
+            secondary_base_url=secondary_base_url,
+            overflow_enabled=overflow_enabled,
+            overflow_primary_max_inflight=overflow_primary_max_inflight,
         )
 
     return client

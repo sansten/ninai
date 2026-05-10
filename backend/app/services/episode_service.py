@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.episode import Episode, EpisodeStatus
 from app.models.episode_event import EpisodeEvent
 from app.models.episode_link import EpisodeLink
+from app.models.memory import MemoryMetadata
 from app.schemas.episode import (
     EpisodeCreate,
     EpisodeEventCreate,
@@ -23,6 +24,7 @@ from app.schemas.episode import (
     EpisodeUpdate,
 )
 from app.services.audit_service import AuditService
+from app.services.episode_convergence_service import EpisodeConvergenceService
 
 
 class EpisodeService:
@@ -54,6 +56,7 @@ class EpisodeService:
         self.user_id = user_id
         self.org_id = org_id
         self.audit_service = AuditService(session)
+        self.convergence_service = EpisodeConvergenceService(session)
 
     # ═════════════════════════════════════════════════════════════════════
     # Episode CRUD
@@ -93,6 +96,11 @@ class EpisodeService:
 
         self.session.add(episode)
         await self.session.flush()
+        await self.convergence_service.sync_case_episode_projection(
+            episode=episode,
+            actor_user_id=self.user_id,
+            boundary_reason="episode_service_create",
+        )
 
         # Audit log
         await self.audit_service.log_event(
@@ -218,6 +226,11 @@ class EpisodeService:
             setattr(episode, key, value)
 
         await self.session.flush()
+        await self.convergence_service.sync_case_episode_projection(
+            episode=episode,
+            actor_user_id=self.user_id,
+            boundary_reason="episode_service_update",
+        )
 
         # Audit log
         await self.audit_service.log_event(
@@ -251,6 +264,12 @@ class EpisodeService:
         episode.status = EpisodeStatus.RESOLVED
         episode.resolved_at = datetime.now(timezone.utc)
         await self.session.flush()
+        await self.convergence_service.sync_case_episode_projection(
+            episode=episode,
+            actor_user_id=self.user_id,
+            event_ts=episode.resolved_at,
+            boundary_reason="episode_service_resolve",
+        )
 
         # Audit log
         await self.audit_service.log_event(
@@ -309,6 +328,23 @@ class EpisodeService:
         # Update episode.last_event_at
         episode.last_event_at = event_ts
         await self.session.flush()
+        memory = None
+        if data.memory_id:
+            memory = (
+                await self.session.execute(
+                    select(MemoryMetadata).where(
+                        MemoryMetadata.id == data.memory_id,
+                        MemoryMetadata.organization_id == self.org_id,
+                    )
+                )
+            ).scalar_one_or_none()
+        await self.convergence_service.sync_case_episode_projection(
+            episode=episode,
+            memory=memory,
+            actor_user_id=self.user_id,
+            event_ts=event_ts,
+            boundary_reason="episode_service_event",
+        )
 
         # Audit log
         await self.audit_service.log_event(

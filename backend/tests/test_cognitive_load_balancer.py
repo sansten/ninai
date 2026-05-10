@@ -88,6 +88,10 @@ def test_should_skip_high_graph_true():
     assert _balancer().should_skip(task_name="q.agent_graph", load_level="high") is True
 
 
+def test_should_skip_high_reasoning_true():
+    assert _balancer().should_skip(task_name="q.agent_reasoning", load_level="high") is True
+
+
 def test_should_skip_high_memory_ingest_false():
     assert _balancer().should_skip(task_name="q.memory_ingest", load_level="high") is False
 

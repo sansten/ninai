@@ -8,6 +8,7 @@ import pytest
 
 from app.core.database import get_db
 from app.main import app
+from app.api.v1.endpoints import memories as memories_endpoints
 from app.api.v1.endpoints.memories import get_memory_service
 
 
@@ -156,5 +157,84 @@ async def test_batch_share_returns_share_ids(client, auth_headers):
     assert data["results"][0]["share_id"] == "s_m1"
     assert data["results"][1]["share_id"] == "s_m2"
     assert session.commit.await_count == 1
+
+    app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_update_memory_content_persists_and_reenqueues(client, auth_headers, test_org_id, test_user_id, monkeypatch):
+    session = AsyncMock()
+    session.commit = AsyncMock()
+
+    async def override_get_db():
+        yield session
+
+    app.dependency_overrides[get_db] = override_get_db
+
+    captured: dict = {}
+
+    class StubMemoryService:
+        async def update_memory(self, memory_id, data, new_embedding=None, request_id=None):
+            captured["memory_id"] = memory_id
+            captured["content"] = data.content
+            captured["request_id"] = request_id
+            payload = _memory_response_dict(
+                memory_id=memory_id,
+                org_id=test_org_id,
+                owner_id=test_user_id,
+                content_preview=(data.content or "")[:2000] or "preview",
+            )
+            payload["title"] = "Updated"
+            now = datetime.now(timezone.utc)
+            payload["created_at"] = now
+            payload["updated_at"] = now
+            return SimpleNamespace(**payload)
+
+    app.dependency_overrides[get_memory_service] = lambda: StubMemoryService()
+
+    emitted: list[tuple[str, dict]] = []
+
+    class FakeWebhookService:
+        def __init__(self, db):
+            self.db = db
+
+        async def emit_event(self, *, organization_id: str, event_type: str, payload: dict) -> None:
+            emitted.append((event_type, payload))
+
+    monkeypatch.setattr(memories_endpoints, "WebhookService", FakeWebhookService)
+
+    embed_calls: list[dict] = []
+    memory_pipeline_calls: list[dict] = []
+    episode_pipeline_calls: list[dict] = []
+    fact_pipeline_calls: list[dict] = []
+    monkeypatch.setattr(memories_endpoints, "enqueue_embed_and_index", lambda **kwargs: embed_calls.append(kwargs))
+    monkeypatch.setattr(memories_endpoints, "enqueue_memory_pipeline", lambda **kwargs: memory_pipeline_calls.append(kwargs))
+    monkeypatch.setattr(memories_endpoints, "enqueue_episode_pipeline", lambda **kwargs: episode_pipeline_calls.append(kwargs))
+    monkeypatch.setattr(memories_endpoints, "enqueue_fact_pipeline", lambda **kwargs: fact_pipeline_calls.append(kwargs))
+
+    resp = await client.patch(
+        "/api/v1/memories/m-updated",
+        headers=auth_headers,
+        json={"content": "Updated memory body"},
+    )
+
+    assert resp.status_code == 200, resp.text
+    assert captured["memory_id"] == "m-updated"
+    assert captured["content"] == "Updated memory body"
+    assert session.commit.await_count == 2
+    assert emitted and emitted[0][0] == "memory.updated"
+    assert embed_calls == [
+        {
+            "memory_id": "m-updated",
+            "content": "Updated memory body",
+            "org_id": test_org_id,
+        }
+    ]
+    assert len(memory_pipeline_calls) == 1
+    assert len(episode_pipeline_calls) == 1
+    assert len(fact_pipeline_calls) == 1
+    assert memory_pipeline_calls[0]["memory_id"] == "m-updated"
+    assert episode_pipeline_calls[0]["memory_id"] == "m-updated"
+    assert fact_pipeline_calls[0]["memory_id"] == "m-updated"
 
     app.dependency_overrides.clear()

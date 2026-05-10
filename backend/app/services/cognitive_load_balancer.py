@@ -20,7 +20,7 @@ class CognitiveLoadBalancer:
     }
 
     _CRITICAL_ALLOWLIST = {"q.memory_ingest", "q.cognitive_loop"}
-    _HIGH_SKIP = {"q.agent_topics", "q.agent_patterns", "q.agent_graph"}
+    _HIGH_SKIP = {"q.agent_topics", "q.agent_patterns", "q.agent_graph", "q.agent_reasoning"}
     _MEDIUM_SKIP = {"q.agent_topics"}
 
     _THROTTLE_FACTORS: dict[str, float] = {

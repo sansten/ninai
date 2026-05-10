@@ -120,6 +120,23 @@ def _composite_score(rows: list[dict[str, Any]], strategy: str) -> float:
             v = _get("recall_at_10") or _get("Recall@10")
             if v is not None:
                 quality_vals.append(v)
+        # Gate E quality gates — each contributes its pass-rate to the composite
+        elif bname == "decide_quality":
+            v = _get("accuracy")
+            if v is not None:
+                quality_vals.append(v)
+        elif bname == "plan_quality":
+            v = _get("pass_rate")
+            if v is not None:
+                quality_vals.append(v)
+        elif bname == "explain_fidelity":
+            v = _get("fidelity_rate")
+            if v is not None:
+                quality_vals.append(v)
+        elif bname == "uncertainty_loop":
+            v = _get("loop_rate")
+            if v is not None:
+                quality_vals.append(v)
 
     quality = (sum(quality_vals) / len(quality_vals)) if quality_vals else 0.0
     return round(quality * reliability, 4)

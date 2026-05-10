@@ -200,6 +200,8 @@ def enqueue_fact_pipeline(
     org_id: str,
     memory_id: str,
     initiator_user_id: str | None = None,
+    initiator_roles: str = "",
+    initiator_clearance_level: int = 0,
     trace_id: str | None = None,
     storage: str = "long_term",
 ):

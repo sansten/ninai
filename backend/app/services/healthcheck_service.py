@@ -16,7 +16,9 @@ from typing import Dict, Any
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.database import async_session_factory
+from app.core.qdrant import QdrantService
 
 
 class HealthStatus:
@@ -198,17 +200,14 @@ class HealthcheckService:
             Health status
         """
         try:
-            # Import here to make Qdrant optional
-            from app.services.vector_service import vector_service
+            if not (settings.QDRANT_URL or (settings.QDRANT_HOST and settings.QDRANT_PORT)):
+                return HealthStatus.DEGRADED
 
-            if vector_service:
-                # Try to list collections (lightweight operation)
-                # In production: await vector_service.list_collections()
-                return HealthStatus.HEALTHY
-            else:
-                return HealthStatus.DEGRADED  # Not configured
-
-        except Exception as e:
+            client = QdrantService.get_client()
+            timeout = float(getattr(settings, "QDRANT_TIMEOUT_SECONDS", 2.5) or 2.5)
+            await QdrantService._run_sync_with_timeout(client.get_collections, timeout=timeout)
+            return HealthStatus.HEALTHY
+        except Exception:
             return HealthStatus.UNHEALTHY
 
     async def _check_migrations(self) -> bool:

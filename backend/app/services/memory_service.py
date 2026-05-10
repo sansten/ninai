@@ -15,6 +15,8 @@ HYBRID MEMORY ARCHITECTURE:
 import hashlib
 import logging
 import math
+import re
+import uuid
 from typing import Optional, List, Union
 from datetime import datetime, timezone, timedelta
 from uuid import uuid4
@@ -25,9 +27,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.qdrant import QdrantService
-from app.agents.registry import get_agent
+from app.models.graph_relationship import GraphRelationship
 from app.models.memory import MemoryMetadata, MemorySharing
 from app.models.memory_feedback import MemoryFeedback
+from app.services.embedding_service import EmbeddingService
 from app.services.permission_checker import PermissionChecker, AccessDecision
 from app.services.audit_service import AuditService
 from app.services.short_term_memory import ShortTermMemory, ShortTermMemoryService
@@ -91,6 +94,160 @@ class MemoryService:
         if value.tzinfo is None:
             return value.replace(tzinfo=timezone.utc)
         return value.astimezone(timezone.utc)
+
+    @staticmethod
+    def _tokenize_query_terms(text: str) -> list[str]:
+        """Extract stable query terms from snippet text for enrichment variants."""
+        if not text:
+            return []
+        parts = re.split(r"[^a-zA-Z0-9_]+", text.lower())
+        stop = {
+            "the", "and", "for", "with", "this", "that", "from", "into", "about", "have", "has",
+            "was", "were", "will", "would", "should", "could", "not", "you", "your", "their", "they",
+            "our", "are", "but", "can", "all", "any", "use", "using", "new", "old", "what", "when",
+            "where", "why", "how", "who", "which", "than", "then", "also", "more", "less", "into",
+        }
+        out: list[str] = []
+        seen: set[str] = set()
+        for p in parts:
+            if len(p) < 4 or p.isdigit() or p in stop:
+                continue
+            if p in seen:
+                continue
+            seen.add(p)
+            out.append(p)
+        return out
+
+    @staticmethod
+    def _retrieval_learning_prior(memory: "MemoryMetadata") -> tuple[float, int]:
+        """Extract org-level retrieval prior learned from applied feedback."""
+        meta = getattr(memory, "extra_metadata", {}) or {}
+        learning = meta.get("retrieval_learning") if isinstance(meta, dict) else {}
+        if not isinstance(learning, dict):
+            return 0.0, 0
+
+        try:
+            score = float(learning.get("relevance_score") or 0.0)
+        except (TypeError, ValueError):
+            score = 0.0
+
+        try:
+            count = int(learning.get("relevance_feedback_count") or 0)
+        except (TypeError, ValueError):
+            count = 0
+
+        return max(-1.0, min(1.0, score)), max(0, count)
+
+    async def _load_graph_neighbor_scores(self, seed_memory_ids: list[str], limit: int) -> dict[str, float]:
+        """Collect neighboring memory ids from graph edges with similarity-based scores."""
+        if not seed_memory_ids or limit <= 0:
+            return {}
+
+        try:
+            org_uuid = uuid.UUID(str(self.org_id))
+        except Exception:
+            return {}
+
+        stmt = (
+            select(
+                GraphRelationship.from_memory_id,
+                GraphRelationship.to_memory_id,
+                GraphRelationship.similarity_score,
+                GraphRelationship.relationship_type,
+            )
+            .where(
+                GraphRelationship.organization_id == org_uuid,
+                or_(
+                    GraphRelationship.from_memory_id.in_(seed_memory_ids),
+                    GraphRelationship.to_memory_id.in_(seed_memory_ids),
+                ),
+            )
+            .order_by(GraphRelationship.similarity_score.desc().nullslast())
+            .limit(max(limit * 4, 32))
+        )
+
+        rows = (await self.session.execute(stmt)).all()
+        if not rows:
+            return {}
+
+        seed_set = set(seed_memory_ids)
+        neighbors: dict[str, float] = {}
+        type_weight = {
+            "DEPENDS_ON": 1.0,
+            "REFINES": 0.95,
+            "REFERENCES": 0.9,
+            "RELATES_TO": 0.85,
+            "CONTRADICTS": 0.7,
+        }
+
+        for from_id, to_id, similarity, relationship_type in rows:
+            from_s = str(from_id)
+            to_s = str(to_id)
+            if from_s in seed_set and to_s not in seed_set:
+                neighbor_id = to_s
+            elif to_s in seed_set and from_s not in seed_set:
+                neighbor_id = from_s
+            else:
+                continue
+
+            base = float(similarity or 0.5)
+            rel = str(relationship_type or "RELATES_TO").upper()
+            weighted = max(0.0, min(1.0, base * type_weight.get(rel, 0.85)))
+            prev = neighbors.get(neighbor_id, 0.0)
+            if weighted > prev:
+                neighbors[neighbor_id] = weighted
+
+        if len(neighbors) <= limit:
+            return neighbors
+        return dict(sorted(neighbors.items(), key=lambda kv: kv[1], reverse=True)[:limit])
+
+    async def _build_graph_query_variants(
+        self,
+        base_query: str,
+        graph_neighbor_scores: dict[str, float],
+        max_variants: int,
+    ) -> list[str]:
+        """Build enriched query variants from graph-linked memory snippets."""
+        if not base_query or max_variants <= 0 or not graph_neighbor_scores:
+            return []
+
+        neighbor_ids = [mid for mid, _ in sorted(graph_neighbor_scores.items(), key=lambda kv: kv[1], reverse=True)[:12]]
+        stmt = select(MemoryMetadata.title, MemoryMetadata.content_preview, MemoryMetadata.tags).where(
+            MemoryMetadata.organization_id == self.org_id,
+            MemoryMetadata.is_active.is_(True),
+            MemoryMetadata.id.in_(neighbor_ids),
+        )
+        rows = (await self.session.execute(stmt)).all()
+
+        terms: list[str] = []
+        seen: set[str] = set()
+        for title, content_preview, tags in rows:
+            snippets = [str(title or ""), str(content_preview or "")[:240]]
+            if isinstance(tags, list):
+                snippets.extend([str(t) for t in tags[:6] if t])
+            for token in self._tokenize_query_terms(" ".join(snippets)):
+                if token in seen:
+                    continue
+                seen.add(token)
+                terms.append(token)
+                if len(terms) >= max(6, max_variants * 4):
+                    break
+            if len(terms) >= max(6, max_variants * 4):
+                break
+
+        if not terms:
+            return []
+
+        variants: list[str] = []
+        chunk_size = 4
+        for i in range(0, len(terms), chunk_size):
+            chunk = terms[i : i + chunk_size]
+            if not chunk:
+                continue
+            variants.append((base_query + " " + " ".join(chunk)).strip())
+            if len(variants) >= max_variants:
+                break
+        return variants
     
     # =========================================================================
     # Create
@@ -210,8 +367,9 @@ class MemoryService:
             content=data.content,
             tags=data.tags,
         )
-        await self.session.flush()  # Persist any optional search_vector UPDATE
-        
+        # No second flush needed — _ensure_search_vector uses session.execute()
+        # which sends SQL immediately; the final db.commit() flushes the rest.
+
         # Save to Qdrant
         try:
             await QdrantService.upsert_memory(
@@ -657,7 +815,12 @@ class MemoryService:
         Returns:
             List of authorized MemoryMetadata results
         """
+        normalized_tags = [str(t).strip() for t in (request.tags or []) if str(t).strip()]
+        date_from = self._normalize_utc_timestamp(getattr(request, "date_from", None))
+        date_to = self._normalize_utc_timestamp(getattr(request, "date_to", None))
+
         qdrant_results = []
+        graph_scores: dict[str, float] = {}
         lexical_scores: dict[str, float] = {}
 
         ranking_meta = self.get_search_ranking_meta(request)
@@ -675,17 +838,67 @@ class MemoryService:
                 score_threshold=request.score_threshold or 0.0,
                 scope_filter=scope_val,
                 team_id=request.team_id,
-                tags=request.tags if request.tags else None,
             )
+
+            # Graph-guided multi-query expansion:
+            # - Seed from first-pass vector hits
+            # - Expand neighbors from graph_relationships
+            # - Build enriched query variants and re-query vectors
+            graph_enabled = bool(getattr(request, "use_graph", False)) and bool(
+                getattr(settings, "SEARCH_GRAPH_EXPANSION_ENABLED", True)
+            )
+            if graph_enabled:
+                seed_limit = int(getattr(settings, "SEARCH_GRAPH_SEED_LIMIT", 12) or 12)
+                neighbor_limit = int(getattr(settings, "SEARCH_GRAPH_NEIGHBOR_LIMIT", 32) or 32)
+                max_variants = int(getattr(settings, "SEARCH_MULTI_QUERY_MAX_VARIANTS", 4) or 4)
+
+                seed_ids = [
+                    str(r.get("payload", {}).get("memory_id"))
+                    for r in qdrant_results[:seed_limit]
+                    if r.get("payload", {}).get("memory_id")
+                ]
+                seed_ids = [sid for sid in seed_ids if sid]
+
+                if seed_ids:
+                    graph_scores = await self._load_graph_neighbor_scores(seed_ids, neighbor_limit)
+                    variants = await self._build_graph_query_variants(request.query, graph_scores, max_variants)
+
+                    for idx, variant in enumerate(variants):
+                        try:
+                            variant_embedding = await EmbeddingService.embed(variant)
+                            variant_results = await QdrantService.search(
+                                org_id=self.org_id,
+                                query_vector=variant_embedding,
+                                limit=request.limit * 2,
+                                score_threshold=max((request.score_threshold or 0.0) - 0.05, 0.0),
+                                scope_filter=scope_val,
+                                team_id=request.team_id,
+                            )
+                        except Exception:
+                            continue
+
+                        # Slightly discount later variants so the base query remains primary.
+                        blend = max(0.75, 0.95 - (0.05 * idx))
+                        for result in variant_results:
+                            payload = result.get("payload") or {}
+                            memory_id = str(payload.get("memory_id") or "")
+                            if not memory_id:
+                                continue
+                            score = float(result.get("score") or 0.0) * blend
+                            # Append for unified candidate set and keep best score downstream.
+                            qdrant_results.append(result)
+                            if memory_id in graph_scores:
+                                graph_scores[memory_id] = max(graph_scores[memory_id], score)
+                            else:
+                                graph_scores[memory_id] = max(graph_scores.get(memory_id, 0.0), score * 0.8)
         except Exception as exc:
-            # Keep search available during transient vector store outages.
             logger.warning(
                 "Qdrant search failed for org_id=%s query=%r: %s",
                 self.org_id,
                 request.query,
                 exc,
             )
-            qdrant_results = []
+            raise RuntimeError("Vector search unavailable") from exc
 
         # Lexical leg (Postgres FTS) - opt-in via request.hybrid
         if getattr(request, "hybrid", False):
@@ -733,8 +946,12 @@ class MemoryService:
                 stmt = stmt.where(MemoryMetadata.scope == scope_val)
             if request.team_id:
                 stmt = stmt.where(MemoryMetadata.scope == "team", MemoryMetadata.scope_id == request.team_id)
-            if request.tags:
-                stmt = stmt.where(MemoryMetadata.tags.contains(request.tags))
+            if normalized_tags:
+                stmt = stmt.where(MemoryMetadata.tags.contains(normalized_tags))
+            if date_from is not None:
+                stmt = stmt.where(MemoryMetadata.occurred_at >= date_from)
+            if date_to is not None:
+                stmt = stmt.where(MemoryMetadata.occurred_at <= date_to)
 
             lex_res = await self.session.execute(stmt)
             for row in lex_res.all():
@@ -742,62 +959,43 @@ class MemoryService:
                 lexical_scores[memory_id] = float(row[1] or 0.0)
 
         # Candidate IDs from both legs
-        vector_scores = {r["payload"]["memory_id"]: float(r.get("score") or 0.0) for r in qdrant_results}
-        candidate_ids = list({*vector_scores.keys(), *lexical_scores.keys()})
+        vector_scores: dict[str, float] = {}
+        for result in qdrant_results:
+            payload = result.get("payload") or {}
+            memory_id = payload.get("memory_id")
+            if not memory_id:
+                continue
+            memory_id = str(memory_id)
+            score = float(result.get("score") or 0.0)
+            vector_scores[memory_id] = max(vector_scores.get(memory_id, 0.0), score)
+
+        candidate_ids = list({*vector_scores.keys(), *lexical_scores.keys(), *graph_scores.keys()})
         if not candidate_ids:
             return []
 
         # Fetch from Postgres (RLS will filter unauthorized)
-        _where_clauses = [
-            MemoryMetadata.id.in_(candidate_ids),
-            MemoryMetadata.is_active.is_(True),
-            # Defense-in-depth: even with RLS, constrain by org_id explicitly.
-            MemoryMetadata.organization_id == self.org_id,
-        ]
-        # Tag filtering: memory must contain ALL requested tags (@> = array contains).
-        # This scopes search to a specific conversation/context without needing a separate
-        # index scan — the candidate_ids set from Qdrant is already small.
-        if request.tags:
-            _where_clauses.append(MemoryMetadata.tags.contains(request.tags))
+        query = select(MemoryMetadata).where(
+            and_(
+                MemoryMetadata.id.in_(candidate_ids),
+                MemoryMetadata.is_active.is_(True),
+                # Defense-in-depth: even with RLS, constrain by org_id explicitly.
+                MemoryMetadata.organization_id == self.org_id,
+            )
+        )
 
-        query = select(MemoryMetadata).where(and_(*_where_clauses))
+        if scope_val:
+            query = query.where(MemoryMetadata.scope == scope_val)
+        if request.team_id:
+            query = query.where(MemoryMetadata.scope == "team", MemoryMetadata.scope_id == request.team_id)
+        if normalized_tags:
+            query = query.where(MemoryMetadata.tags.contains(normalized_tags))
+        if date_from is not None:
+            query = query.where(MemoryMetadata.occurred_at >= date_from)
+        if date_to is not None:
+            query = query.where(MemoryMetadata.occurred_at <= date_to)
 
         result = await self.session.execute(query)
         memories = result.scalars().all()
-
-        if getattr(request, "use_graph", False) and memories:
-            # Graph expansion is best-effort and must never break search.
-            try:
-                wm_agent = get_agent("world_model")
-                if wm_agent is not None and hasattr(wm_agent, "get_neighbours"):
-                    entity_ids: set[str] = set()
-                    for mem in memories[:5]:
-                        ents = getattr(mem, "entities", None) or {}
-                        if isinstance(ents, dict):
-                            entity_ids.update(str(k) for k in ents.keys())
-
-                    if entity_ids:
-                        neighbour_ids = await wm_agent.get_neighbours(
-                            org_id=self.org_id,
-                            entity_ids=list(entity_ids),
-                            db=self.session,
-                            limit=20,
-                        )
-                        if neighbour_ids:
-                            nb_stmt = select(MemoryMetadata).where(
-                                MemoryMetadata.id.in_(list(neighbour_ids)),
-                                MemoryMetadata.is_active.is_(True),
-                                MemoryMetadata.organization_id == self.org_id,
-                            )
-                            if request.tags:
-                                nb_stmt = nb_stmt.where(MemoryMetadata.tags.contains(request.tags))
-
-                            nb_result = await self.session.execute(nb_stmt)
-                            neighbours = nb_result.scalars().all()
-                            existing_ids = {m.id for m in memories}
-                            memories += [m for m in neighbours if m.id not in existing_ids]
-            except Exception:
-                pass
 
         # Optional: feedback-driven reranking (closed-loop retrieval).
         # Uses most recent per-user feedback of type "relevance" for each memory.
@@ -837,35 +1035,53 @@ class MemoryService:
         # Normalize scores and compute a combined score
         max_vec = max(vector_scores.values(), default=0.0)
         max_lex = max(lexical_scores.values(), default=0.0)
+        max_graph = max(graph_scores.values(), default=0.0)
 
-        vec_weight = 0.7
-        lex_weight = 0.3
+        graph_enabled = bool(getattr(request, "use_graph", False)) and bool(
+            getattr(settings, "SEARCH_GRAPH_EXPANSION_ENABLED", True)
+        )
+        if graph_enabled:
+            vec_weight = 0.6
+            lex_weight = 0.25
+            graph_weight = 0.15
+        else:
+            vec_weight = 0.7
+            lex_weight = 0.3
+            graph_weight = 0.0
 
         # HNMS-inspired ranking mode selector.
         # Mode influences temporal decay weighting (recency bias).
         # (Computed once via get_search_ranking_meta.)
         
-        # Verify each memory and collect authorized ones
+        # Verify each memory and collect authorized ones.
+        # Use the batched permission path to avoid per-result N+1 checks on hot search traffic.
+        authorized_ids = set(
+            await self.permission_checker.filter_memory_ids_with_access(
+                self.user_id,
+                self.org_id,
+                [m.id for m in memories],
+                "read",
+                self.clearance_level,
+            )
+        )
         authorized_memories: list[MemoryMetadata] = []
         normalized_similarities: dict[str, float] = {}
         for memory in memories:
-            access = await self.permission_checker.check_memory_access(
-                self.user_id, self.org_id, memory.id, "read", self.clearance_level
-            )
-            
-            if access.allowed:
+            if memory.id in authorized_ids:
                 vec = vector_scores.get(memory.id, 0.0)
                 lex = lexical_scores.get(memory.id, 0.0)
+                graph = graph_scores.get(memory.id, 0.0)
 
                 vec_norm = (vec / max_vec) if max_vec > 0 else 0.0
                 lex_norm = (lex / max_lex) if max_lex > 0 else 0.0
+                graph_norm = (graph / max_graph) if max_graph > 0 else 0.0
 
                 normalized_similarities[str(memory.id)] = float(vec_norm)
 
                 if getattr(request, "hybrid", False):
-                    memory.score = (vec_weight * vec_norm) + (lex_weight * lex_norm)
+                    memory.score = (vec_weight * vec_norm) + (lex_weight * lex_norm) + (graph_weight * graph_norm)
                 else:
-                    memory.score = vec
+                    memory.score = (vec_weight * vec_norm) + (graph_weight * graph_norm)
 
                 # Optional: temporal decay weighting (HNMS-inspired).
                 # Uses last_accessed_at if present, else updated_at, else created_at.
@@ -882,6 +1098,13 @@ class MemoryService:
                         age_days = max(0.0, (now - anchor).total_seconds() / 86400.0)
                         decay = math.pow(0.5, age_days / half_life_days)
                         memory.score = float(memory.score or 0.0) * float(decay)
+
+                prior_score, prior_count = self._retrieval_learning_prior(memory)
+                if prior_count > 0:
+                    confidence = min(1.0, prior_count / 4.0)
+                    prior_multiplier = 1.0 + (0.2 * prior_score * confidence)
+                    if prior_multiplier > 0:
+                        memory.score = float(memory.score or 0.0) * prior_multiplier
 
                 # Optional: per-user relevance feedback reranking.
                 # Expected payload shapes:
@@ -1081,6 +1304,10 @@ class MemoryService:
             "feedback_rerank_window_days": feedback_rerank_window_days,
             "feedback_rerank_positive_multiplier": feedback_rerank_positive_multiplier,
             "feedback_rerank_negative_multiplier": feedback_rerank_negative_multiplier,
+            "retrieval_prior_boost_enabled": True,
+            "graph_expansion_enabled": bool(getattr(settings, "SEARCH_GRAPH_EXPANSION_ENABLED", True)),
+            "graph_expansion_requested": bool(getattr(request, "use_graph", False)),
+            "multi_query_max_variants": int(getattr(settings, "SEARCH_MULTI_QUERY_MAX_VARIANTS", 4) or 4),
         }
     
     # =========================================================================
@@ -1132,7 +1359,15 @@ class MemoryService:
         
         # Track changes
         changes = {}
-        
+
+        if data.content is not None:
+            changes["content"] = {
+                "old_preview": memory.content_preview,
+                "new_preview": data.content[:2000],
+            }
+            memory.content_preview = data.content[:2000]
+            memory.content_hash = hashlib.sha256(data.content.encode("utf-8")).hexdigest()
+
         # Update fields
         if data.title is not None:
             changes["title"] = {"old": memory.title, "new": data.title}
@@ -1146,10 +1381,22 @@ class MemoryService:
             changes["classification"] = {"old": memory.classification, "new": data.classification}
             memory.classification = data.classification
         
-        if data.metadata is not None:
-            changes["metadata"] = {"old": memory.metadata, "new": data.metadata}
-            memory.metadata = data.metadata
-        
+        if data.extra_metadata is not None:
+            changes["extra_metadata"] = {"old": memory.extra_metadata, "new": data.extra_metadata}
+            memory.extra_metadata = data.extra_metadata
+
+        if data.retention_days is not None:
+            changes["retention_days"] = {"old": memory.retention_days, "new": data.retention_days}
+            memory.retention_days = data.retention_days
+
+        if data.content is not None or data.title is not None or data.tags is not None:
+            await self._ensure_search_vector(
+                memory_id=memory_id,
+                title=memory.title,
+                content=data.content if data.content is not None else (memory.content_preview or ""),
+                tags=memory.tags,
+            )
+
         # Update embedding in Qdrant if provided
         if new_embedding:
             await QdrantService.upsert_memory(

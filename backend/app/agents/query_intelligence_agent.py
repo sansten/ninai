@@ -217,6 +217,51 @@ def run_heuristic(content: str, enrichment: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+async def run_llm_only_query_intelligence(
+    content: str,
+    enrichment: dict[str, Any],
+    tool_event_sink: Any | None = None,
+) -> dict[str, Any]:
+    """Run query intelligence using LLM only (no heuristic fallback)."""
+    prompt = (
+        "You are an enterprise memory query intelligence engine. "
+        "Output JSON only. Do not hallucinate.\n\n"
+        "Analyse the memory content and enrichment signals below. "
+        "Detect the primary intent of this memory, extract named entities, "
+        "suggest retrieval filters, and recommend relevant enrichment agents.\n\n"
+        f"CONTENT: {content[:500]}\n"
+        f"ENTITY_NAME: {enrichment.get('entity_name')}\n"
+        f"ENTITY_TYPE: {enrichment.get('entity_type')}\n"
+        f"KEY_ENTITIES: {enrichment.get('key_entities')}\n"
+        f"UNCERTAINTY_LEVEL: {enrichment.get('uncertainty_level')}\n"
+        f"TAGS: {enrichment.get('tags') or enrichment.get('normalized_tags')}\n\n"
+        "Return JSON with keys:\n"
+        "- query_intent: one of locate|explain|compare|analyze|generate|find_person|find_timeline|retrieve\n"
+        "- extracted_entities: list of entity name strings\n"
+        "- dynamic_filters: dict of retrieval filter key-value pairs\n"
+        "- suggested_agents: list of agent name strings\n"
+        "- confidence: float 0..1\n"
+        "- rationale: brief explanation"
+    )
+    client = create_ollama_client(
+        base_url=str(getattr(settings, "OLLAMA_BASE_URL", "http://localhost:11434")),
+        model=str(settings.get_ollama_model("agents")),
+        timeout_seconds=float(getattr(settings, "OLLAMA_TIMEOUT_SECONDS", 5.0)),
+        max_concurrency=int(getattr(settings, "OLLAMA_MAX_CONCURRENCY", 2)),
+    )
+    resp = await client.complete_json(
+        prompt=prompt,
+        schema_hint={},
+        tool_event_sink=tool_event_sink,
+    )
+    if not _valid_llm_response(resp):
+        raise ValueError("invalid llm response")
+
+    out = dict(resp)
+    out.setdefault("rationale", "llm")
+    return out
+
+
 def _valid_llm_response(resp: Any) -> bool:
     if not isinstance(resp, dict):
         return False

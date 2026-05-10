@@ -125,6 +125,56 @@ async def test_create_memory_accepts_occurred_at(client, auth_headers, test_org_
 
 
 @pytest.mark.asyncio
+async def test_create_memory_enqueues_tenant_roles_and_clearance(client, auth_headers, test_org_id, test_user_id, monkeypatch):
+    embed_mock = AsyncMock(return_value=[0.1, 0.2, 0.3])
+    monkeypatch.setattr(memories_endpoints.EmbeddingService, "embed", embed_mock)
+
+    captured_calls: list[tuple[str, dict]] = []
+
+    def _capture(name: str):
+        def _inner(**kwargs):
+            captured_calls.append((name, kwargs))
+            return None
+
+        return _inner
+
+    monkeypatch.setattr(memories_endpoints, "enqueue_memory_pipeline", _capture("memory"))
+    monkeypatch.setattr(memories_endpoints, "enqueue_episode_pipeline", _capture("episode"))
+    monkeypatch.setattr(memories_endpoints, "enqueue_fact_pipeline", _capture("fact"))
+
+    class StubMemoryService:
+        async def create_memory(self, data, embedding, request_id=None, actor_ctx=None):
+            return SimpleNamespace(
+                **_memory_response_dict(
+                    memory_id="m-enqueue",
+                    org_id=test_org_id,
+                    owner_id=test_user_id,
+                    content_preview=(data.content or "")[:200],
+                )
+            )
+
+    app.dependency_overrides[get_memory_service] = lambda: StubMemoryService()
+
+    resp = await client.post(
+        "/api/v1/memories",
+        headers=auth_headers,
+        json={
+            "content": "hello tenant context",
+            "scope": "personal",
+            "memory_type": "long_term",
+            "classification": "internal",
+        },
+    )
+
+    assert resp.status_code == 201, resp.text
+    assert [name for name, _ in captured_calls] == ["memory", "episode", "fact"]
+    for _, kwargs in captured_calls:
+        assert kwargs["initiator_user_id"] == test_user_id
+        assert kwargs["initiator_roles"] == "org_admin"
+        assert kwargs["initiator_clearance_level"] == 0
+
+
+@pytest.mark.asyncio
 async def test_search_memories_uses_embedding_service(client, auth_headers, test_org_id, test_user_id, monkeypatch):
     embed_mock = AsyncMock(return_value=[0.4, 0.5, 0.6])
     monkeypatch.setattr(memories_endpoints.EmbeddingService, "embed", embed_mock)
@@ -241,30 +291,20 @@ async def test_bulk_enrich_memories_queues_tasks(client, auth_headers, monkeypat
 
     app.dependency_overrides[get_db] = _override_db
 
-    captured_signatures = []
     queued = []
 
-    class _TaskStub:
-        def __init__(self, name):
-            self.name = name
-
-        def si(self, **kwargs):
-            captured_signatures.append((self.name, kwargs))
-            return (self.name, kwargs)
-
     class _ChainStub:
-        def __init__(self, *signatures):
-            self.signatures = signatures
+        def __init__(self, agent_names, kwargs):
+            self.agent_names = agent_names
+            self.kwargs = kwargs
 
         def apply_async(self):
-            queued.append(self.signatures)
+            queued.append((self.agent_names, self.kwargs))
 
-    monkeypatch.setattr("app.tasks.memory_pipeline.entity_resolution_task", _TaskStub("entity_resolution"))
-    monkeypatch.setattr("app.tasks.memory_pipeline.world_model_task", _TaskStub("world_model"))
-    monkeypatch.setattr("app.tasks.memory_pipeline.temporal_reasoning_task", _TaskStub("temporal_reasoning"))
-    monkeypatch.setattr("app.tasks.memory_pipeline.episodic_grouping_task", _TaskStub("episodic_grouping"))
-    monkeypatch.setattr("app.tasks.memory_pipeline.causal_reasoning_task", _TaskStub("causal_reasoning"))
-    monkeypatch.setattr("celery.chain", lambda *signatures: _ChainStub(*signatures))
+    def _build_canvas(*, agent_names, **kwargs):
+        return _ChainStub(tuple(agent_names), kwargs)
+
+    monkeypatch.setattr(memories_endpoints, "build_memory_enrichment_canvas", _build_canvas)
 
     resp = await client.post(
         "/api/v1/memories/enrich/bulk",
@@ -276,4 +316,10 @@ async def test_bulk_enrich_memories_queues_tasks(client, auth_headers, monkeypat
     body = resp.json()
     assert body["queued_count"] == 2
     assert len(queued) == 2
-    assert captured_signatures
+    assert queued[0][0] == (
+        "entity_resolution",
+        "world_model",
+        "temporal_reasoning",
+        "episodic_grouping",
+        "causal_reasoning",
+    )

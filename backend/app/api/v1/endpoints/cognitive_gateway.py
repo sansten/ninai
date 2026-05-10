@@ -18,13 +18,20 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Path, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Path, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.agents.query_intelligence_agent import run_llm_only_query_intelligence
 from app.core.database import get_db, set_tenant_context
 from app.core.requester_context import RequesterContext
 from app.middleware.tenant_context import TenantContext, get_requester_context, require_org_admin
+from app.schemas.memory import MemoryResponse, MemorySearchRequest, SearchHnmsMode
+from app.services.cognitive_evidence_service import CognitiveEvidenceService
+from app.services.cognitive_ingestion_service import CognitiveIngestionService
+from app.services.cognitive_read_planner import CognitiveReadPlanner
+from app.services.grounded_answer_service import GroundedAnswerService
 from app.services.usage_service import UsageService
+from app.services.embedding_service import EmbeddingService
 from app.services.cognitive_gateway_service import (
     CognitiveGatewayCapabilities,
     CognitiveGatewayService,
@@ -32,6 +39,7 @@ from app.services.cognitive_gateway_service import (
     load_gateway_context,
     save_gateway_context,
 )
+from app.services.memory_service import MemoryService
 
 router = APIRouter()
 
@@ -54,15 +62,197 @@ async def _context_working_set_summary(context_id: str | None, org_id: str) -> d
     return dict(ctx.working_set_summary or {})
 
 
+def _coerce_hnms_mode(value: Any) -> SearchHnmsMode | None:
+    if value is None or value == "":
+        return None
+    if isinstance(value, SearchHnmsMode):
+        return value
+    try:
+        return SearchHnmsMode(str(value).strip().lower())
+    except ValueError:
+        return None
+
+
+def _merge_str_lists(*values: Any) -> list[str]:
+    merged: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        if not isinstance(value, list):
+            continue
+        for item in value:
+            if not isinstance(item, str):
+                continue
+            cleaned = item.strip()
+            if not cleaned:
+                continue
+            key = cleaned.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            merged.append(cleaned)
+    return merged
+
+
+def _expand_query_with_intelligence(query: str, intelligence: dict[str, Any]) -> str:
+    extras = list(intelligence.get("extracted_entities") or [])
+    intent = str(intelligence.get("query_intent") or "retrieve").strip().lower()
+
+    if intent == "find_timeline":
+        extras.extend(["timeline", "date", "sequence"])
+    elif intent == "find_person":
+        extras.extend(["person", "name"])
+    elif intent == "explain":
+        extras.extend(["cause", "reason"])
+    elif intent == "compare":
+        extras.extend(["difference", "contrast"])
+    elif intent == "analyze":
+        extras.extend(["pattern", "trend"])
+
+    merged = _merge_str_lists(extras)
+    if not merged:
+        return query
+    return (query + " " + " ".join(merged[:6])).strip()
+
+
+def _memory_to_gateway_candidate(memory: Any) -> dict[str, Any]:
+    return MemoryResponse.model_validate(memory).model_dump(mode="python")
+
+
+def _apply_query_intelligence_filters(
+    memories: list[dict[str, Any]],
+    intelligence: dict[str, Any],
+) -> list[dict[str, Any]]:
+    filters = dict(intelligence.get("dynamic_filters") or {})
+    if not filters:
+        return memories
+
+    filtered = list(memories)
+
+    min_credibility = filters.get("min_credibility")
+    try:
+        min_credibility_f = float(min_credibility) if min_credibility is not None else None
+    except (TypeError, ValueError):
+        min_credibility_f = None
+    if min_credibility_f is not None:
+        def _credibility(mem: dict[str, Any]) -> float:
+            raw = (
+                mem.get("credibility_score")
+                or (mem.get("enrichment") or {}).get("credibility_score")
+                or 0.0
+            )
+            try:
+                return float(raw)
+            except (TypeError, ValueError):
+                return 0.0
+
+        filtered = [
+            mem
+            for mem in filtered
+            if _credibility(mem) >= min_credibility_f
+        ]
+
+    excluded_uncertainty = {
+        str(v).strip().lower()
+        for v in (filters.get("exclude_uncertainty_levels") or [])
+        if str(v).strip()
+    }
+    if excluded_uncertainty:
+        kept: list[dict[str, Any]] = []
+        for mem in filtered:
+            uncertainty = str(
+                mem.get("uncertainty_level")
+                or (mem.get("enrichment") or {}).get("uncertainty_level")
+                or (mem.get("extra_metadata") or {}).get("uncertainty_level")
+                or ""
+            ).strip().lower()
+            if uncertainty not in excluded_uncertainty:
+                kept.append(mem)
+        filtered = kept
+
+    if filters.get("has_temporal_data"):
+        def _score(mem: dict[str, Any]) -> float:
+            try:
+                return float(mem.get("score") or 0.0)
+            except (TypeError, ValueError):
+                return 0.0
+
+        filtered.sort(
+            key=lambda mem: (
+                not bool(
+                    mem.get("occurred_at")
+                    or (mem.get("extra_metadata") or {}).get("event_time")
+                    or (mem.get("enrichment") or {}).get("temporal_anchor")
+                ),
+                -_score(mem),
+            )
+        )
+
+    return filtered
+
+
+async def _compose_gateway_candidates(
+    *,
+    query: str,
+    payload: dict[str, Any],
+    tenant: TenantContext,
+    db: AsyncSession,
+) -> tuple[list[dict[str, Any]], dict[str, Any], str]:
+    await set_tenant_context(db, tenant.user_id, tenant.org_id, tenant.roles_string, tenant.clearance_level)
+
+    try:
+        intelligence = await run_llm_only_query_intelligence(query, {})
+    except Exception:
+        # Keep retrieval available even if LLM intelligence is temporarily unavailable.
+        intelligence = {
+            "query_intent": "retrieve",
+            "extracted_entities": [],
+            "dynamic_filters": {},
+            "suggested_agents": [],
+            "confidence": 0.0,
+            "rationale": "llm_unavailable",
+        }
+    expanded_query = _expand_query_with_intelligence(query, intelligence)
+    filter_tags = _merge_str_lists(
+        payload.get("filter_tags"),
+        (intelligence.get("dynamic_filters") or {}).get("tags"),
+    )
+    limit = max(1, min(int(payload.get("limit") or 10), 100))
+
+    search_request = MemorySearchRequest(
+        query=expanded_query,
+        scope=payload.get("scope"),
+        team_id=payload.get("team_id"),
+        limit=min(max(limit * 3, 10), 100),
+        hybrid=bool(payload.get("hybrid", True)),
+        use_graph=bool(payload.get("use_graph")) or bool(intelligence.get("extracted_entities")),
+        hnms_mode=_coerce_hnms_mode(payload.get("hnms_mode")),
+        tags=filter_tags or None,
+    )
+
+    memory_service = MemoryService(
+        session=db,
+        user_id=tenant.user_id,
+        org_id=tenant.org_id,
+        clearance_level=tenant.clearance_level,
+    )
+    query_embedding = await EmbeddingService.embed(expanded_query)
+    results = await memory_service.search_memories(query_embedding=query_embedding, request=search_request)
+    candidates = [_memory_to_gateway_candidate(memory) for memory in results]
+    candidates = _apply_query_intelligence_filters(candidates, intelligence)
+    return candidates, intelligence, expanded_query
+
+
 # ---------------------------------------------------------------------------
 # POST /cognitive/gateway/write
 # ---------------------------------------------------------------------------
 
 @router.post("/write")
 async def gateway_write(
+    request: Request,
     payload: dict[str, Any] = Body(...),
     tenant: TenantContext = Depends(require_org_admin()),
     requester: RequesterContext = Depends(get_requester_context),
+    db: AsyncSession = Depends(get_db),
     gateway: CognitiveGatewayService = Depends(_get_gateway),
 ) -> dict[str, Any]:
     """Store and enrich a memory record.
@@ -81,13 +271,42 @@ async def gateway_write(
             detail="content is required",
         )
     context_id = payload.get("context_id") or None
+    request_id = getattr(request.state, "request_id", None)
+
+    await set_tenant_context(db, tenant.user_id, tenant.org_id, tenant.roles_string, tenant.clearance_level)
 
     try:
+        if hasattr(gateway, "_check"):
+            gateway._check("write")
+
+        ingestion_service = CognitiveIngestionService(
+            session=db,
+            user_id=tenant.user_id,
+            org_id=tenant.org_id,
+            clearance_level=tenant.clearance_level,
+            roles_string=tenant.roles_string,
+        )
+        memory_create = CognitiveIngestionService.build_gateway_memory_create(
+            content=content,
+            title=str(payload.get("title") or ""),
+            tags=list(payload.get("tags") or []),
+            metadata=dict(payload.get("metadata") or {}),
+            payload=payload,
+            requester=requester,
+            context_id=context_id,
+        )
+        ingestion = await ingestion_service.ingest_memory(
+            data=memory_create,
+            request_id=request_id,
+            requester=requester,
+            storage="long_term",
+        )
         result = await gateway.write(
             content=content,
             title=str(payload.get("title") or ""),
             tags=list(payload.get("tags") or []),
             metadata=dict(payload.get("metadata") or {}),
+            memory_id=ingestion.memory.id,
             context_id=context_id,
             org_id=tenant.org_id if context_id else None,
             requester=requester,
@@ -103,6 +322,8 @@ async def gateway_write(
         "created_at": result.created_at.isoformat(),
         "context_id": context_id,
         "working_set_summary": await _context_working_set_summary(context_id, tenant.org_id),
+        "storage": ingestion.storage,
+        "memory": MemoryResponse.model_validate(ingestion.memory).model_dump(mode="python"),
     }
 
 
@@ -115,6 +336,7 @@ async def gateway_read(
     payload: dict[str, Any] = Body(...),
     tenant: TenantContext = Depends(require_org_admin()),
     requester: RequesterContext = Depends(get_requester_context),
+    db: AsyncSession = Depends(get_db),
     gateway: CognitiveGatewayService = Depends(_get_gateway),
 ) -> dict[str, Any]:
     """Retrieve and rank memories for a query.
@@ -132,36 +354,52 @@ async def gateway_read(
             detail="query is required",
         )
     context_id = payload.get("context_id") or None
+    await set_tenant_context(db, tenant.user_id, tenant.org_id, tenant.roles_string, tenant.clearance_level)
 
     filter_tags = payload.get("filter_tags") or None
     if filter_tags and not isinstance(filter_tags, list):
         filter_tags = None
 
     try:
-        result = await gateway.read(
+        planner = CognitiveReadPlanner(
+            db,
+            user_id=tenant.user_id,
+            org_id=tenant.org_id,
+            clearance_level=tenant.clearance_level,
+            gateway=gateway,
+        )
+        planned = await planner.plan_and_read(
             query=query,
-            memories=list(payload.get("memories") or []),
             limit=int(payload.get("limit") or 10),
-            filter_tags=filter_tags,
             context_id=context_id,
-            org_id=tenant.org_id if context_id else None,
+            scope=payload.get("scope"),
+            team_id=payload.get("team_id"),
+            filter_tags=filter_tags,
+            hybrid=bool(payload.get("hybrid", True)),
+            use_graph=bool(payload.get("use_graph")) if "use_graph" in payload else None,
+            hnms_mode=_coerce_hnms_mode(payload.get("hnms_mode")),
+            supplied_memories=list(payload.get("memories") or []),
             requester=requester,
         )
     except PermissionError as exc:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
 
     return {
-        "memories": result.memories,
-        "total": result.total,
-        "query": result.query,
-        "context_assembled": result.context_assembled,
-        "retrieval_confidence": result.retrieval_confidence,
-        "corrected_by": result.corrected_by,
-        "reasoning_steps": result.reasoning_steps,
-        "compression_ratio": result.compression_ratio,
-        "information_density": result.information_density,
+        "memories": planned.memories,
+        "total": planned.total,
+        "query": planned.query,
+        "context_assembled": planned.context_assembled,
+        "retrieval_confidence": planned.retrieval_confidence,
+        "reasoning_steps": planned.reasoning_steps,
+        "compression_ratio": planned.compression_ratio,
+        "information_density": planned.information_density,
         "context_id": context_id,
         "working_set_summary": await _context_working_set_summary(context_id, tenant.org_id),
+        "retrieval_strategy": planned.retrieval_strategy,
+        "target_memory_level": planned.target_memory_level,
+        "expanded_query": planned.expanded_query if planned.expanded_query != query else None,
+        "query_intelligence": planned.query_intelligence,
+        "evidence_package": planned.evidence_package,
     }
 
 
@@ -390,6 +628,8 @@ async def get_cognitive_state(
 async def gateway_answer(
     payload: dict[str, Any] = Body(...),
     tenant: TenantContext = Depends(require_org_admin()),
+    requester: RequesterContext = Depends(get_requester_context),
+    db: AsyncSession = Depends(get_db),
     gateway: CognitiveGatewayService = Depends(_get_gateway),
 ) -> dict[str, Any]:
     """Generate an answer to a question using pre-fetched memory context.
@@ -410,19 +650,96 @@ async def gateway_answer(
         )
     memories = list(payload.get("memories") or [])
     prompt_override = payload.get("prompt_override") or None
-    if not memories and not prompt_override:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="memories or prompt_override is required",
-        )
+    context_id = payload.get("context_id") or None
+
+    await set_tenant_context(db, tenant.user_id, tenant.org_id, tenant.roles_string, tenant.clearance_level)
+
+    _timeout_raw = payload.get("timeout_seconds") or payload.get("timeout")
+    _timeout_val: float | None = None
+    if _timeout_raw is not None:
+        try:
+            _timeout_val = float(_timeout_raw)
+        except (TypeError, ValueError):
+            _timeout_val = None
+
+    _keep_alive_raw = payload.get("keep_alive")
+    _keep_alive_val: int | None = None
+    if _keep_alive_raw is not None:
+        try:
+            _keep_alive_val = int(_keep_alive_raw)
+        except (TypeError, ValueError):
+            _keep_alive_val = None
 
     try:
+        evidence_package = dict(payload.get("evidence_package") or {})
+        planned = None
+
+        if not prompt_override and not memories:
+            planner = CognitiveReadPlanner(
+                db,
+                user_id=tenant.user_id,
+                org_id=tenant.org_id,
+                clearance_level=tenant.clearance_level,
+                gateway=gateway,
+            )
+            planned = await planner.plan_and_read(
+                query=question,
+                limit=int(payload.get("limit") or 10),
+                context_id=context_id,
+                scope=payload.get("scope"),
+                team_id=payload.get("team_id"),
+                filter_tags=payload.get("filter_tags") if isinstance(payload.get("filter_tags"), list) else None,
+                hybrid=bool(payload.get("hybrid", True)),
+                use_graph=bool(payload.get("use_graph")) if "use_graph" in payload else None,
+                hnms_mode=_coerce_hnms_mode(payload.get("hnms_mode")),
+                requester=requester,
+            )
+            memories = list(planned.memories or [])
+            evidence_package = dict(planned.evidence_package or {})
+        if not prompt_override:
+            if not evidence_package:
+                evidence_service = CognitiveEvidenceService(db, org_id=tenant.org_id)
+                evidence_package = await evidence_service.build_package(
+                    query=question,
+                    memories=memories,
+                )
+
+            grounded = await GroundedAnswerService(gateway).answer(
+                question=question,
+                evidence_package=evidence_package,
+                memories=memories,
+                model=payload.get("model") or None,
+                num_ctx=int(payload.get("num_ctx") or 32768),
+                timeout_seconds=_timeout_val,
+                keep_alive=_keep_alive_val,
+            )
+            return {
+                "answer": grounded.answer,
+                "model": grounded.model,
+                "context_turns": grounded.context_turns,
+                "used_llm": grounded.used_llm,
+                "answer_source": grounded.answer_source,
+                "llm_error": grounded.llm_error,
+                "grounded": grounded.grounded,
+                "confidence": grounded.confidence,
+                "support": grounded.support,
+                "contradictions": grounded.contradictions,
+                "uncertainty_reason": grounded.uncertainty_reason,
+                "evidence_package": evidence_package,
+                "query_intelligence": planned.query_intelligence if planned else None,
+                "retrieval_strategy": planned.retrieval_strategy if planned else None,
+                "target_memory_level": planned.target_memory_level if planned else None,
+                "context_id": context_id,
+            }
+
         result = await gateway.answer(
             question=question,
             memories=memories,
             model=payload.get("model") or None,
             num_ctx=int(payload.get("num_ctx") or 32768),
             prompt_override=prompt_override,
+            timeout_seconds=_timeout_val,
+            keep_alive=_keep_alive_val,
         )
     except PermissionError as exc:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
@@ -432,6 +749,9 @@ async def gateway_answer(
         "model": result.model,
         "context_turns": result.context_turns,
         "used_llm": result.used_llm,
+        "answer_source": result.answer_source,
+        "llm_error": result.llm_error,
+        "context_id": context_id,
     }
 
 

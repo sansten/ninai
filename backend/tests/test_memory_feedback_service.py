@@ -134,3 +134,43 @@ async def test_apply_pending_feedback_memory_missing_returns_warning_and_does_no
     assert summary.get("applied_count") == 0
     # No bulk update should have been attempted
     assert session.execute.call_count == 1
+
+
+@pytest.mark.asyncio
+async def test_apply_pending_feedback_relevance_updates_retrieval_learning():
+    memory_id = str(uuid4())
+    feedback_rows = [
+        _FakeFeedback(
+            id=str(uuid4()),
+            actor_id="u1",
+            feedback_type="relevance",
+            payload={"relevant": True, "value": 1, "query": "release blocker", "comment": "exact hit"},
+            created_at=datetime.now(timezone.utc),
+        ),
+        _FakeFeedback(
+            id=str(uuid4()),
+            actor_id="u2",
+            feedback_type="relevance",
+            payload={"relevant": False, "value": -1},
+            created_at=datetime.now(timezone.utc),
+        ),
+    ]
+
+    memory = SimpleNamespace(tags=[], entities={}, extra_metadata={}, classification="internal")
+    session = AsyncMock()
+    session.execute = AsyncMock(side_effect=[_execute_result_with_rows(feedback_rows), MagicMock()])
+    session.get = AsyncMock(return_value=memory)
+
+    svc = MemoryFeedbackService(session, user_id="u", org_id="org")
+    summary = await svc.apply_pending_feedback(memory_id=memory_id, applied_by="u")
+
+    learning = memory.extra_metadata["retrieval_learning"]
+    quality = memory.extra_metadata["evidence_quality"]
+
+    assert summary["applied_count"] == 2
+    assert learning["relevance_feedback_count"] == 2
+    assert learning["positive_relevance_count"] == 1
+    assert learning["negative_relevance_count"] == 1
+    assert learning["query_hints"][0] == "release blocker"
+    assert quality["human_feedback_count"] == 2
+    assert "feedback_notes" in memory.extra_metadata

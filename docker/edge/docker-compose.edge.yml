@@ -10,19 +10,39 @@ services:
     env_file:
       - .env.edge
     environment:
-      - DATABASE_URL=postgresql+asyncpg://ninai:ninai@postgres:5432/ninai
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=ninai
+      - POSTGRES_PASSWORD=ninai
+      - POSTGRES_DB=ninai
+      - DB_POOL_SIZE=${DB_POOL_SIZE:-10}
+      - DB_MAX_OVERFLOW=${DB_MAX_OVERFLOW:-10}
+      - DB_POOL_TIMEOUT_SECONDS=${DB_POOL_TIMEOUT_SECONDS:-30}
+      - DB_POOL_RECYCLE_SECONDS=${DB_POOL_RECYCLE_SECONDS:-1800}
+      - DB_POOL_USE_LIFO=${DB_POOL_USE_LIFO:-true}
       - REDIS_URL=redis://redis:6379/0
+      - GRAPH_REDIS_URL=redis://falkordb:6379/0
+      - QDRANT_HOST=qdrant
+      - QDRANT_PORT=6333
       - QDRANT_URL=http://qdrant:6333
+      - QDRANT_TIMEOUT_SECONDS=${QDRANT_TIMEOUT_SECONDS:-2.5}
       - OLLAMA_BASE_URL=http://ollama:11434
-      - AGENT_STRATEGY=llm
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-qwen2.5:7b}
+      - AGENT_STRATEGY=${AGENT_STRATEGY:-llm}
       - DEPLOYMENT_MODE=edge
       - LOCAL_FIRST_MODE=true
       - ORG_FEDERATED_LOGIN_ENABLED=false
     depends_on:
-      - postgres
-      - redis
-      - qdrant
-      - ollama
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      falkordb:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+      ollama:
+        condition: service_started
 
   ollama:
     image: ollama/ollama:latest
@@ -37,10 +57,13 @@ services:
     image: qdrant/qdrant:latest
     container_name: ninai-edge-qdrant
     restart: unless-stopped
+    command: ["./qdrant", "--config-path", "/qdrant/config/config.yaml"]
     ports:
       - "6333:6333"
+      - "6334:6334"
     volumes:
       - qdrant_data:/qdrant/storage
+      - ./qdrant/config.yaml:/qdrant/config/config.yaml:ro
 
   postgres:
     image: pgvector/pgvector:pg16
@@ -54,18 +77,51 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ninai -d ninai"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
 
   redis:
     image: redis:7-alpine
     container_name: ninai-edge-redis
     restart: unless-stopped
+    command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
     ports:
       - "6379:6379"
     volumes:
       - redis_data:/data
+      - ./redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+
+  falkordb:
+    image: falkordb/falkordb:latest
+    container_name: ninai-edge-falkordb
+    restart: unless-stopped
+    command: ["redis-server", "/etc/falkordb/falkordb.conf"]
+    ports:
+      - "6380:6379"
+    volumes:
+      - falkordb_data:/data
+      - ./falkordb/falkordb.conf:/etc/falkordb/falkordb.conf:ro
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
 
 volumes:
   ollama_data:
   qdrant_data:
   postgres_data:
   redis_data:
+  falkordb_data:

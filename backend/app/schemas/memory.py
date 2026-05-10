@@ -110,6 +110,7 @@ class MemoryCreate(BaseSchema):
 class MemoryUpdate(BaseSchema):
     """Request schema for updating a memory."""
     
+    content: Optional[str] = Field(None, min_length=1, max_length=100000)
     title: Optional[str] = Field(None, max_length=500)
     tags: Optional[List[str]] = None
     classification: Optional[Classification] = None
@@ -201,6 +202,7 @@ class MemorySearchResponse(BaseSchema):
     facts_used: Optional[List[dict[str, Any]]] = None
     disputed_facts: Optional[List[dict[str, Any]]] = None
     playbooks: Optional[List[dict[str, Any]]] = None
+    evidence_package: Optional[dict[str, Any]] = None
 
 
 # =============================================================================

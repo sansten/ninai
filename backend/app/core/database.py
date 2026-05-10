@@ -33,8 +33,11 @@ _engine_kwargs = dict(
 if settings.APP_ENV == "test":
     _engine_kwargs["poolclass"] = NullPool
 else:
-    _engine_kwargs["pool_size"] = 10
-    _engine_kwargs["max_overflow"] = 20
+    _engine_kwargs["pool_size"] = settings.DB_POOL_SIZE
+    _engine_kwargs["max_overflow"] = settings.DB_MAX_OVERFLOW
+    _engine_kwargs["pool_timeout"] = settings.DB_POOL_TIMEOUT_SECONDS
+    _engine_kwargs["pool_recycle"] = settings.DB_POOL_RECYCLE_SECONDS
+    _engine_kwargs["pool_use_lifo"] = settings.DB_POOL_USE_LIFO
 
 engine: AsyncEngine = create_async_engine(settings.DATABASE_URL, **_engine_kwargs)
 

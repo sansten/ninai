@@ -11,6 +11,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.episode import Episode, EpisodeStatus
 from app.models.episode_event import EpisodeEvent
 from app.models.memory import MemoryMetadata
+from app.models.memory_episode import MemoryEpisode
+from app.models.memory_episode_membership import MemoryEpisodeMembership
 from app.tasks.episode_pipeline import route_memory_to_episode, summarize_episode
 
 
@@ -92,6 +94,22 @@ async def test_episode_router_creates_new_episode_when_no_match(db_session: Asyn
     assert episode.organization_id == test_org_id
     assert episode.status == EpisodeStatus.OPEN
 
+    projected = await db_session.get(MemoryEpisode, result["episode_id"])
+    assert projected is not None
+    assert projected.message_count == 1
+    assert projected.extra_metadata["source_case_episode_id"] == result["episode_id"]
+
+    membership = (
+        await db_session.execute(
+            select(MemoryEpisodeMembership).where(
+                MemoryEpisodeMembership.organization_id == test_org_id,
+                MemoryEpisodeMembership.episode_id == result["episode_id"],
+                MemoryEpisodeMembership.memory_id == memory_id,
+            )
+        )
+    ).scalar_one_or_none()
+    assert membership is not None
+
 
 @pytest.mark.asyncio
 async def test_episode_router_attaches_to_existing_episode_when_similar(db_session: AsyncSession, test_org_id: str, test_user_id: str):
@@ -139,6 +157,11 @@ async def test_episode_router_attaches_to_existing_episode_when_similar(db_sessi
 
     assert result["attached_existing"] is True
     assert result["episode_id"] == existing_episode_id
+
+    projected = await db_session.get(MemoryEpisode, existing_episode_id)
+    assert projected is not None
+    assert projected.message_count == 1
+    assert projected.extra_metadata["entities"]["customer_id"] == "C-100"
 
 
 @pytest.mark.asyncio
@@ -217,3 +240,8 @@ async def test_episode_summarizer_updates_summary_from_recent_events(db_session:
     assert refreshed.summary is not None
     assert "Intermittent Packet Loss" in refreshed.summary
     assert "Customer reports intermittent packet loss" in refreshed.summary
+
+    projected = await db_session.get(MemoryEpisode, episode_id)
+    assert projected is not None
+    assert projected.narrative_summary == refreshed.summary
+    assert projected.status == "open"

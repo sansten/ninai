@@ -1,0 +1,33 @@
+# Speed up Cloud Build uploads for backend image builds.
+# Keep runtime code and packaging files; exclude local artifacts and heavy non-runtime trees.
+
+# VCS / local env
+.git
+.gitignore
+.venv/
+.pytest_cache/
+__pycache__/
+
+# Development-only or heavy content
+tests/
+notebooks/
+kaggle_data/
+performance-tests/
+docs/
+.github/
+
+# Logs and transient files
+*.log
+*.out
+*.tmp
+.tmp_*
+celerybeat-schedule
+
+# Workspace/editor metadata
+.vscode/
+.idea/
+
+# Python cache
+**/__pycache__/
+**/*.pyc
+**/*.pyo

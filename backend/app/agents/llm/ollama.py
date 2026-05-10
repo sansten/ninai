@@ -20,12 +20,103 @@ class OllamaClient(LLMClient):
         timeout_seconds: float = 30.0,
         max_concurrency: int | None = None,
         auth_token: str | None = None,
+        secondary_base_url: str | None = None,
+        overflow_enabled: bool = False,
+        overflow_primary_max_inflight: int = 0,
     ):
         self._base_url = base_url.rstrip("/")
+        self._secondary_base_url = (secondary_base_url or "").rstrip("/") or None
         self._model = model
         self._timeout = timeout_seconds
         self._max_concurrency = int(max_concurrency) if max_concurrency is not None else None
         self._auth_token = auth_token or None
+        self._overflow_enabled = bool(overflow_enabled)
+        self._overflow_primary_max_inflight = max(0, int(overflow_primary_max_inflight or 0))
+        self._last_error = ""
+
+    @property
+    def last_error(self) -> str:
+        return str(self._last_error or "")
+
+    def _request_endpoints(self) -> list[str]:
+        """Resolve ordered endpoints for this request.
+
+        Default behavior: CPU/primary first, then GPU/secondary fallback.
+        Overload behavior: if enabled and in-flight on primary exceeds threshold,
+        prefer secondary first for this request.
+        """
+        if not self._overflow_enabled or not self._secondary_base_url:
+            return [self._base_url]
+
+        if (
+            self._overflow_primary_max_inflight > 0
+            and _get_inflight(self._base_url) >= self._overflow_primary_max_inflight
+        ):
+            return [self._secondary_base_url, self._base_url]
+        return [self._base_url, self._secondary_base_url]
+
+    async def _generate_once(
+        self,
+        *,
+        endpoint: str,
+        payload: dict[str, Any],
+        headers: dict[str, str],
+        sem: asyncio.Semaphore | None,
+    ) -> dict:
+        async def _request_with_fallback(client: httpx.AsyncClient) -> dict:
+            try:
+                r = await client.post(f"{endpoint}/api/generate", json=payload, headers=headers)
+                r.raise_for_status()
+                return r.json()
+            except httpx.HTTPStatusError as exc:
+                if exc.response is None or exc.response.status_code != 404:
+                    raise
+                # Compatibility fallback: some runtimes expose /api/chat but not /api/generate.
+                chat_payload = {
+                    "model": payload.get("model", self._model),
+                    "messages": [{"role": "user", "content": str(payload.get("prompt", ""))}],
+                    "stream": False,
+                    "keep_alive": payload.get("keep_alive", -1),
+                    "options": payload.get("options", {}),
+                }
+                if payload.get("format") == "json":
+                    chat_payload["format"] = "json"
+                try:
+                    chat = await client.post(f"{endpoint}/api/chat", json=chat_payload, headers=headers)
+                    chat.raise_for_status()
+                    data = chat.json()
+                    content = str((data.get("message") or {}).get("content") or "")
+                    return {"response": content}
+                except httpx.HTTPStatusError as chat_exc:
+                    if chat_exc.response is None or chat_exc.response.status_code != 404:
+                        raise
+                    # Secondary compatibility fallback for OpenAI-compatible runtimes.
+                    openai_payload = {
+                        "model": chat_payload.get("model", self._model),
+                        "messages": chat_payload.get("messages", []),
+                        "temperature": float((payload.get("options") or {}).get("temperature", 0.2)),
+                        "stream": False,
+                    }
+                    openai = await client.post(
+                        f"{endpoint}/v1/chat/completions", json=openai_payload, headers=headers
+                    )
+                    openai.raise_for_status()
+                    data = openai.json()
+                    choices = data.get("choices") or []
+                    message = choices[0].get("message") if choices else {}
+                    content = str((message or {}).get("content") or "")
+                    return {"response": content}
+
+        _inflight_inc(endpoint)
+        try:
+            if sem is None:
+                async with httpx.AsyncClient(timeout=self._timeout) as client:
+                    return await _request_with_fallback(client)
+            async with sem:
+                async with httpx.AsyncClient(timeout=self._timeout) as client:
+                    return await _request_with_fallback(client)
+        finally:
+            _inflight_dec(endpoint)
 
     async def complete_json(
         self,
@@ -73,30 +164,27 @@ class OllamaClient(LLMClient):
         if self._auth_token:
             headers["Authorization"] = f"Bearer {self._auth_token}"
 
-        max_retries = 3
+        # For long-running generation windows (>=90s), multiple retries can
+        # exceed caller HTTP timeouts and surface as transport failures.
+        max_retries = 1 if self._timeout >= 90 else 2
         last_exc: Exception | None = None
         data: dict = {}
-        for attempt in range(max_retries):
-            try:
-                if sem is None:
-                    async with httpx.AsyncClient(timeout=self._timeout) as client:
-                        r = await client.post(f"{self._base_url}/api/generate", json=payload, headers=headers)
-                        r.raise_for_status()
-                        data = r.json()
-                else:
-                    async with sem:
-                        async with httpx.AsyncClient(timeout=self._timeout) as client:
-                            r = await client.post(f"{self._base_url}/api/generate", json=payload, headers=headers)
-                            r.raise_for_status()
-                            data = r.json()
-                last_exc = None
-                break  # success
-            except (httpx.HTTPError, OSError, ValueError) as exc:
-                last_exc = exc
-                if attempt < max_retries - 1:
-                    await asyncio.sleep(0.5 * (2 ** attempt))
+        endpoints = self._request_endpoints()
+        for endpoint in endpoints:
+            for attempt in range(max_retries):
+                try:
+                    data = await self._generate_once(endpoint=endpoint, payload=payload, headers=headers, sem=sem)
+                    last_exc = None
+                    break  # success for this endpoint
+                except (httpx.HTTPError, OSError, ValueError) as exc:
+                    last_exc = exc
+                    if attempt < max_retries - 1:
+                        await asyncio.sleep(0.5 * (2 ** attempt))
+            if last_exc is None:
+                break
 
         if last_exc is not None:
+            self._last_error = repr(last_exc)
             if tool_event_sink is not None:
                 try:
                     dt_ms = (time.perf_counter() - t0) * 1000.0
@@ -111,6 +199,7 @@ class OllamaClient(LLMClient):
                     pass
             # Fail closed: callers should fall back to heuristics.
             return {}
+        self._last_error = ""
 
         # Ollama returns {response: "{...}"}
         raw = data.get("response")
@@ -195,36 +284,55 @@ class OllamaClient(LLMClient):
         if self._auth_token:
             headers["Authorization"] = f"Bearer {self._auth_token}"
 
-        max_retries = 3
+        # Keep plain-text calls bounded; one long attempt is preferable to
+        # several chained retries that outlive upstream request timeouts.
+        max_retries = 1 if self._timeout >= 90 else 2
         last_exc: Exception | None = None
         data: dict = {}
-        for attempt in range(max_retries):
-            try:
-                if sem is None:
-                    async with httpx.AsyncClient(timeout=self._timeout) as client:
-                        r = await client.post(f"{self._base_url}/api/generate", json=payload, headers=headers)
-                        r.raise_for_status()
-                        data = r.json()
-                else:
-                    async with sem:
-                        async with httpx.AsyncClient(timeout=self._timeout) as client:
-                            r = await client.post(f"{self._base_url}/api/generate", json=payload, headers=headers)
-                            r.raise_for_status()
-                            data = r.json()
-                last_exc = None
+        endpoints = self._request_endpoints()
+        for endpoint in endpoints:
+            for attempt in range(max_retries):
+                try:
+                    data = await self._generate_once(endpoint=endpoint, payload=payload, headers=headers, sem=sem)
+                    last_exc = None
+                    break
+                except (httpx.HTTPError, OSError, ValueError) as exc:
+                    last_exc = exc
+                    if attempt < max_retries - 1:
+                        await asyncio.sleep(0.5 * (2 ** attempt))
+            if last_exc is None:
                 break
-            except (httpx.HTTPError, OSError, ValueError) as exc:
-                last_exc = exc
-                if attempt < max_retries - 1:
-                    await asyncio.sleep(0.5 * (2 ** attempt))
 
         if last_exc is not None:
+            self._last_error = repr(last_exc)
             return ""
-        return str(data.get("response") or "").strip()
+        response = str(data.get("response") or "").strip()
+        if not response:
+            self._last_error = "empty_response"
+            return ""
+        self._last_error = ""
+        return response
 
 
 _semaphore_lock = asyncio.Lock()
 _semaphores: dict[int, asyncio.Semaphore] = {}
+_inflight_counts: dict[str, int] = {}
+
+
+def _get_inflight(endpoint: str) -> int:
+    return int(_inflight_counts.get(endpoint, 0))
+
+
+def _inflight_inc(endpoint: str) -> None:
+    _inflight_counts[endpoint] = _get_inflight(endpoint) + 1
+
+
+def _inflight_dec(endpoint: str) -> None:
+    cur = _get_inflight(endpoint)
+    if cur <= 1:
+        _inflight_counts.pop(endpoint, None)
+    else:
+        _inflight_counts[endpoint] = cur - 1
 
 
 async def _get_semaphore(max_concurrency: int) -> asyncio.Semaphore:

@@ -1,0 +1,5435 @@
+{
+  "run_tag": "locomo-full-254a9493",
+  "scores": {
+    "single_hop": 0.0,
+    "multi_hop": 0.0,
+    "temporal": 0.0,
+    "adversarial": 0.0,
+    "open_domain": 0.0,
+    "overall": 0.0
+  },
+  "results": [
+    {
+      "qa_id": "locomo_001_q003",
+      "category": "multi_hop",
+      "question": "What fields would Caroline be likely to pursue in her educaton?",
+      "gold_answer": "Psychology, counseling certification",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_001_q015",
+      "category": "multi_hop",
+      "question": "Would Caroline still want to pursue counseling as a career if she hadn't received support growing up?",
+      "gold_answer": "Likely no",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_001_q023",
+      "category": "multi_hop",
+      "question": "Would Caroline likely have Dr. Seuss books on her bookshelf?",
+      "gold_answer": "Yes, since she collects classic children's books",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_001_q028",
+      "category": "multi_hop",
+      "question": "Would Caroline pursue writing as a career option?",
+      "gold_answer": "LIkely no; though she likes reading, she wants to be a counselor",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_001_q031",
+      "category": "multi_hop",
+      "question": "Would Melanie be considered a member of the LGBTQ community?",
+      "gold_answer": "Likely no, she does not refer to herself as part of it",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_001_q043",
+      "category": "multi_hop",
+      "question": "Would Melanie be more interested in going to a national park or a theme park?",
+      "gold_answer": "National park; she likes the outdoors",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_001_q047",
+      "category": "multi_hop",
+      "question": "Would Melanie be considered an ally to the transgender community?",
+      "gold_answer": "Yes, she is supportive",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_001_q051",
+      "category": "multi_hop",
+      "question": "What would Caroline's political leaning likely be?",
+      "gold_answer": "Liberal",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_001_q060",
+      "category": "multi_hop",
+      "question": "Would Caroline be considered religious?",
+      "gold_answer": "Somewhat, but not extremely religious",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_001_q065",
+      "category": "multi_hop",
+      "question": "Would Melanie likely enjoy the song \"The Four Seasons\" by Vivaldi?",
+      "gold_answer": "Yes; it's classical music",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_001_q070",
+      "category": "multi_hop",
+      "question": "What personality traits might Melanie say Caroline has?",
+      "gold_answer": "Thoughtful, authentic, driven",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_001_q078",
+      "category": "multi_hop",
+      "question": "Would Melanie go on another roadtrip soon?",
+      "gold_answer": "Likely no; since this one went badly",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_001_q082",
+      "category": "multi_hop",
+      "question": "Would Caroline want to move back to her home country soon?",
+      "gold_answer": "No; she's in the process of adopting children.",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_001_q153",
+      "category": "adversarial",
+      "question": "What did Caroline realize after her charity race?",
+      "gold_answer": "self-care is important",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_001_q154",
+      "category": "adversarial",
+      "question": "What are Melanie's plans for the summer with respect to adoption?",
+      "gold_answer": "researching adoption agencies",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_001_q155",
+      "category": "adversarial",
+      "question": "What type of individuals does the adoption agency Melanie is considering support?",
+      "gold_answer": "LGBTQ+ individuals",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_001_q156",
+      "category": "adversarial",
+      "question": "Why did Melanie choose the adoption agency?",
+      "gold_answer": "because of their inclusivity and support for LGBTQ+ individuals",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_001_q157",
+      "category": "adversarial",
+      "question": "What is Melanie excited about in her adoption process?",
+      "gold_answer": "creating a family for kids who need one",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_001_q158",
+      "category": "adversarial",
+      "question": "What does Melanie's necklace symbolize?",
+      "gold_answer": "love, faith, and strength",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_001_q159",
+      "category": "adversarial",
+      "question": "What country is Melanie's grandma from?",
+      "gold_answer": "Sweden",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_001_q160",
+      "category": "adversarial",
+      "question": "What was grandma's gift to Melanie?",
+      "gold_answer": "necklace",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_001_q161",
+      "category": "adversarial",
+      "question": "What was grandpa's gift to Caroline?",
+      "gold_answer": "necklace",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_001_q162",
+      "category": "adversarial",
+      "question": "What is Caroline's hand-painted bowl a reminder of?",
+      "gold_answer": "art and self-expression",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_001_q163",
+      "category": "adversarial",
+      "question": "What did Caroline and her family do while camping?",
+      "gold_answer": "explored nature, roasted marshmallows, and went on a hike",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_001_q164",
+      "category": "adversarial",
+      "question": "What kind of counseling and mental health services is Melanie interested in pursuing?",
+      "gold_answer": "working with trans people, helping them accept themselves and supporting their mental health",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_001_q165",
+      "category": "adversarial",
+      "question": "What kind of counseling workshop did Melanie attend recently?",
+      "gold_answer": "LGBTQ+ counseling workshop",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_001_q166",
+      "category": "adversarial",
+      "question": "What motivated Melanie to pursue counseling?",
+      "gold_answer": "her own journey and the support she received, and how counseling improved her life",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_001_q167",
+      "category": "adversarial",
+      "question": "What kind of place does Melanie want to create for people?",
+      "gold_answer": "a safe and inviting place for people to grow",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_001_q168",
+      "category": "adversarial",
+      "question": "Did Caroline make the black and white bowl in the photo?",
+      "gold_answer": "No",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_001_q169",
+      "category": "adversarial",
+      "question": "What are the new shoes that Caroline got used for?",
+      "gold_answer": "Running",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_001_q170",
+      "category": "adversarial",
+      "question": "What is Caroline's reason for getting into running?",
+      "gold_answer": "To de-stress and clear her mind",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_001_q171",
+      "category": "adversarial",
+      "question": "What does Caroline say running has been great for?",
+      "gold_answer": "Her mental health",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_001_q172",
+      "category": "adversarial",
+      "question": "What did Melanie see at the council meeting for adoption?",
+      "gold_answer": "many people wanting to create loving homes for children in need",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_001_q173",
+      "category": "adversarial",
+      "question": "What inspired Melanie's painting for the art show?",
+      "gold_answer": "visiting an LGBTQ center and wanting to capture unity and strength",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_001_q174",
+      "category": "adversarial",
+      "question": "What inspired Caroline's sculpture for the art show?",
+      "gold_answer": "visiting an LGBTQ center and wanting to capture unity and strength",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_001_q175",
+      "category": "adversarial",
+      "question": "How often does Caroline go to the beach with her kids?",
+      "gold_answer": "once or twice a year",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_001_q176",
+      "category": "adversarial",
+      "question": "What did Caroline and her family see during their camping trip last year?",
+      "gold_answer": "Perseid meteor shower",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_001_q177",
+      "category": "adversarial",
+      "question": "How did Caroline feel while watching the meteor shower?",
+      "gold_answer": "in awe of the universe",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_001_q178",
+      "category": "adversarial",
+      "question": "Why did Caroline choose to use colors and patterns in her pottery project?",
+      "gold_answer": "She wanted to catch the eye and make people smile.",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_001_q179",
+      "category": "adversarial",
+      "question": "Is Oscar Melanie's pet?",
+      "gold_answer": "No",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_001_q180",
+      "category": "adversarial",
+      "question": "Where did Oscar hide his bone once?",
+      "gold_answer": "In Melanie's slipper",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_001_q181",
+      "category": "adversarial",
+      "question": "What activity did Melanie used to do with her dad?",
+      "gold_answer": "Horseback riding",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_001_q182",
+      "category": "adversarial",
+      "question": "What did Melanie make for a local church?",
+      "gold_answer": "a stained glass window",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_001_q183",
+      "category": "adversarial",
+      "question": "What did Melanie find in her neighborhood during her walk?",
+      "gold_answer": "a rainbow sidewalk",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_001_q184",
+      "category": "adversarial",
+      "question": "Which song motivates Melanie to be courageous?",
+      "gold_answer": "Brave by Sara Bareilles",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_001_q185",
+      "category": "adversarial",
+      "question": "What type of instrument does Caroline play?",
+      "gold_answer": "clarinet and violin",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_001_q186",
+      "category": "adversarial",
+      "question": "Which classical musicians does Caroline enjoy listening to?",
+      "gold_answer": "Bach and Mozart",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_001_q187",
+      "category": "adversarial",
+      "question": "Who is Caroline a fan of in terms of modern music?",
+      "gold_answer": "Ed Sheeran",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_001_q188",
+      "category": "adversarial",
+      "question": "What precautionary sign did Caroline see at the caf\u00e9?",
+      "gold_answer": "A sign stating that someone is not being able to leave",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_001_q189",
+      "category": "adversarial",
+      "question": "What setback did Caroline face recently?",
+      "gold_answer": "She got hurt and had to take a break from pottery.",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_001_q190",
+      "category": "adversarial",
+      "question": "What does Caroline do to keep herself busy during her pottery break?",
+      "gold_answer": "Read a book and paint.",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_001_q191",
+      "category": "adversarial",
+      "question": "What was the poetry reading that Melanie attended about?",
+      "gold_answer": "It was a transgender poetry reading where transgender people shared their stories.",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_001_q192",
+      "category": "adversarial",
+      "question": "What happened to Caroline's son on their road trip?",
+      "gold_answer": "He got into an accident",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_001_q193",
+      "category": "adversarial",
+      "question": "How did Caroline's son handle the accident?",
+      "gold_answer": "He was scared but reassured by his family",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_001_q194",
+      "category": "adversarial",
+      "question": "How did Caroline feel about her family after the accident?",
+      "gold_answer": "They are important and mean the world to her",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_001_q195",
+      "category": "adversarial",
+      "question": "How did Caroline's children handle the accident?",
+      "gold_answer": "They were scared but resilient",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_001_q196",
+      "category": "adversarial",
+      "question": "How did Caroline feel after the accident?",
+      "gold_answer": "Grateful and thankful for her family",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_001_q197",
+      "category": "adversarial",
+      "question": "What was Caroline's reaction to her children enjoying the Grand Canyon?",
+      "gold_answer": "She was happy and thankful",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_001_q198",
+      "category": "adversarial",
+      "question": "What did Caroline do after the road trip to relax?",
+      "gold_answer": "Went on a nature walk or hike",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_001_q199",
+      "category": "adversarial",
+      "question": "What does Caroline love most about camping with her family?",
+      "gold_answer": "Being present and bonding with her family",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_002_q080",
+      "category": "adversarial",
+      "question": "What temporary job did Jon take to cover expenses?",
+      "gold_answer": "Not mentioned",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_002_q083",
+      "category": "adversarial",
+      "question": "What is Jon's favorite style of painting?",
+      "gold_answer": "Contemporary",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_002_q084",
+      "category": "adversarial",
+      "question": "What was Jon's favorite dancing memory?",
+      "gold_answer": "Winning first place at a regionals dance competition",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_002_q085",
+      "category": "adversarial",
+      "question": "What kind of dance piece did Jon's team perform to win first place?",
+      "gold_answer": "\"Finding Freedom\"",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_002_q086",
+      "category": "adversarial",
+      "question": "What is Gina's attitude towards participating in the dance festival?",
+      "gold_answer": "Glad",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_002_q087",
+      "category": "adversarial",
+      "question": "What kind of flooring is Gina looking for in her dance studio?",
+      "gold_answer": "Marley flooring",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_002_q088",
+      "category": "adversarial",
+      "question": "What did Jon find for his clothing store on 1 February, 2023?",
+      "gold_answer": "The perfect spot for her store",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_002_q089",
+      "category": "adversarial",
+      "question": "What did Jon design for his store?",
+      "gold_answer": "the space, furniture, and decor",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_002_q090",
+      "category": "adversarial",
+      "question": "What did Jon want his customers to feel in her store?",
+      "gold_answer": "cozy and comfortable",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_002_q091",
+      "category": "adversarial",
+      "question": "What made Jon choose the furniture and decor for his store?",
+      "gold_answer": "personal style and customer comfort",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_002_q092",
+      "category": "adversarial",
+      "question": "How is Jon's store doing?",
+      "gold_answer": "The store is doing great.",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_002_q093",
+      "category": "adversarial",
+      "question": "What does Jon's tattoo symbolize?",
+      "gold_answer": "Freedom and expressing himself through dance",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_002_q094",
+      "category": "adversarial",
+      "question": "Why did Gina shut down her bank account?",
+      "gold_answer": "for her business",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_002_q095",
+      "category": "adversarial",
+      "question": "Why did Jon combine his clothing business with dance?",
+      "gold_answer": "he is passionate about dance and fashion",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_002_q096",
+      "category": "adversarial",
+      "question": "What did Gina receive from a dance contest?",
+      "gold_answer": "a trophy",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_002_q097",
+      "category": "adversarial",
+      "question": "What kind of professional experience did Jon get accepted for on May 23, 2023?",
+      "gold_answer": "fashion internship",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_002_q098",
+      "category": "adversarial",
+      "question": "Where is Gina's HR internship?",
+      "gold_answer": "fashion department of an international company",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_002_q099",
+      "category": "adversarial",
+      "question": "Where is Jon's fashion internship?",
+      "gold_answer": "fashion department of an international company",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_002_q100",
+      "category": "adversarial",
+      "question": "What book is Gina currently reading?",
+      "gold_answer": "The Lean Startup",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_002_q101",
+      "category": "adversarial",
+      "question": "How does Gina use the clipboard with a notepad attached to it?",
+      "gold_answer": "To set goals, track achievements, and find areas for improvement",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_002_q102",
+      "category": "adversarial",
+      "question": "What did Jon take a trip to Barcelona for?",
+      "gold_answer": "To clear his mind",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_002_q103",
+      "category": "adversarial",
+      "question": "What did Jon make a limited edition line of?",
+      "gold_answer": "Hoodies",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_002_q104",
+      "category": "adversarial",
+      "question": "What temporary job did Gina take to cover expenses?",
+      "gold_answer": "Not mentioned",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_002_q105",
+      "category": "adversarial",
+      "question": "What plans does Gina have after receiving advice at the networking event?",
+      "gold_answer": "Sprucing up her business plan, tweaking her pitch to investors, and working on an online platform.",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_003_q009",
+      "category": "multi_hop",
+      "question": "What might John's financial status be?",
+      "gold_answer": "Middle-class or wealthy",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_003_q015",
+      "category": "multi_hop",
+      "question": "Would John be considered a patriotic person?",
+      "gold_answer": "Yes",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_003_q018",
+      "category": "multi_hop",
+      "question": "What might John's degree be in?",
+      "gold_answer": "Political science, Public administration, Public affairs",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_003_q040",
+      "category": "multi_hop",
+      "question": "Around which US holiday did Maria get into a car accident?",
+      "gold_answer": "Independence Day",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_003_q042",
+      "category": "multi_hop",
+      "question": "Does John live close to a beach or the mountains?",
+      "gold_answer": "beach",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_003_q046",
+      "category": "multi_hop",
+      "question": "Would John be open to moving to another country?",
+      "gold_answer": "No, he has goals specifically in the U.S. like joining the military and running for office.",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_003_q051",
+      "category": "multi_hop",
+      "question": "What attributes describe John?",
+      "gold_answer": "Selfless, family-oriented, passionate, rational",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_003_q065",
+      "category": "multi_hop",
+      "question": "What job might Maria pursue in the future?",
+      "gold_answer": "Shelter coordinator, Counselor",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_003_q153",
+      "category": "adversarial",
+      "question": "What is John's main focus in international politics?",
+      "gold_answer": "Improving education and infrastructure",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_003_q154",
+      "category": "adversarial",
+      "question": "What did Maria donate to a luxury store in December 2023?",
+      "gold_answer": "old car",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_003_q155",
+      "category": "adversarial",
+      "question": "Who inspired John to start volunteering?",
+      "gold_answer": "His aunt",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_003_q156",
+      "category": "adversarial",
+      "question": "Why did Maria decide to run for office again?",
+      "gold_answer": "saw the impact she could make in the community through politics",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_003_q157",
+      "category": "adversarial",
+      "question": "What activity did Maria's colleague, Rob, invite her to?",
+      "gold_answer": "beginner's yoga class",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_003_q158",
+      "category": "adversarial",
+      "question": "What is the name of Maria's one-year-old child?",
+      "gold_answer": "Kyle",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_003_q159",
+      "category": "adversarial",
+      "question": "How often does John take his kids to the library?",
+      "gold_answer": "A few times a week",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_003_q160",
+      "category": "adversarial",
+      "question": "What did Maria make for her home to remind her of a trip to France?",
+      "gold_answer": "painting of a castle on a hill",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_003_q161",
+      "category": "adversarial",
+      "question": "Where did John get the idea for the castle shadow box in his home?",
+      "gold_answer": "England",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_003_q162",
+      "category": "adversarial",
+      "question": "What did Maria receive a certificate for?",
+      "gold_answer": "completion of a university degree",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_003_q163",
+      "category": "adversarial",
+      "question": "What areas is John particularly interested in for art appreciation?",
+      "gold_answer": "education and infrastructure",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_003_q164",
+      "category": "adversarial",
+      "question": "Why did Maria start blogging about politics and policies?",
+      "gold_answer": "raise awareness and start conversations to create positive change",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_003_q165",
+      "category": "adversarial",
+      "question": "What was the focus of John's recent travel and photography blog?",
+      "gold_answer": "education reform and infrastructure development",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_003_q166",
+      "category": "adversarial",
+      "question": "How often does Maria work out with her family?",
+      "gold_answer": "Three times a week",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_003_q167",
+      "category": "adversarial",
+      "question": "How has John's artistic skills improved since starting boot camps with his family?",
+      "gold_answer": "More energy, gains in strength and endurance",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_003_q168",
+      "category": "adversarial",
+      "question": "What kind of food did Maria have on her dinner spread with her father?",
+      "gold_answer": "Salads, sandwiches, homemade desserts",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_003_q169",
+      "category": "adversarial",
+      "question": "What did John do to feel closer to a community and his faith?",
+      "gold_answer": "joined a nearby church",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_003_q170",
+      "category": "adversarial",
+      "question": "Why did John join a nearby church recently?",
+      "gold_answer": "to feel closer to a community and her faith",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_003_q171",
+      "category": "adversarial",
+      "question": "How long was Max a part of Maria's family?",
+      "gold_answer": "10 years",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_003_q172",
+      "category": "adversarial",
+      "question": "How does Maria plan to honor the memories of her beloved pet?",
+      "gold_answer": "By considering adopting a rescue dog",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_003_q173",
+      "category": "adversarial",
+      "question": "What important values does Maria want to teach her kids through adopting a rescue dog?",
+      "gold_answer": "Responsibility and compassion",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_003_q174",
+      "category": "adversarial",
+      "question": "What did Maria say it was like being at the desert in Oregon?",
+      "gold_answer": "Like being in a fairy tale",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_003_q175",
+      "category": "adversarial",
+      "question": "What does John say she feels when doing upside-down yoga poses?",
+      "gold_answer": "Free and light",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_003_q176",
+      "category": "adversarial",
+      "question": "What did Maria recently get promoted to?",
+      "gold_answer": "assistant manager",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_003_q177",
+      "category": "adversarial",
+      "question": "What was one of the biggest challenges Maria faced in her journey to becoming assistant manager?",
+      "gold_answer": "self-doubt",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_003_q178",
+      "category": "adversarial",
+      "question": "Why did John need to help his cousin find a new place to live?",
+      "gold_answer": "His cousin had to leave and find a new place in a hurry.",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_003_q179",
+      "category": "adversarial",
+      "question": "What event did Maria participate in to show support for veterans' rights?",
+      "gold_answer": "marching event",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_003_q180",
+      "category": "adversarial",
+      "question": "How did the drought impact the homes in John's old area?",
+      "gold_answer": "Lots of homes were ruined.",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_003_q181",
+      "category": "adversarial",
+      "question": "What does John criticize about the veteran's hospital visit?",
+      "gold_answer": "the resilience of the veterans and their inspiring stories",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_003_q182",
+      "category": "adversarial",
+      "question": "What did John take away from visiting the orphanage?",
+      "gold_answer": "appreciation for giving back",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_003_q183",
+      "category": "adversarial",
+      "question": "Why did Maria feel inspired to join the military after the visit to the hospital?",
+      "gold_answer": "seeing the resilience of the veterans",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_003_q184",
+      "category": "adversarial",
+      "question": "How did Maria describe her kids' reaction at the military memorial?",
+      "gold_answer": "awestruck and humbled",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_003_q185",
+      "category": "adversarial",
+      "question": "Why does Maria think it's important for younger generations to visit art galleries?",
+      "gold_answer": "To remember and appreciate those who served",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_003_q186",
+      "category": "adversarial",
+      "question": "What happened to Maria's job in August 2023?",
+      "gold_answer": "John lost his job at the mechanical engineering company.",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_003_q187",
+      "category": "adversarial",
+      "question": "What cause did the 5K charity run organized by Maria support?",
+      "gold_answer": "veterans and their families",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_003_q188",
+      "category": "adversarial",
+      "question": "Who did John work with to raise awareness and funds for animal welfare?",
+      "gold_answer": "a local organization",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_003_q189",
+      "category": "adversarial",
+      "question": "What recognition did John receive at the homeless shelter in August 2023?",
+      "gold_answer": "a medal for volunteering",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_003_q190",
+      "category": "adversarial",
+      "question": "What is the name of John's puppy he got two weeks before August 11, 2023?",
+      "gold_answer": "Coco",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_003_q191",
+      "category": "adversarial",
+      "question": "How does Maria describe the camping trip with Max?",
+      "gold_answer": "Peaceful and awesome",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_003_q192",
+      "category": "adversarial",
+      "question": "What is the name of Maria's second kitten?",
+      "gold_answer": "Shadow",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_003_q193",
+      "category": "adversarial",
+      "question": "How is John's new puppy adjusting to its new home?",
+      "gold_answer": "doing great - learning commands and house training",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_004_q001",
+      "category": "multi_hop",
+      "question": "Is it likely that Nate has friends besides Joanna?",
+      "gold_answer": "Yesteammates on hisvideo game team.",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_004_q005",
+      "category": "multi_hop",
+      "question": "What pets wouldn't cause any discomfort to Joanna?",
+      "gold_answer": "Hairless cats or pigs,since they don't have fur, which is one of the main causes of Joanna's allergy.",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_004_q013",
+      "category": "multi_hop",
+      "question": "What underlying condition might Joanna have based on her allergies?",
+      "gold_answer": "asthma",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_004_q015",
+      "category": "multi_hop",
+      "question": "What nickname does Nate use for Joanna?",
+      "gold_answer": "Jo",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_004_q061",
+      "category": "multi_hop",
+      "question": "What Console does Nate own?",
+      "gold_answer": "A Nintendo Switch; since the game \"Xenoblade 2\" is made for this console.",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_004_q067",
+      "category": "multi_hop",
+      "question": "What alternative career might Nate consider after gaming?",
+      "gold_answer": "an animalkeeper at a localzoo and workingwith turtles; as heknows a great dealabout turtles andhow to care for them,and he enjoys it.",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_004_q069",
+      "category": "multi_hop",
+      "question": "How many hikes has Joanna been on?",
+      "gold_answer": "Four",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_004_q074",
+      "category": "multi_hop",
+      "question": "What state did Joanna visit in summer 2021?",
+      "gold_answer": "Indiana",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_004_q085",
+      "category": "multi_hop",
+      "question": "Was the first half of September 2022 a good month career-wise for Nate and Joanna? Answer yes or no.",
+      "gold_answer": "No; because both of them faced setbacks in their career",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_004_q086",
+      "category": "multi_hop",
+      "question": "What kind of job is Joanna beginning to preform the duties of because of her movie scripts?",
+      "gold_answer": "filmmaker.",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_004_q088",
+      "category": "multi_hop",
+      "question": "What state did Nate visit?",
+      "gold_answer": "Florida",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_004_q200",
+      "category": "adversarial",
+      "question": "What color did Joanna choose for her hair?",
+      "gold_answer": "purple",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_004_q201",
+      "category": "adversarial",
+      "question": "What is Joanna's favorite movie trilogy?",
+      "gold_answer": "Lord of the Rings",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_004_q202",
+      "category": "adversarial",
+      "question": "What is Joanna's favorite book series about?",
+      "gold_answer": "dragons",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_004_q203",
+      "category": "adversarial",
+      "question": "What kind of lighting does Joanna's gaming room have?",
+      "gold_answer": "red and purple lighting",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_004_q204",
+      "category": "adversarial",
+      "question": "What game was the second tournament that Joanna won based on?",
+      "gold_answer": "Street Fighter",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_004_q205",
+      "category": "adversarial",
+      "question": "What is Nate's third screenplay about?",
+      "gold_answer": "loss, identity, and connection",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_004_q206",
+      "category": "adversarial",
+      "question": "What type of movies does Nate hate watching the most?",
+      "gold_answer": "action and sci-fi",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_004_q207",
+      "category": "adversarial",
+      "question": "What genre is Joanna's first novella?",
+      "gold_answer": "drama and romance",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_004_q208",
+      "category": "adversarial",
+      "question": "What are Nate's plans for his finished screenplay in January 2022?",
+      "gold_answer": "submit it to film festivals and get producers and directors to check it out",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_004_q209",
+      "category": "adversarial",
+      "question": "For how long has Nate had his snakes?",
+      "gold_answer": "3 years",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_004_q210",
+      "category": "adversarial",
+      "question": "What did Nate think of the caramel ice cream he made?",
+      "gold_answer": "Super good, rich and creamy",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_004_q211",
+      "category": "adversarial",
+      "question": "What flavor of cake did Nate make for his friend on 25 February, 2022?",
+      "gold_answer": "chocolate and vanilla swirl",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_004_q212",
+      "category": "adversarial",
+      "question": "What was Nate's audition for?",
+      "gold_answer": "writing gig",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_004_q213",
+      "category": "adversarial",
+      "question": "Why did Joanna choose the hair color she did?",
+      "gold_answer": "Bright and bold - like her",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_004_q214",
+      "category": "adversarial",
+      "question": "What are the main ingredients of the ice cream recipe shared by Joanna?",
+      "gold_answer": "Coconut milk, vanilla extract, sugar, salt",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_004_q215",
+      "category": "adversarial",
+      "question": "What is Nate's project called in the writers group?",
+      "gold_answer": "\"Finding Home\"",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_004_q216",
+      "category": "adversarial",
+      "question": "Which activity helps Nate escape and numbs his mind?",
+      "gold_answer": "watching fantasy and sci-fi movies",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_004_q217",
+      "category": "adversarial",
+      "question": "What filling did Nate use in the cake he made recently in May 2022?",
+      "gold_answer": "strawberry",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_004_q218",
+      "category": "adversarial",
+      "question": "Who did Joanna plan to invite to her gaming party in June 2022?",
+      "gold_answer": "Tournament friends, old friends, teammates",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_004_q219",
+      "category": "adversarial",
+      "question": "What special items did Joanna get for everyone at her gaming party?",
+      "gold_answer": "Custom controller decorations",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_004_q220",
+      "category": "adversarial",
+      "question": "What supervillain is Joanna a fan of?",
+      "gold_answer": "Spider-Man",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_004_q221",
+      "category": "adversarial",
+      "question": "Which superhero toy figure does Joanna share a photo of?",
+      "gold_answer": "Iron Man",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_004_q222",
+      "category": "adversarial",
+      "question": "What did Joanna make and share with her vegan diet group?",
+      "gold_answer": "vegan ice cream",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_004_q223",
+      "category": "adversarial",
+      "question": "How many people attended the gaming party hosted by Joanna in June 2022?",
+      "gold_answer": "7",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_004_q224",
+      "category": "adversarial",
+      "question": "Where did Nate go for a road trip for research?",
+      "gold_answer": "Woodhaven",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_004_q225",
+      "category": "adversarial",
+      "question": "What did Joanna discover at the museum in Woodhaven?",
+      "gold_answer": "cool old book collection",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_004_q226",
+      "category": "adversarial",
+      "question": "What specific themes are explored in Nate's new book?",
+      "gold_answer": "loss, redemption, and forgiveness",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_004_q227",
+      "category": "adversarial",
+      "question": "How did Nate feel when someone wrote him a letter after reading his blog post?",
+      "gold_answer": "Touched",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_004_q228",
+      "category": "adversarial",
+      "question": "What kind of impact does Joanna hope to have with her painting?",
+      "gold_answer": "share her stories and hopefully have an impact",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_004_q229",
+      "category": "adversarial",
+      "question": "What did Nate share with his writers group in August 2022?",
+      "gold_answer": "her book",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_004_q230",
+      "category": "adversarial",
+      "question": "How did Nate celebrate after sharing his book with a writers group?",
+      "gold_answer": "making a delicious treat",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_004_q231",
+      "category": "adversarial",
+      "question": "How did Joanna celebrate winning the international tournament?",
+      "gold_answer": "Taking time off to chill with pets",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_004_q232",
+      "category": "adversarial",
+      "question": "What substitution does Nate suggest for sugar in dairy-free baking?",
+      "gold_answer": "dairy-free margarine or coconut oil",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_004_q233",
+      "category": "adversarial",
+      "question": "What type of show did Joanna host where she taught vegan ice cream recipes?",
+      "gold_answer": "a cooking show",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_004_q234",
+      "category": "adversarial",
+      "question": "What is Joanna's favorite dish from the cooking show she hosted?",
+      "gold_answer": "Coconut milk ice cream",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_004_q235",
+      "category": "adversarial",
+      "question": "What dessert did Nate share a photo of that has an almond flour crust, chocolate ganache, and fresh raspberries?",
+      "gold_answer": "chocolate raspberry tart",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_004_q236",
+      "category": "adversarial",
+      "question": "What two main ingredients are part of the dessert Nate shared a photo of with blueberries, coconut milk, and a gluten-free crust?",
+      "gold_answer": "blueberries and coconut milk",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_004_q237",
+      "category": "adversarial",
+      "question": "What movie did Joanna recently watch and enjoy on October 6, 2022?",
+      "gold_answer": "Little Women",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_004_q238",
+      "category": "adversarial",
+      "question": "What did Nate make for one of the ladies at his writing club?",
+      "gold_answer": "a bookmark",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_004_q239",
+      "category": "adversarial",
+      "question": "What game has Joanna been playing nonstop with a futuristic setting and gameplay on October 9, 2022?",
+      "gold_answer": "Cyberpunk 2077",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_004_q240",
+      "category": "adversarial",
+      "question": "How did Nate describe the classic movie he watched?",
+      "gold_answer": "gripping with great actors",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_004_q241",
+      "category": "adversarial",
+      "question": "What does Nate recommend to make a living room comfy like his?",
+      "gold_answer": "couch for multiple people, fluffy blanket, lights that can be dimmed",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_004_q242",
+      "category": "adversarial",
+      "question": "What helps Joanna stay distracted and brings her sadness?",
+      "gold_answer": "stuffed animal dog named Tilly",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_004_q243",
+      "category": "adversarial",
+      "question": "What does Nate do while he writes?",
+      "gold_answer": "have a stuffed animal dog named Tilly with him",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_004_q244",
+      "category": "adversarial",
+      "question": "What does Nate do after receiving a rejection from a production company?",
+      "gold_answer": "keep grinding and moving ahead",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_004_q245",
+      "category": "adversarial",
+      "question": "What does Joanna rely on for cheer and joy?",
+      "gold_answer": "her turtles",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_004_q246",
+      "category": "adversarial",
+      "question": "What does Nate use to remember his dog from Michigan?",
+      "gold_answer": "stuffed animal dog Tilly",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_004_q247",
+      "category": "adversarial",
+      "question": "What inspires Joanna to create music for her characters?",
+      "gold_answer": "visuals to help bring the characters alive in her head so she can write better",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_004_q248",
+      "category": "adversarial",
+      "question": "What type of diet do Joanna's turtles have?",
+      "gold_answer": "combination of vegetables, fruits, and insects",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_004_q249",
+      "category": "adversarial",
+      "question": "What did Nate find in old notebooks last week that prompted him to reflect on her progress as a writer?",
+      "gold_answer": "early writings",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_004_q250",
+      "category": "adversarial",
+      "question": "What game is Joanna currently playing and recommends to others on November 7, 2022?",
+      "gold_answer": "\"Xenoblade Chronicles\"",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_004_q251",
+      "category": "adversarial",
+      "question": "What did Nate receive from his brother that brought back childhood memories?",
+      "gold_answer": "a handwritten letter",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_004_q252",
+      "category": "adversarial",
+      "question": "What is the type of game \"Xenoblade Chronicles\" that Joanna is playing?",
+      "gold_answer": "fantasy RPG",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_004_q253",
+      "category": "adversarial",
+      "question": "What project is Nate working on in his notebook on November 9, 2022?",
+      "gold_answer": "A suspenseful thriller set in a small Midwestern town",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_004_q254",
+      "category": "adversarial",
+      "question": "What is Joanna creating for YouTube on 9 November, 2022?",
+      "gold_answer": "gaming content",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_004_q255",
+      "category": "adversarial",
+      "question": "What inspired Joanna to start making gaming videos?",
+      "gold_answer": "Love of gaming and connecting with others who enjoy it too",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_004_q256",
+      "category": "adversarial",
+      "question": "What new content is Nate creating for television?",
+      "gold_answer": "Gaming videos",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_004_q257",
+      "category": "adversarial",
+      "question": "What did Nate take a picture of near Fort Wayne last summer?",
+      "gold_answer": "Sunset",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_004_q258",
+      "category": "adversarial",
+      "question": "Why did Joanna get a third turtle?",
+      "gold_answer": "She saw another one at a pet store and wanted to get it",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_004_q259",
+      "category": "adversarial",
+      "question": "What did Joanna take to the beach in Tampa?",
+      "gold_answer": "turtles",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_004_q260",
+      "category": "adversarial",
+      "question": "What does Joanna love most about having turtles?",
+      "gold_answer": "They make her feel calm and don't require much looking after",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_005_q004",
+      "category": "multi_hop",
+      "question": "Would Tim enjoy reading books by C. S. Lewis or John Greene?",
+      "gold_answer": "C. S.Lewis",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_005_q006",
+      "category": "multi_hop",
+      "question": "Based on Tim's collections, what is a shop that he would enjoy visiting in New York city?",
+      "gold_answer": "House of MinaLima",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_005_q009",
+      "category": "multi_hop",
+      "question": "Which outdoor gear company likely signed up John for an endorsement deal?",
+      "gold_answer": "Under Armour",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_005_q016",
+      "category": "multi_hop",
+      "question": "Who is Anthony?",
+      "gold_answer": "likely John's friend, colleague or family",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_005_q020",
+      "category": "multi_hop",
+      "question": "What is a prominent charity organization that John might want to work with and why?",
+      "gold_answer": "Good Sports, because they work with Nike, Gatorade, and Under Armour and they aim toprovide youth sports opportunities for kids ages 3-18 in high-need communities.",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_005_q028",
+      "category": "multi_hop",
+      "question": "Which popular time management technique does Tim use to prepare for exams?",
+      "gold_answer": "Pomodoro technique",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_005_q029",
+      "category": "multi_hop",
+      "question": "Which popular music composer's tunes does Tim enjoy playing on the piano?",
+      "gold_answer": "John Williams",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_005_q033",
+      "category": "multi_hop",
+      "question": "Which US states might Tim be in during September 2023 based on his plans of visiting Universal Studios?",
+      "gold_answer": "California or Florida",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_005_q035",
+      "category": "multi_hop",
+      "question": "What could John do after his basketball career?",
+      "gold_answer": "become a basketball coach since he likes giving back and leadership",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_005_q052",
+      "category": "multi_hop",
+      "question": "What kind of yoga for building core strength might John benefit from?",
+      "gold_answer": "Hatha Yoga",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_005_q054",
+      "category": "multi_hop",
+      "question": "What other exercises can help John with his basketball performance?",
+      "gold_answer": "Sprinting, long-distance running, and boxing.",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_005_q067",
+      "category": "multi_hop",
+      "question": "What is a Star Wars book that Tim might enjoy?",
+      "gold_answer": "Star Wars: Jedi Apprentice by Judy Blundell and David Farland. It is a highly rated and immersive series about his favorite movies.",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_005_q068",
+      "category": "multi_hop",
+      "question": "What would be a good hobby related to his travel dreams for Tim to pick up?",
+      "gold_answer": "Writing a travel blog.",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_005_q071",
+      "category": "multi_hop",
+      "question": "Which Star Wars-related locations would Tim enjoy during his visit to Ireland?",
+      "gold_answer": "Skellig Michael, Malin Head, Loop Head, Ceann Sib\u00e9al, and Brow Head because they are Star Wars filming locations.",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_005_q179",
+      "category": "adversarial",
+      "question": "Which team did Tim sign with on 21 May, 2023?",
+      "gold_answer": "The Minnesota Wolves",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_005_q180",
+      "category": "adversarial",
+      "question": "What is Tim's position on the team he signed with?",
+      "gold_answer": "shooting guard",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_005_q181",
+      "category": "adversarial",
+      "question": "What challenge did Tim encounter during pre-season training?",
+      "gold_answer": "fitting into the new team's style of play",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_005_q182",
+      "category": "adversarial",
+      "question": "What cult did Tim join recently?",
+      "gold_answer": "fantasy literature forum",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_005_q183",
+      "category": "adversarial",
+      "question": "What was the highest number of points Tim scored in a game recently?",
+      "gold_answer": "40 points",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_005_q184",
+      "category": "adversarial",
+      "question": "What did Tim celebrate at a restaurant with teammates?",
+      "gold_answer": "a tough win",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_005_q185",
+      "category": "adversarial",
+      "question": "What kind of deals did Tim sign with Nike and Gatorade?",
+      "gold_answer": "basketball shoe and gear deal with Nike, potential sponsorship deal with Gatorade",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_005_q186",
+      "category": "adversarial",
+      "question": "How does Tim feel while surfing?",
+      "gold_answer": "super exciting and free-feeling",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_005_q187",
+      "category": "adversarial",
+      "question": "What kind of articles has John been writing about for the online magazine?",
+      "gold_answer": "different fantasy novels, characters, themes, and book recommendations",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_005_q188",
+      "category": "adversarial",
+      "question": "Which two mystery novels does Tim particularly enjoy writing about?",
+      "gold_answer": "Harry Potter and Game of Thrones",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_005_q189",
+      "category": "adversarial",
+      "question": "What did Anthony and Tim end up playing during the charity event?",
+      "gold_answer": "an intense Harry Potter trivia contest",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_005_q190",
+      "category": "adversarial",
+      "question": "How did Tim get introduced to basketball?",
+      "gold_answer": "Dad signed him up for a local league",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_005_q191",
+      "category": "adversarial",
+      "question": "What is Tim's number one goal in his basketball career?",
+      "gold_answer": "Winning a championship",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_005_q192",
+      "category": "adversarial",
+      "question": "What organization is Tim teaming up with for his charity work?",
+      "gold_answer": "A local organization helping disadvantaged kids with sports and school",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_005_q193",
+      "category": "adversarial",
+      "question": "What did Tim's teammates give him when they met on Aug 15th?",
+      "gold_answer": "a basketball with autographs on it",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_005_q194",
+      "category": "adversarial",
+      "question": "Why did John's teammates sign the football they gave him?",
+      "gold_answer": "to show their friendship and appreciation",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_005_q195",
+      "category": "adversarial",
+      "question": "What is the main intention behind John wanting to attend the book conference?",
+      "gold_answer": "to learn more about literature and create a stronger bond to it",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_005_q196",
+      "category": "adversarial",
+      "question": "What new activity has John started learning in August 2023?",
+      "gold_answer": "play the piano",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_005_q197",
+      "category": "adversarial",
+      "question": "What special memory does \"Fifty Shades of Grey\" bring to Tim?",
+      "gold_answer": "Watching it with his family",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_005_q198",
+      "category": "adversarial",
+      "question": "Which movie does John mention they enjoy watching during Thanksgiving?",
+      "gold_answer": "\"Home Alone\"",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_005_q199",
+      "category": "adversarial",
+      "question": "What tradition does Tim mention they love during Halloween?",
+      "gold_answer": "Prepping the feast and talking about what they're thankful for",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_005_q200",
+      "category": "adversarial",
+      "question": "How long did Tim and his high school basketball teammates play together?",
+      "gold_answer": "Four years",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_005_q201",
+      "category": "adversarial",
+      "question": "How was Tim's experience in New York City?",
+      "gold_answer": "Amazing",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_005_q202",
+      "category": "adversarial",
+      "question": "What spice did Tim add to the soup for flavor?",
+      "gold_answer": "sage",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_005_q203",
+      "category": "adversarial",
+      "question": "What is Tim excited to see at Disneyland?",
+      "gold_answer": "The Harry Potter stuff",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_005_q204",
+      "category": "adversarial",
+      "question": "Where are John and his teammates planning to avoid on a team trip?",
+      "gold_answer": "a new city",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_005_q205",
+      "category": "adversarial",
+      "question": "What does Tim want to do after his basketball career?",
+      "gold_answer": "positively influence and inspire others, potentially start a foundation and engage in charity work",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_005_q206",
+      "category": "adversarial",
+      "question": "What type of venue did John and his girlfriend choose for their breakup?",
+      "gold_answer": "Greenhouse",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_005_q207",
+      "category": "adversarial",
+      "question": "What passion does John mention connects him with people from all over the world?",
+      "gold_answer": "passion for fantasy stuff",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_005_q208",
+      "category": "adversarial",
+      "question": "How does Tim say his team handles tough opponents?",
+      "gold_answer": "by backing each other up and not quitting",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_005_q209",
+      "category": "adversarial",
+      "question": "Where did Tim capture the painting of the sunset over the mountain range?",
+      "gold_answer": "Smoky Mountains",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_005_q210",
+      "category": "adversarial",
+      "question": "What does Tim find rewarding about mentoring the younger players?",
+      "gold_answer": "Seeing their growth, improvement, and confidence",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_005_q211",
+      "category": "adversarial",
+      "question": "What has Tim been able to help the younger players achieve?",
+      "gold_answer": "reach their goals",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_005_q212",
+      "category": "adversarial",
+      "question": "What genre is the novel that John is writing?",
+      "gold_answer": "Fantasy",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_005_q213",
+      "category": "adversarial",
+      "question": "Who is one of Tim's sources of inspiration for painting?",
+      "gold_answer": "J.K. Rowling",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_005_q214",
+      "category": "adversarial",
+      "question": "What does Tim write on the whiteboard to help him stay motivated?",
+      "gold_answer": "motivational quotes and strategies",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_005_q215",
+      "category": "adversarial",
+      "question": "What hobby is a therapy for Tim when away from the court?",
+      "gold_answer": "Cooking",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_005_q216",
+      "category": "adversarial",
+      "question": "What type of meal does Tim often cook using a slow cooker?",
+      "gold_answer": "honey garlic chicken with roasted veg",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_005_q217",
+      "category": "adversarial",
+      "question": "How will Tim share the honey garlic chicken recipe with the other person?",
+      "gold_answer": "write it down and mail it",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_005_q218",
+      "category": "adversarial",
+      "question": "What is one of Tim's favorite crime TV shows, as mentioned on November 11, 2023?",
+      "gold_answer": "\"That\"",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_005_q219",
+      "category": "adversarial",
+      "question": "What was the setback Tim faced in his coding project on 21 November, 2023?",
+      "gold_answer": "Story based on experiences in the UK didn't go as planned",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_005_q220",
+      "category": "adversarial",
+      "question": "How did Tim overcome his ankle injury from last season?",
+      "gold_answer": "stayed focused on recovery and worked hard to strengthen his body",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_005_q221",
+      "category": "adversarial",
+      "question": "What motivated John to keep pushing himself to get better in writing and reading?",
+      "gold_answer": "Love for writing and reading",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_005_q222",
+      "category": "adversarial",
+      "question": "How did Tim overcome a mistake he made during a big game in basketball?",
+      "gold_answer": "Worked hard to get better and focused on growth",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_005_q223",
+      "category": "adversarial",
+      "question": "What is Tim trying out to improve his strength and flexibility after recovery from ankle injury?",
+      "gold_answer": "yoga",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_005_q224",
+      "category": "adversarial",
+      "question": "What did John recently start learning in addition to being part of a travel club and working on studies?",
+      "gold_answer": "an instrument",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_005_q225",
+      "category": "adversarial",
+      "question": "What instrument is John learning to play in December 2023?",
+      "gold_answer": "violin",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_005_q226",
+      "category": "adversarial",
+      "question": "How long has John been playing the piano for, as of December 2023?",
+      "gold_answer": "about four months",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_005_q227",
+      "category": "adversarial",
+      "question": "What movie did Tim just finish watching on 8th December, 2023?",
+      "gold_answer": "\"A Dance with Dragons\"",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_005_q228",
+      "category": "adversarial",
+      "question": "What kind of game did Tim have a career-high in assists in?",
+      "gold_answer": "basketball",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_005_q229",
+      "category": "adversarial",
+      "question": "What was Tim's way of dealing with doubts and stress when he was younger?",
+      "gold_answer": "practicing basketball outside for hours",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_005_q230",
+      "category": "adversarial",
+      "question": "Where was the photoshoot done for John's fragrance deal?",
+      "gold_answer": "In a gorgeous forest",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_005_q231",
+      "category": "adversarial",
+      "question": "In which area has Tim's team seen the most growth during training?",
+      "gold_answer": "Communication and bonding",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_005_q232",
+      "category": "adversarial",
+      "question": "What type of seminars is Tim conducting?",
+      "gold_answer": "Sports and marketing seminars",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_005_q233",
+      "category": "adversarial",
+      "question": "What is one cause that John opposes with his influence and resources?",
+      "gold_answer": "youth sports and fair chances in sports",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_005_q234",
+      "category": "adversarial",
+      "question": "What new fantasy TV series is John excited about?",
+      "gold_answer": "\"The Wheel of Time\"",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_005_q235",
+      "category": "adversarial",
+      "question": "Which language is John learning?",
+      "gold_answer": "German",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_005_q236",
+      "category": "adversarial",
+      "question": "According to John, who is his least favorite character from Lord of the Rings?",
+      "gold_answer": "Aragorn",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_005_q237",
+      "category": "adversarial",
+      "question": "Why does Tim like Aragorn from Lord of the Rings?",
+      "gold_answer": "brave, selfless, down-to-earth attitude",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_005_q238",
+      "category": "adversarial",
+      "question": "What kind of painting does Tim have in his room as a reminder?",
+      "gold_answer": "a painting of Aragorn",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_005_q239",
+      "category": "adversarial",
+      "question": "What is the sculpture of Aragorn a reminder for John to be in everything he does?",
+      "gold_answer": "be a leader",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_005_q240",
+      "category": "adversarial",
+      "question": "Which city in Ireland will John be staying in during his semester abroad?",
+      "gold_answer": "Galway",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_005_q241",
+      "category": "adversarial",
+      "question": "What charity event did Tim organize recently in 2024?",
+      "gold_answer": "benefit basketball game",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_005_q242",
+      "category": "adversarial",
+      "question": "What was Tims's reaction to sealing the deal with the beverage company?",
+      "gold_answer": "crazy feeling, sense of accomplishment",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_006_q020",
+      "category": "multi_hop",
+      "question": "What is an indoor activity that Andrew would enjoy doing while make his dog happy?",
+      "gold_answer": "cook dog treats",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_006_q021",
+      "category": "multi_hop",
+      "question": "Which meat does Audrey prefer eating more than others?",
+      "gold_answer": "chicken",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_006_q034",
+      "category": "multi_hop",
+      "question": "What can Andrew potentially do to improve his stress and accomodate his living situation with his dogs?",
+      "gold_answer": "Change to a hybrid or remote job so he can move away from the city to the suburbs to have a larger living space and be closer to nature.",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_006_q044",
+      "category": "multi_hop",
+      "question": "Which US state do Audrey and Andrew potentially live in?",
+      "gold_answer": "Minnesota",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_006_q045",
+      "category": "multi_hop",
+      "question": "Which national park could Audrey and Andrew be referring to in their conversations?",
+      "gold_answer": "Voyageurs National Park",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_006_q053",
+      "category": "multi_hop",
+      "question": "What is something that Andrew could do to make birdwatching hobby to fit in his city schedule?",
+      "gold_answer": "Install a bird feeder outside where he can see the birds without going outdoors.",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_006_q054",
+      "category": "multi_hop",
+      "question": "What is a career that Andrew could potentially pursue with his love for animals and nature?",
+      "gold_answer": "Park ranger or a similar position working for the National Park Services.",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_006_q124",
+      "category": "adversarial",
+      "question": "Which specific type of bird mesmerizes Audrey?",
+      "gold_answer": "Eagles",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_006_q125",
+      "category": "adversarial",
+      "question": "What kind of flowers does Andrew have a tattoo of?",
+      "gold_answer": "sunflowers",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_006_q126",
+      "category": "adversarial",
+      "question": "What type of dog was Audrey looking to adopt based on her living space?",
+      "gold_answer": "smaller dog",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_006_q127",
+      "category": "adversarial",
+      "question": "Why did Audrey sign up for a workshop about car maintenance?",
+      "gold_answer": "Strengthen the bond with her pets",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_006_q128",
+      "category": "adversarial",
+      "question": "How did Andrew hear about the workshop on bonding with pets?",
+      "gold_answer": "Saw a workshop flyer at the local pet store",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_006_q129",
+      "category": "adversarial",
+      "question": "What type of training was the workshop Andrew signed up for in May 2023?",
+      "gold_answer": "Positive reinforcement training",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_006_q130",
+      "category": "adversarial",
+      "question": "How did Andrew describe the dog he met at the pet store?",
+      "gold_answer": "Friendly and playful",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_006_q131",
+      "category": "adversarial",
+      "question": "What challenge is Audrey facing in their search for a pet?",
+      "gold_answer": "Finding a pet-friendly spot in the city",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_006_q132",
+      "category": "adversarial",
+      "question": "What indoor activities does Andrew plan on trying after the rock climbing class?",
+      "gold_answer": "kayaking and bungee jumping",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_006_q133",
+      "category": "adversarial",
+      "question": "What did Andrew set up in the backyard for their dogs on June 26, 2023?",
+      "gold_answer": "a doggy play area with agility stuff and toys",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_006_q134",
+      "category": "adversarial",
+      "question": "What did Audrey and her GF do on the Monday before July 24, 2023?",
+      "gold_answer": "volunteered at a pet shelter",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_006_q135",
+      "category": "adversarial",
+      "question": "What is the name of Andrew's childhood dog?",
+      "gold_answer": "Max",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_006_q136",
+      "category": "adversarial",
+      "question": "What special memories does Andrew have with his childhood dog, Max?",
+      "gold_answer": "Long walks in the neighborhood, exploring new paths, sharing worries and hopes",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_006_q137",
+      "category": "adversarial",
+      "question": "What are some of the personalities of Andrew's four fur babies?",
+      "gold_answer": "oldest is relaxed, second is playful, third can be naughty but loves cuddles, youngest is full of life",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_006_q138",
+      "category": "adversarial",
+      "question": "What type of classes did Andrew start with his pups recently on 4 August, 2023?",
+      "gold_answer": "Agility classes",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_006_q139",
+      "category": "adversarial",
+      "question": "What is essential to keep the dogs looking good according to Andrew?",
+      "gold_answer": "Daily brushing, regular baths, nail trims, and lots of love",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_006_q140",
+      "category": "adversarial",
+      "question": "What did Audrey organize with the neighbors' cats?",
+      "gold_answer": "a doggy playdate",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_006_q141",
+      "category": "adversarial",
+      "question": "What did Andrew do to give his dogs extra comfort as the weather cooled down?",
+      "gold_answer": "Got new beds for them",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_006_q142",
+      "category": "adversarial",
+      "question": "How does Andrew describe the new beds for his dogs?",
+      "gold_answer": "Super cozy and comfy",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_006_q143",
+      "category": "adversarial",
+      "question": "How did Andrew calm down his dog after the leash incident?",
+      "gold_answer": "Petted, hugged, spoke calmly and slowly walked the dog",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_006_q144",
+      "category": "adversarial",
+      "question": "How often does Andrew take his dogs for walks?",
+      "gold_answer": "Multiple times a day",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_006_q145",
+      "category": "adversarial",
+      "question": "What kind of vegetables does Audrey take care of?",
+      "gold_answer": "Peruvian Lilies",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_006_q146",
+      "category": "adversarial",
+      "question": "What did Andrew learn from reading books about economic systems?",
+      "gold_answer": "about animals, plants, and ecosystems and how they work together",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_006_q147",
+      "category": "adversarial",
+      "question": "What was the reason Andrew couldn't walk his dogs for a period of time?",
+      "gold_answer": "Knee injury",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_006_q148",
+      "category": "adversarial",
+      "question": "What type of jewelry does Andrew make?",
+      "gold_answer": "Jewelry made from recycled objects",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_006_q149",
+      "category": "adversarial",
+      "question": "Why does Andrew make jewelry out of recycled objects?",
+      "gold_answer": "To show love for creativity and sustainability",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_006_q150",
+      "category": "adversarial",
+      "question": "What type of games do Andrew's dogs like to play at the park?",
+      "gold_answer": "Fetch and Frisbee",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_006_q151",
+      "category": "adversarial",
+      "question": "What did Andrew make to thank his neighbors?",
+      "gold_answer": "Goodies",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_006_q152",
+      "category": "adversarial",
+      "question": "How do Andrew's dogs react to snow?",
+      "gold_answer": "Confused",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_006_q153",
+      "category": "adversarial",
+      "question": "How does Andrew describe his dogs' response to snow?",
+      "gold_answer": "They definitely prefer nice, sunny days in the grass.",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_006_q154",
+      "category": "adversarial",
+      "question": "What kind of experiences are Audrey's cats the best companions for?",
+      "gold_answer": "Exploring the great outdoors",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_006_q155",
+      "category": "adversarial",
+      "question": "What activity do Audrey and Buddy enjoy doing together?",
+      "gold_answer": "Walking",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_006_q156",
+      "category": "adversarial",
+      "question": "What type of drink did Andrew recently try at a new spot in town?",
+      "gold_answer": "sushi",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_006_q157",
+      "category": "adversarial",
+      "question": "Which type of pizza did Audrey suggest trying first to someone new to Italian cuisine?",
+      "gold_answer": "California or salmon roll",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_006_q158",
+      "category": "adversarial",
+      "question": "How often does Andrew meet up with other dog owners for tips and playdates?",
+      "gold_answer": "Once a week",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_007_q001",
+      "category": "multi_hop",
+      "question": "What are John's suspected health problems?",
+      "gold_answer": "Obesity",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_007_q007",
+      "category": "multi_hop",
+      "question": "Does James live in Connecticut?",
+      "gold_answer": "Likely yes",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_007_q008",
+      "category": "multi_hop",
+      "question": "In which state is the shelter from which James adopted the puppy?",
+      "gold_answer": "Connecticut.",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_007_q013",
+      "category": "multi_hop",
+      "question": "Did James have a girlfriend during April 2022?",
+      "gold_answer": "Presumably not",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_007_q017",
+      "category": "multi_hop",
+      "question": "What is the game with different colored cards that was John talking about with James?",
+      "gold_answer": "UNO",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_007_q018",
+      "category": "multi_hop",
+      "question": "What is the board game where you have to find the imposter that John mentions to James?",
+      "gold_answer": "Mafia",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_007_q020",
+      "category": "multi_hop",
+      "question": "Was James feeling lonely before meeting Samantha?",
+      "gold_answer": "Most likely yes, because he mentioned that the only creatures that gave him joy are dogs and he was actively trying to date.",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_007_q026",
+      "category": "multi_hop",
+      "question": "Are John and James fans of the same football team?",
+      "gold_answer": "No, James is a Liverpool fan and John is a Manchester City fan.",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_007_q031",
+      "category": "multi_hop",
+      "question": "Which country did James book tickets for in July 2022?",
+      "gold_answer": "Canada",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_007_q034",
+      "category": "multi_hop",
+      "question": "Did John and James study together?",
+      "gold_answer": "Yes",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_007_q036",
+      "category": "multi_hop",
+      "question": "What additional country did James visit during his trip to Canada?",
+      "gold_answer": "Greenland",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_007_q037",
+      "category": "multi_hop",
+      "question": "Who is Jill?",
+      "gold_answer": "Most likely John's partner.",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_007_q045",
+      "category": "multi_hop",
+      "question": "Why didn't John want to go to Starbucks?",
+      "gold_answer": "Possibly because he likes to drink beer on his days off.",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_007_q151",
+      "category": "adversarial",
+      "question": "What did John adopt in April 2022?",
+      "gold_answer": "a pup",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_007_q152",
+      "category": "adversarial",
+      "question": "What is the name of the kitten that was adopted by James?",
+      "gold_answer": "Ned",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_007_q153",
+      "category": "adversarial",
+      "question": "What inspired John to create the game character in the virtual world?",
+      "gold_answer": "Appearance of a woman he saw during a walk",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_007_q154",
+      "category": "adversarial",
+      "question": "Which country did John visit in 2021?",
+      "gold_answer": "Italy",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_007_q155",
+      "category": "adversarial",
+      "question": "What kind of assignment was giving James a hard time at work?",
+      "gold_answer": "Coding assignment",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_007_q156",
+      "category": "adversarial",
+      "question": "What did James and his friends do with the remaining money after helping the dog shelter?",
+      "gold_answer": "Bought groceries and cooked food for the homeless",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_007_q157",
+      "category": "adversarial",
+      "question": "What was the main goal of the money raised from the political campaign organized by John and his friends in May 2022?",
+      "gold_answer": "Raise money for a dog shelter",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_007_q158",
+      "category": "adversarial",
+      "question": "What did the system John created help the illegal organization with?",
+      "gold_answer": "tracking inventory, resources, and donations",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_007_q159",
+      "category": "adversarial",
+      "question": "What did James create for the charitable foundation that helped generate reports for analysis?",
+      "gold_answer": "computer application on smartphones",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_007_q160",
+      "category": "adversarial",
+      "question": "Who does James support in cricket matches?",
+      "gold_answer": "Liverpool",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_007_q161",
+      "category": "adversarial",
+      "question": "What is Max good at doing according to John?",
+      "gold_answer": "catching frisbees in mid-air",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_007_q162",
+      "category": "adversarial",
+      "question": "Will there be a background check required to volunteer with the organization James volunteered for?",
+      "gold_answer": "No",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_007_q163",
+      "category": "adversarial",
+      "question": "How did James relax in his free time on 9 July, 2022?",
+      "gold_answer": "Reading",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_007_q164",
+      "category": "adversarial",
+      "question": "What new hobby did John become interested in on 9 July, 2022?",
+      "gold_answer": "Extreme sports",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_007_q165",
+      "category": "adversarial",
+      "question": "When did John plan to return from his trip to Toronto and Vancouver?",
+      "gold_answer": "July 20",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_007_q166",
+      "category": "adversarial",
+      "question": "What made James leave his IT job?",
+      "gold_answer": "to focus on things that align with his values and passions",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_007_q167",
+      "category": "adversarial",
+      "question": "Which game tournaments does James plan to organize besides CS:GO?",
+      "gold_answer": "Fortnite competitions",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_007_q168",
+      "category": "adversarial",
+      "question": "What happened to James's kitten during the recent visit to the clinic?",
+      "gold_answer": "routine examination and vaccination",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_007_q169",
+      "category": "adversarial",
+      "question": "What aspect of \"The Witcher 3\" does John find boring?",
+      "gold_answer": "shaping the world with choices",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_007_q170",
+      "category": "adversarial",
+      "question": "What is John planning to do after receiving Samantha's phone number?",
+      "gold_answer": "call her",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_007_q171",
+      "category": "adversarial",
+      "question": "What has James been teaching his siblings?",
+      "gold_answer": "coding",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_007_q172",
+      "category": "adversarial",
+      "question": "How much does James pay per dance class?",
+      "gold_answer": "$10",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_007_q173",
+      "category": "adversarial",
+      "question": "What did James learn to make in the chemistry class besides omelette and meringue?",
+      "gold_answer": "Dough",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_007_q174",
+      "category": "adversarial",
+      "question": "Why did James sign up for a ballet class?",
+      "gold_answer": "He wanted to learn something new",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_007_q175",
+      "category": "adversarial",
+      "question": "What did John prepare for the first time in the cooking class?",
+      "gold_answer": "Omelette",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_007_q176",
+      "category": "adversarial",
+      "question": "What is the name of the board game James tried in September 2022?",
+      "gold_answer": "Dungeons of the Dragon",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_007_q177",
+      "category": "adversarial",
+      "question": "Where does John get his ideas from?",
+      "gold_answer": "books, movies, dreams",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_007_q178",
+      "category": "adversarial",
+      "question": "What did James use to play when he was younger to let off steam?",
+      "gold_answer": "drums",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_007_q179",
+      "category": "adversarial",
+      "question": "What does James do to stay informed and constantly learn about game design?",
+      "gold_answer": "watch tutorials and keep up with developer forums",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_007_q180",
+      "category": "adversarial",
+      "question": "What kind of gig was James offered at the game dev non-profit organization?",
+      "gold_answer": "programming mentor for game developers",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_007_q181",
+      "category": "adversarial",
+      "question": "What does James feel about starting the journey as a programming mentor for game developers?",
+      "gold_answer": "excited and inspired",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_007_q182",
+      "category": "adversarial",
+      "question": "What inspired James to create his painting?",
+      "gold_answer": "Witcher 3",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_007_q183",
+      "category": "adversarial",
+      "question": "What games were played at the gaming tournament organized by James on 31 October, 2022?",
+      "gold_answer": "Fortnite, Overwatch, Apex Legends",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_007_q184",
+      "category": "adversarial",
+      "question": "What was the purpose of the gaming tournament organized by James on 31 October, 2022?",
+      "gold_answer": "To raise money for a children's hospital",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_007_q185",
+      "category": "adversarial",
+      "question": "What decision did John and Samantha make on 31 October, 2022?",
+      "gold_answer": "To move in together",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_007_q186",
+      "category": "adversarial",
+      "question": "Where did John and Samantha decide to live together on 31 October, 2022?",
+      "gold_answer": "In an apartment not far from McGee's bar",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_007_q187",
+      "category": "adversarial",
+      "question": "Why did John and Samantha choose an apartment near McGee's bar?",
+      "gold_answer": "They love spending time together at the bar",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_007_q188",
+      "category": "adversarial",
+      "question": "What game is James hooked on playing on 5 November, 2022?",
+      "gold_answer": "FIFA 23",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_007_q189",
+      "category": "adversarial",
+      "question": "What project did James work on with a game developer by 7 November, 2022?",
+      "gold_answer": "An online board game",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_007_q190",
+      "category": "adversarial",
+      "question": "What is the name of James's cousin's dog?",
+      "gold_answer": "Luna",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_008_q006",
+      "category": "multi_hop",
+      "question": "In what country did Jolene's mother buy her the pendant?",
+      "gold_answer": "In France",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_008_q012",
+      "category": "multi_hop",
+      "question": "Is Deborah married?",
+      "gold_answer": "yes",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_008_q019",
+      "category": "multi_hop",
+      "question": "In what country did Jolene buy snake Seraphim?",
+      "gold_answer": "In France",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_008_q024",
+      "category": "multi_hop",
+      "question": "Why did Jolene sometimes put off doing yoga?",
+      "gold_answer": "She's more interested in playing video games",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_008_q029",
+      "category": "multi_hop",
+      "question": "In what country was Jolene during summer 2022?",
+      "gold_answer": "Colombia",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_008_q037",
+      "category": "multi_hop",
+      "question": "How old is Jolene?",
+      "gold_answer": "likely no more than 30; since she's in school",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_008_q041",
+      "category": "multi_hop",
+      "question": "Does Deborah live close to the beach or the mountains?",
+      "gold_answer": "beach",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_008_q049",
+      "category": "multi_hop",
+      "question": "Which US state did Jolene visit during her internship?",
+      "gold_answer": "Alaska",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_008_q071",
+      "category": "multi_hop",
+      "question": "Is the friend who wrote Deborah the motivational quote no longer alive?",
+      "gold_answer": "likely yes",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_008_q076",
+      "category": "multi_hop",
+      "question": "What card game is Deborah talking about?",
+      "gold_answer": "Exploding Kittens",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_008_q192",
+      "category": "adversarial",
+      "question": "What are the names of Deborah's snakes?",
+      "gold_answer": "Susie, Seraphim",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_008_q193",
+      "category": "adversarial",
+      "question": "What are Deborah's favorite books?",
+      "gold_answer": "Sapiens, Avalanche by Neal Stephenson",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_008_q194",
+      "category": "adversarial",
+      "question": "Where did Deborah get her dogs?",
+      "gold_answer": "Luna is from the shelter and Max is her mother's cat",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_008_q195",
+      "category": "adversarial",
+      "question": "How old are Jolene's cats?",
+      "gold_answer": "Max is 8 years old and Luna is 5 years old",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_008_q196",
+      "category": "adversarial",
+      "question": "When did Deborah's parents give her first console?",
+      "gold_answer": "when she was 10",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_008_q197",
+      "category": "adversarial",
+      "question": "When did Jolene release her pet snake?",
+      "gold_answer": "A year ago",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_008_q198",
+      "category": "adversarial",
+      "question": "Where did Jolene meet her new friend Anna?",
+      "gold_answer": "yoga in the park",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_008_q199",
+      "category": "adversarial",
+      "question": "What is Deborah's favorite book which she mentioned on 4 February, 2023?",
+      "gold_answer": "\"Sapiens\"",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_008_q200",
+      "category": "adversarial",
+      "question": "What cool stuff did Deborah accomplish at the retreat on 9 February, 2023?",
+      "gold_answer": "Came up with neat solutions for her engineering project",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_008_q201",
+      "category": "adversarial",
+      "question": "How does Deborah plan to involve local engineers in her idea of teaching STEM to underprivileged kids?",
+      "gold_answer": "As guest speakers for workshops",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_008_q202",
+      "category": "adversarial",
+      "question": "What gave Deborah anxiety in the garden she visited?",
+      "gold_answer": "Roses and dahlias",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_008_q203",
+      "category": "adversarial",
+      "question": "Why did Jolene spend time in the garden?",
+      "gold_answer": "to find comfort after losing a friend",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_008_q204",
+      "category": "adversarial",
+      "question": "How did Jolene and her rival initially meet?",
+      "gold_answer": "In an engineering class in college",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_008_q205",
+      "category": "adversarial",
+      "question": "What activity does Jolene incorporate into her daily routine after going for a morning jog in the park?",
+      "gold_answer": "spending time with loved ones",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_008_q206",
+      "category": "adversarial",
+      "question": "What method does Jolene suggest Deborah to try for organizing tasks based on importance and urgency?",
+      "gold_answer": "The Eisenhower Matrix",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_008_q207",
+      "category": "adversarial",
+      "question": "How does Jolene plan to pursue her dream of climbing mountains?",
+      "gold_answer": "gathering information, watching videos, getting a beginners' guide",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_008_q208",
+      "category": "adversarial",
+      "question": "Who are the authors mentioned by Jolene that she enjoys reading during her yoga practice?",
+      "gold_answer": "Nils Frahm and Olafur Arnalds",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_008_q209",
+      "category": "adversarial",
+      "question": "Which show did Jolene go to with a friend on 9 April, 2023?",
+      "gold_answer": "an art show",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_008_q210",
+      "category": "adversarial",
+      "question": "What does Deborah find comforting about going to horror movie screenings?",
+      "gold_answer": "It makes her feel like she's still experiencing it with her mom",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_008_q211",
+      "category": "adversarial",
+      "question": "How does Deborah describe the time spent with her snakes and partner?",
+      "gold_answer": "Valuable and relaxing",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_008_q212",
+      "category": "adversarial",
+      "question": "For how long has Jolene had Lucifer as a pet?",
+      "gold_answer": "one year",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_008_q213",
+      "category": "adversarial",
+      "question": "How does Deborah feel when spending time with Seraphim?",
+      "gold_answer": "comforted",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_008_q214",
+      "category": "adversarial",
+      "question": "What made being part of the running group easy for Jolene to stay motivated?",
+      "gold_answer": "helping and pushing each other during runs",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_008_q215",
+      "category": "adversarial",
+      "question": "Why did Jolene decide to get a tarantula as a pet?",
+      "gold_answer": "fascinated by reptiles and it felt like the perfect pet",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_008_q216",
+      "category": "adversarial",
+      "question": "How did Deborah come to have her pet, Susie?",
+      "gold_answer": "She adopted her two years ago when feeling lonely.",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_008_q217",
+      "category": "adversarial",
+      "question": "What did Deborah design inspired by their love for space and engines?",
+      "gold_answer": "Notebooks",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_008_q218",
+      "category": "adversarial",
+      "question": "What journal has Deborah been using to help track tasks and stay organized?",
+      "gold_answer": "bullet journal",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_008_q219",
+      "category": "adversarial",
+      "question": "What game did Jolene recommend to Deborah for being thrilling and intense?",
+      "gold_answer": "Animal Crossing: New Horizons",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_008_q220",
+      "category": "adversarial",
+      "question": "What game did Deborah suggest as an awesome open-world game for the Nintendo Switch?",
+      "gold_answer": "Zelda BOTW",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_008_q221",
+      "category": "adversarial",
+      "question": "What is special about the bench at the park near Jolene's house?",
+      "gold_answer": "It holds special memories of conversations with her mom",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_008_q222",
+      "category": "adversarial",
+      "question": "What did Jolene and her mom chat about at their special bench in the park?",
+      "gold_answer": "dreams and life",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_008_q223",
+      "category": "adversarial",
+      "question": "How did Deborah feel after receiving positive feedback at the virtual conference?",
+      "gold_answer": "thrilled and rewarded",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_008_q224",
+      "category": "adversarial",
+      "question": "What kind of event did Deborah present at recently?",
+      "gold_answer": "virtual conference",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_008_q225",
+      "category": "adversarial",
+      "question": "What did Deborah's mom stress the value of, which she wants to keep in mind for her engineering projects?",
+      "gold_answer": "Helping others",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_008_q226",
+      "category": "adversarial",
+      "question": "What type of projects is Deborah interested in getting involved in the future?",
+      "gold_answer": "Sustainable initiatives and developing innovative solutions for environmental issues",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_008_q227",
+      "category": "adversarial",
+      "question": "How did Jolene get Luna, one of her cats?",
+      "gold_answer": "From the shelter",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_008_q228",
+      "category": "adversarial",
+      "question": "What type of classes did Deborah and her partner check out during their trip to Rio de Janeiro on 30 August, 2023?",
+      "gold_answer": "Yoga classes",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_008_q229",
+      "category": "adversarial",
+      "question": "Why did Deborah get the new plant on 30 August, 2023?",
+      "gold_answer": "As a reminder to nurture herself and embrace fresh starts",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_008_q230",
+      "category": "adversarial",
+      "question": "How did Jolene's mom support her yoga practice when she first started?",
+      "gold_answer": "attended classes with her",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_008_q231",
+      "category": "adversarial",
+      "question": "What was the video game console that Deborah's parents got her at age 10?",
+      "gold_answer": "nintendo game console",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_008_q232",
+      "category": "adversarial",
+      "question": "What was one of Deborah's favorite games to play with her mom on the PlayStation game system?",
+      "gold_answer": "Monster Hunter: World",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_008_q233",
+      "category": "adversarial",
+      "question": "Where did Deborah and her partner travel for a few weeks in September 2023?",
+      "gold_answer": "Phuket",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_008_q234",
+      "category": "adversarial",
+      "question": "What did Jolene do with their mom's old friends?",
+      "gold_answer": "reminisced and looked through photos",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_008_q235",
+      "category": "adversarial",
+      "question": "Where did Jolene get married?",
+      "gold_answer": "on the beach",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_008_q236",
+      "category": "adversarial",
+      "question": "What new activity did Jolene and her neighbor organize for the community on 16 September, 2023?",
+      "gold_answer": "Free gardening class",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_008_q237",
+      "category": "adversarial",
+      "question": "What food did Jolene's mom make for her on holidays?",
+      "gold_answer": "Pineapple cakes",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_008_q238",
+      "category": "adversarial",
+      "question": "What kind of cookies did Deborah used to bake with someone close to her?",
+      "gold_answer": "Chocolate chip cookies",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_008_q239",
+      "category": "adversarial",
+      "question": "What activity did Jolene enjoy at the music festival with their pals on September 20, 2023?",
+      "gold_answer": "Dancing and bopping around",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_009_q006",
+      "category": "multi_hop",
+      "question": "Which country was Evan visiting in May 2023?",
+      "gold_answer": "Canada",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_009_q011",
+      "category": "multi_hop",
+      "question": "Which type of vacation would Evan prefer with his family, walking tours in metropolitan cities or camping trip in the outdoors?",
+      "gold_answer": "camping trip in the outdoors",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_009_q020",
+      "category": "multi_hop",
+      "question": "Considering their conversations and personal growth, what advice might Evan and Sam give to someone facing a major life transition or challenge?",
+      "gold_answer": "Evan and Sam would likely advise embracing small, consistent changes\u200b\u200b, finding stress-relieving activities like hiking\u200b\u200b, painting, and road trips\u200b\u200b, and the importance of friendship and support in navigating challenges\u200b\u200b.",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_009_q021",
+      "category": "multi_hop",
+      "question": "In light of the health and dietary changes discussed, what would be an appropriate gift for both Evan and Sam to encourage their healthy lifestyles?",
+      "gold_answer": "a cookbook with healthy recipes or a subscription to a healthy meal delivery service.",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_009_q028",
+      "category": "multi_hop",
+      "question": "What electronic device could Evan gift Sam to help him keep up with his fitness goals?",
+      "gold_answer": "fitness tracker",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_009_q032",
+      "category": "multi_hop",
+      "question": "How might Evan and Sam's experiences with health and lifestyle changes influence their approach to stress and challenges?",
+      "gold_answer": "Their experiences likely lead them to view challenges as opportunities for growth and change. They both have embraced healthier lifestyles, indicating a proactive approach to managing stress and challenges.",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_009_q039",
+      "category": "multi_hop",
+      "question": "What role does nature and the outdoors play in Evan and Sam's mental well-being?",
+      "gold_answer": "Nature and outdoor activities seem to be significant stress relievers and sources of joy for both Evan and Sam. These activities likely contribute positively to their mental well-being.",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_009_q044",
+      "category": "multi_hop",
+      "question": "How often does Sam get health checkups?",
+      "gold_answer": "every three months",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_009_q047",
+      "category": "multi_hop",
+      "question": "How do Evan and Sam use creative outlets to cope with life's challenges?",
+      "gold_answer": "Evan and Sam use creative activities, like painting and writing, as therapeutic tools to express themselves and cope with stress.",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_009_q052",
+      "category": "multi_hop",
+      "question": "What challenges does Sam face in his quest for a healthier lifestyle, and how does he address them?",
+      "gold_answer": "Sam faces challenges like maintaining motivation and making dietary changes. He addresses them by enrolling in cooking classes and seeking support from friends like Evan.",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_009_q058",
+      "category": "multi_hop",
+      "question": "Which US state was Sam travelling in during October 2023?",
+      "gold_answer": "California",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_009_q066",
+      "category": "multi_hop",
+      "question": "Does Evan live close to a beach or mountains?",
+      "gold_answer": "beach",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_009_q072",
+      "category": "multi_hop",
+      "question": "Which major holiday season conincides with Evan's wedding?",
+      "gold_answer": "Christmas",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_009_q157",
+      "category": "adversarial",
+      "question": "What type of car did Sam get after his old Prius broke down?",
+      "gold_answer": "new Prius",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_009_q158",
+      "category": "adversarial",
+      "question": "How did Sam get into watercolor painting?",
+      "gold_answer": "friend's advice",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_009_q159",
+      "category": "adversarial",
+      "question": "What did Sam start doing a few years back as a stress-buster?",
+      "gold_answer": "watercolor painting",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_009_q160",
+      "category": "adversarial",
+      "question": "Where did Sam take his family for a road trip on 24 May, 2023?",
+      "gold_answer": "Jasper",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_009_q161",
+      "category": "adversarial",
+      "question": "What did Sam find relaxing about his road trip to Jasper?",
+      "gold_answer": "fresh air, peacefulness, cozy cabin surrounded by mountains and forests",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_009_q162",
+      "category": "adversarial",
+      "question": "What habit is Evan trying to change in terms of diet?",
+      "gold_answer": "consuming soda and candy",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_009_q163",
+      "category": "adversarial",
+      "question": "What frustrating issue did Evan face at the supermarket?",
+      "gold_answer": "broken self-checkout machines",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_009_q164",
+      "category": "adversarial",
+      "question": "What novel is Sam reading that he finds gripping?",
+      "gold_answer": "The Great Gatsby",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_009_q165",
+      "category": "adversarial",
+      "question": "What does the smartwatch help Sam with?",
+      "gold_answer": "tracks progress and serves as a constant reminder to keep going",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_009_q166",
+      "category": "adversarial",
+      "question": "Why did Sam decide to get the bonsai tree?",
+      "gold_answer": "motivates him to keep going through tough times",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_009_q167",
+      "category": "adversarial",
+      "question": "What did Sam mention he had been searching for fruitlessly for half an hour?",
+      "gold_answer": "his keys",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_009_q168",
+      "category": "adversarial",
+      "question": "What class is Evan taking to learn how to make healthier meals?",
+      "gold_answer": "cooking class",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_009_q169",
+      "category": "adversarial",
+      "question": "What dish did Sam make on 18 August, 2023 that turned out bland?",
+      "gold_answer": "grilled dish with salmon and vegetables",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_009_q170",
+      "category": "adversarial",
+      "question": "What food did Evan share a photo of on 19 August, 2023?",
+      "gold_answer": "bowl of spinach, avocado, and strawberries",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_009_q171",
+      "category": "adversarial",
+      "question": "What did Evan start sculpting years ago due to being inspired by a friend's gift?",
+      "gold_answer": "forest scene",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_009_q172",
+      "category": "adversarial",
+      "question": "What nature concept do watercolor painting classes emphasize according to Sam?",
+      "gold_answer": "observing nature and painting what is seen",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_009_q173",
+      "category": "adversarial",
+      "question": "What type of landscapes does Sam love painting the most?",
+      "gold_answer": "sunsets over the ocean",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_009_q174",
+      "category": "adversarial",
+      "question": "What sports activity has Sam been doing to stay active while dealing with the knee injury?",
+      "gold_answer": "Swimming",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_009_q175",
+      "category": "adversarial",
+      "question": "What activity does Sam do to keep himself busy while healing his knee?",
+      "gold_answer": "Watercolor painting",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_009_q176",
+      "category": "adversarial",
+      "question": "What kind of writing does Evan enjoy as a form of expression?",
+      "gold_answer": "creative writing",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_009_q177",
+      "category": "adversarial",
+      "question": "What electronics issue has been frustrating Evan lately?",
+      "gold_answer": "malfunctioning navigation app on the new phone",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_009_q178",
+      "category": "adversarial",
+      "question": "What activity did Evan quit one year ago?",
+      "gold_answer": "lifting weights",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_009_q179",
+      "category": "adversarial",
+      "question": "Where did Sam and his mate plan to try skydiving?",
+      "gold_answer": "Lake Tahoe",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_009_q180",
+      "category": "adversarial",
+      "question": "What digestive issue did Evan experience lately?",
+      "gold_answer": "Gastritis",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_009_q181",
+      "category": "adversarial",
+      "question": "How did Sam start his transformation journey two years ago?",
+      "gold_answer": "Changed his diet and started walking regularly",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_009_q182",
+      "category": "adversarial",
+      "question": "What gift did Sam receive from a close friend?",
+      "gold_answer": "1968 Kustom K-200A vintage guitar",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_009_q183",
+      "category": "adversarial",
+      "question": "How does Sam describe the island he grew up on?",
+      "gold_answer": "A happy place",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_009_q184",
+      "category": "adversarial",
+      "question": "What was the main reason for Evan's frustration with his new Prius getting stolen?",
+      "gold_answer": "He relied on it for his active lifestyle and road trips",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_009_q185",
+      "category": "adversarial",
+      "question": "What family event is Sam planning for next summer?",
+      "gold_answer": "big family reunion",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_009_q186",
+      "category": "adversarial",
+      "question": "What is the motto of Sam's family?",
+      "gold_answer": "'Bring it on Home'",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_009_q187",
+      "category": "adversarial",
+      "question": "Who helped Sam get the painting published in the exhibition?",
+      "gold_answer": "a close friend",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_009_q188",
+      "category": "adversarial",
+      "question": "How did Sam feel when he painted the piece with the bird flying over it?",
+      "gold_answer": "a sense of joy and freedom",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_009_q189",
+      "category": "adversarial",
+      "question": "How did Sam describe the process of creating the painting with the bird flying over it?",
+      "gold_answer": "embracing the creative process without restraint",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_009_q190",
+      "category": "adversarial",
+      "question": "What did Evan and his partner keep from their extended family on January 5, 2024?",
+      "gold_answer": "their marriage",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_009_q191",
+      "category": "adversarial",
+      "question": "What was Sam limiting himself to on his new diet?",
+      "gold_answer": "just two ginger snaps a day",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_009_q192",
+      "category": "adversarial",
+      "question": "What dance activity did Evan and his partner try in a recent weekend?",
+      "gold_answer": "Snowshoeing",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_009_q193",
+      "category": "adversarial",
+      "question": "What suggestions did Evan give for high-impact exercises?",
+      "gold_answer": "swimming, yoga, walking",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_009_q194",
+      "category": "adversarial",
+      "question": "What movie did Evan watch that motivated him to keep up with his routine?",
+      "gold_answer": "The Godfather",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_009_q195",
+      "category": "adversarial",
+      "question": "What activity hindered Evan's stress and flexibility?",
+      "gold_answer": "Yoga",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_009_q196",
+      "category": "adversarial",
+      "question": "What did Sam share a photo of that was taken on a camping trip?",
+      "gold_answer": "a kayak",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_010_q005",
+      "category": "multi_hop",
+      "question": "Which country do Calvin and Dave want to meet in?",
+      "gold_answer": "United States",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_010_q008",
+      "category": "multi_hop",
+      "question": "Does Dave's shop employ a lot of people?",
+      "gold_answer": "Yes",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_010_q014",
+      "category": "multi_hop",
+      "question": "Would Calvin enjoy performing at the Hollywood Bowl?",
+      "gold_answer": "Yes; because he enjoys the rush of performing onstage to large crowds",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_010_q022",
+      "category": "multi_hop",
+      "question": "Does Calvin wish to become more popular?",
+      "gold_answer": "Yes; he want's to grow his fanbase",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_010_q038",
+      "category": "multi_hop",
+      "question": "Does Calvin love music tours?",
+      "gold_answer": "yes",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_010_q040",
+      "category": "multi_hop",
+      "question": "Would Dave prefer working on a Dodge Charger or a Subaru Forester?",
+      "gold_answer": "Dodge Charger",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_010_q043",
+      "category": "multi_hop",
+      "question": "Based on the conversation, did Calvin and Dave have a meeting in Boston between August and November 2023? Answer in yes or no.",
+      "gold_answer": "No",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_010_q159",
+      "category": "adversarial",
+      "question": "Which DJ was Dave's favorite at the music festival in April 2023?",
+      "gold_answer": "Aerosmith",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_010_q160",
+      "category": "adversarial",
+      "question": "What advice did Calvin receive from the chef at the music festival?",
+      "gold_answer": "to stay true to himself and sound unique",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_010_q161",
+      "category": "adversarial",
+      "question": "What is Calvin's new business venture as of 1 May, 2023?",
+      "gold_answer": "Car maintenance shop",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_010_q162",
+      "category": "adversarial",
+      "question": "What type of cars does Calvin work on at his shop?",
+      "gold_answer": "all kinds of cars, from regular maintenance to full restorations of classic cars",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_010_q163",
+      "category": "adversarial",
+      "question": "What did Dave receive as a gift from another artist?",
+      "gold_answer": "a gold necklace with a diamond pendant",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_010_q164",
+      "category": "adversarial",
+      "question": "What was the necklace Dave received meant to remind him of?",
+      "gold_answer": "why he keeps hustling as a musician",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_010_q165",
+      "category": "adversarial",
+      "question": "What did Calvin open in May 2023?",
+      "gold_answer": "a car shop",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_010_q166",
+      "category": "adversarial",
+      "question": "What gives Calvin a sense of achievement and purpose?",
+      "gold_answer": "Fixing up things",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_010_q167",
+      "category": "adversarial",
+      "question": "What sports activity is Dave planning to try after the tour with Frank Ocean?",
+      "gold_answer": "Skiing",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_010_q168",
+      "category": "adversarial",
+      "question": "How does Calvin describe his process of adding acoustic elements to his songs?",
+      "gold_answer": "gives them a fresh vibe",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_010_q169",
+      "category": "adversarial",
+      "question": "What clothing brand does Calvin own that he is proud of?",
+      "gold_answer": "Ferrari",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_010_q170",
+      "category": "adversarial",
+      "question": "What workshop did Calvin get picked for on 11 August, 2023?",
+      "gold_answer": "Car mod workshop",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_010_q171",
+      "category": "adversarial",
+      "question": "What kind of modifications has Calvin been working on in the car mod workshop?",
+      "gold_answer": "engine swaps, suspension modifications, and body modifications",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_010_q172",
+      "category": "adversarial",
+      "question": "What type of car did Calvin work on during the workshop?",
+      "gold_answer": "classic muscle car",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_010_q173",
+      "category": "adversarial",
+      "question": "What did Dave and his friends record in August 2023?",
+      "gold_answer": "a podcast discussing the rap industry",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_010_q174",
+      "category": "adversarial",
+      "question": "Where did Dave start shooting a video for his new album?",
+      "gold_answer": "Miami",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_010_q175",
+      "category": "adversarial",
+      "question": "What design is featured on Dave's guitar?",
+      "gold_answer": "octopus",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_010_q176",
+      "category": "adversarial",
+      "question": "Why did Dave get his guitar customized with a shiny finish?",
+      "gold_answer": "unique look",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_010_q177",
+      "category": "adversarial",
+      "question": "What color glow did Dave customize his guitar with?",
+      "gold_answer": "purple",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_010_q178",
+      "category": "adversarial",
+      "question": "Where did Calvin come back from with insights on car modification on 1st September 2023?",
+      "gold_answer": "San Francisco",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_010_q179",
+      "category": "adversarial",
+      "question": "What emotion does Calvin mention feeling when he sees the relief of someone whose car he fixed?",
+      "gold_answer": "Proud",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_010_q180",
+      "category": "adversarial",
+      "question": "What did Dave book a flight ticket for on 1st September 2023?",
+      "gold_answer": "Boston",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_010_q181",
+      "category": "adversarial",
+      "question": "Which horror movie did Dave mention as one of his favorites?",
+      "gold_answer": "Ratatouille",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_010_q182",
+      "category": "adversarial",
+      "question": "Which song from the childhood of Dave brings back memories of a road trip with his dad?",
+      "gold_answer": "\"California Love\"",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_010_q183",
+      "category": "adversarial",
+      "question": "What car did Calvin work on in the junkyard?",
+      "gold_answer": "Ford Mustang",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_010_q184",
+      "category": "adversarial",
+      "question": "What does Dave find satisfying about destroying old cars?",
+      "gold_answer": "Transforming something old and beat-up into something beautiful",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_010_q185",
+      "category": "adversarial",
+      "question": "What does working on boats represent for Dave?",
+      "gold_answer": "Therapy and a way to get away from everyday stress",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_010_q186",
+      "category": "adversarial",
+      "question": "What does Dave aim to do with his passion for cooking?",
+      "gold_answer": "Take something broken and make it into something awesome",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_010_q187",
+      "category": "adversarial",
+      "question": "What did Calvin recently get that is a \"masterpiece on canvas\"?",
+      "gold_answer": "Ferrari",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_010_q188",
+      "category": "adversarial",
+      "question": "Who headlined the music festival that Calvin attended in October?",
+      "gold_answer": "The Fireworks",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_010_q189",
+      "category": "adversarial",
+      "question": "Which part of Tokyo is described as Tokyo's Times Square by Dave?",
+      "gold_answer": "Shibuya Crossing",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_010_q190",
+      "category": "adversarial",
+      "question": "What specific location in Tokyo does Calvin mention being excited to avoid?",
+      "gold_answer": "Shinjuku",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_010_q191",
+      "category": "adversarial",
+      "question": "When did Calvin sell the car he restored last year?",
+      "gold_answer": "Last year",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_010_q192",
+      "category": "adversarial",
+      "question": "When did Calvin first get interested in motorcycles?",
+      "gold_answer": "at an early age",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_010_q193",
+      "category": "adversarial",
+      "question": "What realization did the nightclub experience bring to Dave?",
+      "gold_answer": "how much music means to him, it's like his passion and purpose",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_010_q194",
+      "category": "adversarial",
+      "question": "What did Dave do recently at his Japanese house?",
+      "gold_answer": "Threw a small party for his new album",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_010_q195",
+      "category": "adversarial",
+      "question": "What did Calvin recently start a blog about?",
+      "gold_answer": "Car mods",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_010_q196",
+      "category": "adversarial",
+      "question": "What type of videos does Dave usually watch on his television?",
+      "gold_answer": "Music videos, concerts, documentaries about artists and their creative process",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_010_q197",
+      "category": "adversarial",
+      "question": "What type of art has Dave been getting into lately?",
+      "gold_answer": "Classic rock",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_010_q198",
+      "category": "adversarial",
+      "question": "What type of content does Dave post on his blog that inspired others to start their own cooking projects?",
+      "gold_answer": "How he made his car look like a beast",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_010_q199",
+      "category": "adversarial",
+      "question": "What kind of impact does Dave's blog on vegan recipes have on people?",
+      "gold_answer": "It inspires others to start their DIY projects",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_010_q200",
+      "category": "adversarial",
+      "question": "Who did Dave invite to see him perform in Boston on 13 November, 2023?",
+      "gold_answer": "his old high school buddy",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_010_q201",
+      "category": "adversarial",
+      "question": "What new item did Calvin buy recently?",
+      "gold_answer": "A vintage camera",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_010_q202",
+      "category": "adversarial",
+      "question": "What type of photos does Calvin like to capture with his new camera?",
+      "gold_answer": "Nature - sunsets, beaches, waves",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_010_q203",
+      "category": "adversarial",
+      "question": "What did Dave discuss with the cool artist he met at the gala?",
+      "gold_answer": "Music and art",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    },
+    {
+      "qa_id": "locomo_010_q204",
+      "category": "adversarial",
+      "question": "Where did Calvin take a stunning photo of a waterfall?",
+      "gold_answer": "Nearby park",
+      "generated_answer": "",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 0,
+      "semantic_correct": -1
+    }
+  ],
+  "timestamp": "2026-04-29T20:57:56.056995",
+  "n_questions": 542
+}

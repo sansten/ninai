@@ -39,17 +39,23 @@ async def run(*, mode: str, strategy: str, dataset: str = "synthetic") -> dict[s
     gold = split_gold_ids(rows, "is_relevant")
     ranked = _feature_rank("authentication failure spike", rows)
 
+    recall_10 = round(_recall_at_k(ranked, gold, 10), 4)
+    quality_floor = 0.75
+
     out: dict[str, Any] = {
         "benchmark": "recall",
         "mode": mode,
         "strategy": strategy,
         "dataset": dataset,
         "recall_at_5": round(_recall_at_k(ranked, gold, 5), 4),
-        "recall_at_10": round(_recall_at_k(ranked, gold, 10), 4),
+        "recall_at_10": recall_10,
         "precision_at_5": round(_precision_at_k(ranked, gold, 5), 4),
         "precision_at_10": round(_precision_at_k(ranked, gold, 10), 4),
+        "gold_count": len(gold),
+        "quality_floor": quality_floor,
+        "passed": recall_10 >= quality_floor,
         "samples": len(rows),
-        "status": "ok",
+        "status": "ok" if recall_10 >= quality_floor else "below_floor",
     }
 
     if mode in {"integration", "full"}:

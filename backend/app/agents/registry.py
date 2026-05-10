@@ -16,6 +16,7 @@ from app.agents.adaptive_persona_agent import AdaptivePersonaAgent
 from app.agents.analogical_reasoning_agent import AnalogicalReasoningAgent
 from app.agents.anomaly_detection_agent import AnomalyDetectionAgent
 from app.agents.base import BaseAgent
+from app.agents.types import AgentExecutionSpec
 from app.agents.classification_agent import ClassificationAgent
 from app.agents.compositional_generalization_agent import CompositionalGeneralizationAgent
 from app.agents.context_amplifier_agent import ContextAmplifierAgent
@@ -243,12 +244,245 @@ ENTERPRISE_AGENT_CLASSES: tuple[type[BaseAgent], ...] = tuple(
 AGENT_CLASSES: tuple[type[BaseAgent], ...] = OSS_AGENT_CLASSES + ENTERPRISE_AGENT_CLASSES
 
 
+def _normalize_agent_identifier(value: str) -> str:
+    return "".join(ch for ch in str(value or "").strip().lower() if ch.isalnum())
+
+
+def _make_execution_spec(
+    *,
+    key: str,
+    agent_name: str,
+    class_name: str,
+    queue: str,
+    tier: int,
+    depends_on: tuple[str, ...] = (),
+    trigger_types: tuple[str, ...] = ("memory_write",),
+    aliases: tuple[str, ...] = (),
+    enabled_by_default: bool = True,
+    description: str | None = None,
+) -> AgentExecutionSpec:
+    identifiers = {
+        key,
+        agent_name,
+        class_name,
+        class_name.removesuffix("Agent"),
+        *aliases,
+    }
+    return AgentExecutionSpec(
+        key=key,
+        agent_name=agent_name,
+        class_name=class_name,
+        queue=queue,
+        tier=tier,
+        depends_on=depends_on,
+        trigger_types=trigger_types,
+        aliases=aliases,
+        enabled_by_default=enabled_by_default,
+        description=description,
+        identifiers=tuple(sorted(_normalize_agent_identifier(value) for value in identifiers if value)),
+    )
+
+
+WRITE_TIME_AGENT_SPECS: tuple[AgentExecutionSpec, ...] = tuple(
+    spec
+    for spec in (
+        _make_execution_spec(
+            key="classification",
+            agent_name="classification",
+            class_name="ClassificationAgent",
+            queue="q.agent_enrich",
+            tier=1,
+            trigger_types=("memory_write", "memory_reenrich"),
+            aliases=("classificationagent",),
+            description="Initial classification and sensitivity scoring.",
+        ),
+        _make_execution_spec(
+            key="metadata",
+            agent_name="metadata",
+            class_name="MetadataExtractionAgent",
+            queue="q.agent_enrich",
+            tier=1,
+            depends_on=("classification",),
+            trigger_types=("memory_write", "memory_reenrich"),
+            aliases=("metadataextraction", "metadataextractionagent"),
+            description="Extracts summaries and structured metadata from raw memory text.",
+        ),
+        _make_execution_spec(
+            key="semantic_normalization",
+            agent_name="semantic_normalization",
+            class_name="SemanticNormalizationAgent",
+            queue="q.agent_enrich",
+            tier=1,
+            depends_on=("metadata",),
+            trigger_types=("memory_write", "memory_reenrich"),
+            aliases=("semanticnormalization", "semanticnormalizationagent"),
+            description="Normalizes intent, domain, and lightweight semantic relationships.",
+        ),
+        _make_execution_spec(
+            key="entity_resolution",
+            agent_name="entity_resolution",
+            class_name="EntityResolutionAgent",
+            queue="q.agent_graph",
+            tier=1,
+            depends_on=("semantic_normalization",),
+            trigger_types=("memory_write", "memory_reenrich"),
+            aliases=("entityresolution", "entityresolutionagent"),
+            description="Resolves people, dates, and ontology concepts into canonical entities.",
+        ),
+        _make_execution_spec(
+            key="logseq_export",
+            agent_name="logseq_export",
+            class_name="LogseqExportAgent",
+            queue="q.agent_graph",
+            tier=1,
+            depends_on=("metadata",),
+            trigger_types=("memory_write",),
+            aliases=("logseq", "logseqexport", "logseqexportagent"),
+            description="Publishes admin-oriented Logseq artifacts for the memory.",
+        ),
+        _make_execution_spec(
+            key="topic_modeling",
+            agent_name="topics",
+            class_name="TopicModelingAgent",
+            queue="q.agent_topics",
+            tier=2,
+            depends_on=("semantic_normalization",),
+            trigger_types=("memory_write",),
+            aliases=("topic", "topicmodeling", "topicmodelingagent"),
+            description="Assigns topic labels for retrieval and clustering.",
+        ),
+        _make_execution_spec(
+            key="pattern_detection",
+            agent_name="patterns",
+            class_name="PatternDetectionAgent",
+            queue="q.agent_patterns",
+            tier=2,
+            depends_on=("topic_modeling",),
+            trigger_types=("memory_write",),
+            aliases=("pattern", "patterndetection", "patterndetectionagent"),
+            description="Detects recurring behavioral or operational patterns.",
+        ),
+        _make_execution_spec(
+            key="promotion",
+            agent_name="promotion",
+            class_name="PromotionAgent",
+            queue="q.agent_patterns",
+            tier=2,
+            depends_on=("pattern_detection",),
+            trigger_types=("memory_write",),
+            aliases=("promotionagent",),
+            description="Scores short-term memories for promotion into durable storage.",
+        ) if PromotionAgent is not None else None,
+        _make_execution_spec(
+            key="graph_linking",
+            agent_name="graph",
+            class_name="GraphLinkingAgent",
+            queue="q.agent_graph",
+            tier=2,
+            depends_on=("entity_resolution",),
+            trigger_types=("memory_write", "memory_reenrich"),
+            aliases=("graph", "graphlinking", "graphlinkingagent"),
+            description="Projects resolved entities into the graph layer.",
+        ) if GraphLinkingAgent is not None else None,
+        _make_execution_spec(
+            key="world_model",
+            agent_name="world_model",
+            class_name="WorldModelAgent",
+            queue="q.agent_reasoning",
+            tier=2,
+            depends_on=("entity_resolution",),
+            trigger_types=("memory_write", "memory_reenrich"),
+            aliases=("worldmodel", "worldmodelagent"),
+            description="Updates higher-level world-state understanding from resolved entities.",
+        ) if WorldModelAgent is not None else None,
+        _make_execution_spec(
+            key="temporal_reasoning",
+            agent_name="temporal_reasoning",
+            class_name="TemporalReasoningAgent",
+            queue="q.agent_reasoning",
+            tier=2,
+            depends_on=("entity_resolution",),
+            trigger_types=("memory_write", "memory_reenrich"),
+            aliases=("temporalreasoning", "temporalreasoningagent"),
+            description="Annotates sequence position, recency, and temporal trends.",
+        ),
+        _make_execution_spec(
+            key="episodic_grouping",
+            agent_name="episodic_grouping",
+            class_name="EpisodicGroupingAgent",
+            queue="q.agent_reasoning",
+            tier=2,
+            depends_on=("temporal_reasoning",),
+            trigger_types=("memory_write", "memory_reenrich"),
+            aliases=("episodicgrouping", "episodicgroupingagent"),
+            description="Groups related memories into episodes and conversational arcs.",
+        ),
+        _make_execution_spec(
+            key="causal_reasoning",
+            agent_name="causal_reasoning",
+            class_name="CausalReasoningAgent",
+            queue="q.agent_reasoning",
+            tier=2,
+            depends_on=("episodic_grouping",),
+            trigger_types=("memory_write", "memory_reenrich"),
+            aliases=("causalreasoning", "causalreasoningagent"),
+            description="Infers causal links after temporal and episodic context is available.",
+        ) if CausalReasoningAgent is not None else None,
+        _make_execution_spec(
+            key="feedback_learning",
+            agent_name="feedback",
+            class_name="FeedbackLearningAgent",
+            queue="q.agent_feedback",
+            tier=2,
+            depends_on=(
+                "promotion",
+                "graph_linking",
+                "world_model",
+                "causal_reasoning",
+                "logseq_export",
+            ),
+            trigger_types=("memory_write", "memory_reenrich"),
+            aliases=("feedback", "feedbacklearning", "feedbacklearningagent"),
+            description="Applies late-stage feedback updates after core enrichment has landed.",
+        ) if FeedbackLearningAgent is not None else None,
+    )
+    if spec is not None
+)
+
+_WRITE_TIME_AGENT_SPEC_BY_IDENTIFIER = {
+    identifier: spec
+    for spec in WRITE_TIME_AGENT_SPECS
+    for identifier in spec.identifiers
+}
+
+
 def list_registered_agent_classes() -> tuple[type[BaseAgent], ...]:
     return AGENT_CLASSES
 
 
 def list_registered_agents() -> list[BaseAgent]:
     return [agent_class() for agent_class in AGENT_CLASSES]
+
+
+def list_write_time_agent_specs(
+    *,
+    trigger_type: str | None = None,
+    enabled_tiers: set[int] | None = None,
+) -> tuple[AgentExecutionSpec, ...]:
+    specs = WRITE_TIME_AGENT_SPECS
+    if trigger_type:
+        specs = tuple(spec for spec in specs if trigger_type in spec.trigger_types)
+    if enabled_tiers is not None:
+        specs = tuple(
+            spec
+            for spec in specs
+            if spec.enabled_by_default and spec.tier in enabled_tiers
+        )
+    return specs
+
+
+def get_write_time_agent_spec(agent_name: str) -> AgentExecutionSpec | None:
+    return _WRITE_TIME_AGENT_SPEC_BY_IDENTIFIER.get(_normalize_agent_identifier(agent_name))
 
 
 def get_agent(agent_name: str) -> Optional[BaseAgent]:

@@ -119,11 +119,24 @@ class Settings(BaseSettings):
     TEST_DATABASE_URL: Optional[str] = None
     TEST_DATABASE_URL_SYNC: Optional[str] = None
 
+    # Optional DB pooler DSN (for PgBouncer-style deployments)
+    POSTGRES_POOLER_URL: Optional[str] = None
+    POSTGRES_POOLER_URL_SYNC: Optional[str] = None
+
+    # SQLAlchemy connection pool tuning
+    DB_POOL_SIZE: int = 20
+    DB_MAX_OVERFLOW: int = 40
+    DB_POOL_TIMEOUT_SECONDS: int = 30
+    DB_POOL_RECYCLE_SECONDS: int = 1800
+    DB_POOL_USE_LIFO: bool = True
+
     @property
     def DATABASE_URL(self) -> str:
         """Build the async database URL."""
         if self.APP_ENV == "test" and self.TEST_DATABASE_URL:
             return self.TEST_DATABASE_URL
+        if self.POSTGRES_POOLER_URL:
+            return self.POSTGRES_POOLER_URL
         if self.POSTGRES_URL:
             return self.POSTGRES_URL
         return (
@@ -136,6 +149,8 @@ class Settings(BaseSettings):
         """Build the sync database URL (for Alembic)."""
         if self.APP_ENV == "test" and self.TEST_DATABASE_URL_SYNC:
             return self.TEST_DATABASE_URL_SYNC
+        if self.POSTGRES_POOLER_URL_SYNC:
+            return self.POSTGRES_POOLER_URL_SYNC
         if self.POSTGRES_URL_SYNC:
             return self.POSTGRES_URL_SYNC
         return (
@@ -203,6 +218,7 @@ class Settings(BaseSettings):
     QDRANT_PORT: int | None = None
     QDRANT_API_KEY: str | None = None
     QDRANT_COLLECTION_NAME: str = "memories"
+    QDRANT_URL: str | None = None
 
     # -------------------------------------------------------------------------
     # Elasticsearch
@@ -225,6 +241,16 @@ class Settings(BaseSettings):
 
     # Optional: service user id for background tasks (must be an org_admin/system_admin or superuser).
     SYSTEM_TASK_USER_ID: str | None = None
+    WRITE_TIME_AGENT_ENABLED_TIERS: List[int] = Field(default_factory=lambda: [1, 2])
+
+    @field_validator("WRITE_TIME_AGENT_ENABLED_TIERS", mode="before")
+    @classmethod
+    def parse_write_time_agent_enabled_tiers(cls, v):
+        if v is None or v == "":
+            return [1, 2]
+        if isinstance(v, str):
+            return [int(part.strip()) for part in v.split(",") if part.strip()]
+        return [int(part) for part in v]
 
     # -------------------------------------------------------------------------
     # Alerts & Notifications
@@ -266,6 +292,15 @@ class Settings(BaseSettings):
         default="http://localhost:11434",
         validation_alias=AliasChoices("OLLAMA_BASE_URL", "OLLAMA_URL"),
     )
+    # Optional split-route endpoints for CPU-default + GPU-overflow behavior.
+    # If unset, OLLAMA_BASE_URL is used as the primary endpoint.
+    OLLAMA_BASE_URL_CPU: str | None = None
+    OLLAMA_BASE_URL_GPU: str | None = None
+    # Enable automatic spillover to GPU endpoint on overload/failure.
+    OLLAMA_OVERFLOW_ENABLED: bool = False
+    # If >0, route requests to GPU first when in-flight requests on CPU endpoint
+    # reach this threshold (per worker process).
+    OLLAMA_OVERFLOW_PRIMARY_MAX_INFLIGHT: int = 0
     # Default local model (override via env OLLAMA_MODEL)
     OLLAMA_MODEL: str = "qwen2.5:7b"
     # Optional per-purpose model overrides (fall back to OLLAMA_MODEL when unset).
@@ -342,6 +377,8 @@ class Settings(BaseSettings):
     ANTHROPIC_API_KEY: str | None = None
     EMBEDDING_MODEL: str = "text-embedding-3-small"
     EMBEDDING_DIMENSIONS: int = 1536
+    EMBEDDING_PROVIDER: str = "auto"
+    OLLAMA_EMBEDDING_MODEL: str = "nomic-embed-text"
 
     # -------------------------------------------------------------------------
     # Memory Attachments (Multimodal MVP)
@@ -388,6 +425,17 @@ class Settings(BaseSettings):
     # Multiplier applied to the base score for positive/negative relevance.
     SEARCH_FEEDBACK_RERANK_POSITIVE_MULTIPLIER: float = 1.15
     SEARCH_FEEDBACK_RERANK_NEGATIVE_MULTIPLIER: float = 0.5
+
+    # Graph-guided vector retrieval expansion.
+    # When enabled and request.use_graph=true, retrieval will:
+    # 1) seed from initial vector hits,
+    # 2) expand through graph_relationships,
+    # 3) run additional enriched vector queries,
+    # 4) blend vector + lexical + graph evidence.
+    SEARCH_GRAPH_EXPANSION_ENABLED: bool = True
+    SEARCH_GRAPH_SEED_LIMIT: int = 12
+    SEARCH_GRAPH_NEIGHBOR_LIMIT: int = 32
+    SEARCH_MULTI_QUERY_MAX_VARIANTS: int = 4
 
     # -------------------------------------------------------------------------
     # Logseq Integration

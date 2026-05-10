@@ -21,6 +21,7 @@ from app.api.v1.router import api_router
 from app.api.v1.metrics import router as metrics_router
 from app.core.config import settings
 from app.core.database import engine, create_db_and_tables, get_db
+from app.core.qdrant import QdrantService
 from app.core.bootstrap import bootstrap_service, create_default_bootstrap_checks
 from app.core.feature_gate import CommunityFeatureGate, set_feature_gate
 from app.core.enterprise_loader import try_register_enterprise
@@ -56,6 +57,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             import logging
             logger = logging.getLogger(__name__)
             logger.warning(f"Could not create database tables: {e} - continuing without database")
+
+        if settings.QDRANT_URL or (settings.QDRANT_HOST and settings.QDRANT_PORT):
+            await QdrantService.ensure_collection()
+        else:
+            logger = logging.getLogger(__name__)
+            logger.warning(
+                "Skipping Qdrant collection initialization because neither QDRANT_URL nor QDRANT_HOST/QDRANT_PORT are configured."
+            )
         
         # Initialize rate limiter with Redis (optional)
         try:

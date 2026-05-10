@@ -23,6 +23,8 @@ class MemoryFeedbackService:
         feedback_type: str,
         payload: dict[str, Any],
         target_agent: Optional[str] = None,
+        apply_immediately: bool = False,
+        applied_by: Optional[str] = None,
     ) -> MemoryFeedback:
         row = MemoryFeedback(
             organization_id=self.org_id,
@@ -35,6 +37,15 @@ class MemoryFeedbackService:
         )
         self.session.add(row)
         await self.session.flush()
+        if apply_immediately:
+            summary = await self.apply_pending_feedback(
+                memory_id=memory_id,
+                applied_by=applied_by or self.user_id,
+            )
+            if int(summary.get("applied_count") or 0) > 0:
+                row.is_applied = True
+                row.applied_at = datetime.now(timezone.utc)
+                row.applied_by = applied_by or self.user_id
         return row
 
     async def list_feedback(
@@ -146,6 +157,75 @@ class MemoryFeedbackService:
             meta["feedback_notes"] = notes
             memory.extra_metadata = meta
 
+        def coerce_relevance_value(payload: dict[str, Any]) -> float | None:
+            raw = payload.get("value")
+            if raw is None:
+                raw = payload.get("relevance")
+            if raw is None:
+                raw = payload.get("relevant")
+
+            if isinstance(raw, bool):
+                return 1.0 if raw else -1.0
+
+            try:
+                return float(raw)
+            except (TypeError, ValueError):
+                return None
+
+        def apply_relevance_feedback(payload: dict[str, Any], actor_id: str, at: datetime) -> dict[str, Any]:
+            value = coerce_relevance_value(payload)
+            if value is None:
+                return {"ignored": True}
+
+            meta = dict(memory.extra_metadata or {})
+            learning = dict(meta.get("retrieval_learning") or {})
+
+            positive = int(learning.get("positive_relevance_count") or 0)
+            negative = int(learning.get("negative_relevance_count") or 0)
+            if value > 0:
+                positive += 1
+            elif value < 0:
+                negative += 1
+
+            feedback_count = positive + negative
+            relevance_score = (positive - negative) / max(1, feedback_count)
+            learning["positive_relevance_count"] = positive
+            learning["negative_relevance_count"] = negative
+            learning["relevance_feedback_count"] = feedback_count
+            learning["relevance_score"] = round(relevance_score, 4)
+            learning["last_feedback_value"] = round(float(value), 4)
+            learning["last_feedback_actor_id"] = actor_id
+            learning["last_feedback_at"] = at.isoformat()
+
+            query_hint = str(payload.get("query") or payload.get("used_in") or "").strip()
+            if query_hint:
+                prior_hints = [str(item).strip() for item in (learning.get("query_hints") or []) if str(item).strip()]
+                deduped = [query_hint] + [item for item in prior_hints if item.lower() != query_hint.lower()]
+                learning["query_hints"] = deduped[:10]
+
+            if payload.get("hnms_mode"):
+                learning["last_hnms_mode"] = str(payload.get("hnms_mode")).strip()
+
+            evidence_quality = dict(meta.get("evidence_quality") or {})
+            evidence_quality["human_feedback_count"] = feedback_count
+            evidence_quality["human_relevance_score"] = round(relevance_score, 4)
+            evidence_quality["human_verified_relevant"] = relevance_score > 0
+            evidence_quality["last_feedback_at"] = at.isoformat()
+
+            meta["retrieval_learning"] = learning
+            meta["evidence_quality"] = evidence_quality
+            memory.extra_metadata = meta
+
+            comment = str(payload.get("comment") or "").strip()
+            if comment:
+                add_note(comment, actor_id=actor_id)
+
+            return {
+                "value": round(float(value), 4),
+                "relevance_score": round(relevance_score, 4),
+                "feedback_count": feedback_count,
+            }
+
         for fb in feedback_rows:
             payload = fb.payload or {}
             ftype = fb.feedback_type
@@ -177,6 +257,9 @@ class MemoryFeedbackService:
                 note = str(payload.get("note", "")).strip()
                 add_note(note, actor_id=fb.actor_id)
                 updates.append({"feedback_id": fb.id, "type": ftype})
+            elif ftype == "relevance":
+                applied = apply_relevance_feedback(payload, actor_id=fb.actor_id, at=fb.created_at)
+                updates.append({"feedback_id": fb.id, "type": ftype, **applied})
             else:
                 updates.append({"feedback_id": fb.id, "type": ftype, "ignored": True})
 

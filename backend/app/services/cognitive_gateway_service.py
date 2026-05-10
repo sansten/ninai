@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import logging
 import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -37,6 +38,7 @@ from app.agents.anomaly_detection_agent import run_heuristic as _anomaly_detect
 from app.agents.debate_ensemble_agent import DebateEnsembleAgent
 from app.agents.llm.ollama_breaker import create_ollama_client
 from app.agents.memory_tier_manager_agent import MemoryTierManagerAgent
+from app.agents.query_intelligence_agent import run_heuristic as _query_intelligence_detect
 from app.core.config import settings
 from app.core.requester_context import RequesterContext
 from app.services.cognitive_fingerprint_service import CognitiveFingerprintService
@@ -49,6 +51,9 @@ from app.services.enterprise_fallbacks import (
 )
 from app.services.attention_retrieval_service import AttentionRetrievalService
 from app.services.self_rag_service import SelfRagService
+
+
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -144,6 +149,8 @@ class GatewayAnswerResult:
     model: str
     context_turns: int
     used_llm: bool
+    answer_source: str
+    llm_error: str | None = None
 
 
 @dataclass
@@ -246,6 +253,190 @@ def _assemble_read_context(
         scored.append((weighted, mem))
     scored.sort(key=lambda x: x[0], reverse=True)
     return [m for _, m in scored]
+
+
+def _coerce_rank_score(value: Any) -> float | None:
+    try:
+        score = float(value)
+    except (TypeError, ValueError):
+        return None
+    if score != score:
+        return None
+    return score
+
+
+def _prepare_read_candidates(
+    memories: list[dict],
+    query: str,
+    requester: "RequesterContext | None",
+    limit: int,
+) -> list[dict]:
+    """Preserve upstream search ranking when candidates already carry scores."""
+    if not memories:
+        return []
+
+    window = max(int(limit or 0), min(len(memories), max(10, int(limit or 0) * 3)))
+    scored_candidates: list[tuple[int, float, dict[str, Any]]] = []
+    for idx, memory in enumerate(memories):
+        existing = _coerce_rank_score(memory.get("_retrieval_score", memory.get("score")))
+        if existing is None:
+            continue
+        enriched = dict(memory)
+        enriched["_retrieval_score"] = existing
+        scored_candidates.append((idx, existing, enriched))
+
+    if scored_candidates:
+        scored_candidates.sort(key=lambda item: (-item[1], item[0]))
+        return [item[2] for item in scored_candidates[:window]]
+
+    return _assemble_read_context(memories, query, requester)[:window]
+
+
+def _memory_field_tokens(memory: dict[str, Any]) -> set[str]:
+    """Collect normalized tokens from content and key enrichment fields."""
+    tokens: set[str] = set()
+
+    content = str(memory.get("content") or "")
+    tokens.update(_normalise_tokens(content))
+
+    enrichment = memory.get("enrichment") or {}
+
+    for field in ("entity_name", "entity_type"):
+        raw = memory.get(field)
+        if raw is None and isinstance(enrichment, dict):
+            raw = enrichment.get(field)
+        if isinstance(raw, str) and raw.strip():
+            tokens.update(_normalise_tokens(raw))
+
+    for field in ("resolved_aliases", "key_entities"):
+        raw = memory.get(field)
+        if raw is None and isinstance(enrichment, dict):
+            raw = enrichment.get(field)
+        if isinstance(raw, list):
+            for item in raw:
+                if isinstance(item, str) and item.strip():
+                    tokens.update(_normalise_tokens(item))
+
+    tags = memory.get("tags")
+    if tags is None and isinstance(enrichment, dict):
+        tags = enrichment.get("tags") or enrichment.get("normalized_tags")
+    if isinstance(tags, list):
+        for tag in tags:
+            if isinstance(tag, str) and tag.strip():
+                tokens.update(_normalise_tokens(tag))
+
+    return tokens
+
+
+def _apply_query_filters(memories: list[dict[str, Any]], filters: dict[str, Any]) -> list[dict[str, Any]]:
+    """Apply QueryIntelligence dynamic filters with conservative fail-open behavior."""
+    if not filters:
+        return memories
+
+    filtered = memories
+
+    entity_type = filters.get("entity_type")
+    if isinstance(entity_type, str) and entity_type.strip():
+        et = entity_type.strip().lower()
+        next_filtered = []
+        for mem in filtered:
+            enrichment = mem.get("enrichment") or {}
+            mem_type = mem.get("entity_type")
+            if mem_type is None and isinstance(enrichment, dict):
+                mem_type = enrichment.get("entity_type")
+            if isinstance(mem_type, str) and mem_type.strip().lower() == et:
+                next_filtered.append(mem)
+        if next_filtered:
+            filtered = next_filtered
+
+    tags = filters.get("tags")
+    if isinstance(tags, list) and tags:
+        requested = {str(t).strip().lower() for t in tags if str(t).strip()}
+        if requested:
+            next_filtered = []
+            for mem in filtered:
+                enrichment = mem.get("enrichment") or {}
+                mem_tags = mem.get("tags")
+                if mem_tags is None and isinstance(enrichment, dict):
+                    mem_tags = enrichment.get("tags") or enrichment.get("normalized_tags")
+                norm_tags = {str(t).strip().lower() for t in (mem_tags or []) if str(t).strip()}
+                if requested.issubset(norm_tags):
+                    next_filtered.append(mem)
+            if next_filtered:
+                filtered = next_filtered
+
+    if filters.get("has_temporal_data") is True:
+        next_filtered = []
+        for mem in filtered:
+            enrichment = mem.get("enrichment") or {}
+            has_temporal = bool(mem.get("timestamp") or mem.get("created_at"))
+            if isinstance(enrichment, dict):
+                has_temporal = has_temporal or bool(
+                    enrichment.get("temporal_confidence")
+                    or enrichment.get("timeline")
+                    or enrichment.get("event_time")
+                )
+            if has_temporal:
+                next_filtered.append(mem)
+        if next_filtered:
+            filtered = next_filtered
+
+    min_credibility = filters.get("min_credibility")
+    if min_credibility is not None:
+        try:
+            min_score = float(min_credibility)
+        except (TypeError, ValueError):
+            min_score = None
+        if min_score is not None:
+            next_filtered = [m for m in filtered if _credibility_weight(m) >= min_score]
+            if next_filtered:
+                filtered = next_filtered
+
+    exclude_levels = filters.get("exclude_uncertainty_levels")
+    if isinstance(exclude_levels, list) and exclude_levels:
+        blocked = {str(l).strip().lower() for l in exclude_levels if str(l).strip()}
+        if blocked:
+            next_filtered = []
+            for mem in filtered:
+                enrichment = mem.get("enrichment") or {}
+                level = mem.get("uncertainty_level")
+                if level is None and isinstance(enrichment, dict):
+                    level = enrichment.get("uncertainty_level")
+                if str(level or "").strip().lower() not in blocked:
+                    next_filtered.append(mem)
+            if next_filtered:
+                filtered = next_filtered
+
+    return filtered
+
+
+def _prioritize_entity_matches(
+    memories: list[dict[str, Any]],
+    entities: list[str],
+) -> tuple[list[dict[str, Any]], int]:
+    """Move entity-matched memories to the front while preserving relative order."""
+    if not memories or not entities:
+        return memories, 0
+
+    entity_tokens: set[str] = set()
+    for ent in entities:
+        if isinstance(ent, str) and ent.strip():
+            entity_tokens.update(_normalise_tokens(ent))
+
+    if not entity_tokens:
+        return memories, 0
+
+    matched: list[dict[str, Any]] = []
+    unmatched: list[dict[str, Any]] = []
+
+    for mem in memories:
+        tokens = _memory_field_tokens(mem)
+        if tokens & entity_tokens:
+            matched.append(mem)
+        else:
+            unmatched.append(mem)
+
+    return matched + unmatched, len(matched)
 
 
 def _escalate_action(requester: "RequesterContext | None") -> str:
@@ -525,6 +716,94 @@ def _is_float(v: Any) -> bool:
         return False
 
 
+def _memory_entity_hints(memory: dict[str, Any], limit: int = 6) -> list[str]:
+    hints: list[str] = []
+    seen: set[str] = set()
+
+    def _push(value: Any) -> None:
+        if len(hints) >= limit:
+            return
+        if isinstance(value, str):
+            cleaned = value.strip()
+            if not cleaned or len(cleaned) > 80:
+                return
+            key = cleaned.lower()
+            if key in seen:
+                return
+            seen.add(key)
+            hints.append(cleaned)
+            return
+        if isinstance(value, list):
+            for item in value:
+                _push(item)
+                if len(hints) >= limit:
+                    return
+            return
+        if isinstance(value, dict):
+            for item in value.values():
+                _push(item)
+                if len(hints) >= limit:
+                    return
+
+    _push(memory.get("entities") or {})
+    extra = memory.get("extra_metadata") or {}
+    if isinstance(extra, dict):
+        _push(extra.get("resolved_entities") or [])
+        _push(extra.get("key_entities") or [])
+
+    return hints
+
+
+def _memory_relation_hints(memory: dict[str, Any], limit: int = 4) -> list[str]:
+    rels: list[str] = []
+    seen: set[str] = set()
+
+    def _add(kind: Any, value: Any) -> None:
+        if len(rels) >= limit:
+            return
+        kind_s = str(kind or "related_to").strip().lower()[:32]
+        value_s = str(value or "").strip()
+        if not value_s or len(value_s) > 80:
+            return
+        text = f"{kind_s}:{value_s}"
+        key = text.lower()
+        if key in seen:
+            return
+        seen.add(key)
+        rels.append(text)
+
+    extra = memory.get("extra_metadata") or {}
+    if isinstance(extra, dict):
+        raw = extra.get("semantic_relationships") or []
+        if isinstance(raw, list):
+            for rel in raw:
+                if not isinstance(rel, dict):
+                    continue
+                _add(rel.get("type"), rel.get("concept") or rel.get("target") or rel.get("source"))
+                if len(rels) >= limit:
+                    break
+
+    return rels
+
+
+def _answer_context_line(memory: dict[str, Any]) -> str:
+    content = str(memory.get("content") or "").strip()
+    if not content:
+        return ""
+
+    entities = _memory_entity_hints(memory)
+    relations = _memory_relation_hints(memory)
+    if not entities and not relations:
+        return content
+
+    lines = [content]
+    if entities:
+        lines.append("Entities: " + ", ".join(entities))
+    if relations:
+        lines.append("Relations: " + "; ".join(relations))
+    return "\n".join(lines)
+
+
 def _heuristic_answer(question: str, memories: list[dict]) -> str:
     """Best-effort keyword-overlap answer extraction when Ollama is unavailable."""
     q_tokens = _normalise_tokens(question)
@@ -727,16 +1006,30 @@ class CognitiveGatewayService:
             _tag_set = set(filter_tags)
             _mems = [m for m in _mems if _tag_set.issubset(set(m.get("tags") or []))]
 
+        # Query intelligence (Phase 27): derive intent + entities + dynamic filters,
+        # then apply conservative filtering and entity-priority ordering before ranking.
+        qi = _query_intelligence_detect(query, {})
+        qi_entities = [e for e in (qi.get("extracted_entities") or []) if isinstance(e, str) and e.strip()]
+        qi_filters = qi.get("dynamic_filters") if isinstance(qi.get("dynamic_filters"), dict) else {}
+
+        pre_qi_count = len(_mems)
+        _mems = _apply_query_filters(_mems, qi_filters)
+        _mems, entity_match_count = _prioritize_entity_matches(_mems, qi_entities)
+
+        ranking_query = query
+        if qi_entities:
+            ranking_query = f"{query} {' '.join(qi_entities[:6])}".strip()
+
         if vector_fn is not None:
             # Caller-supplied semantic ranking takes precedence; skip attention rerank.
-            ranked = vector_fn(query, _mems)[:limit]
+            ranked = vector_fn(ranking_query, _mems)[:limit]
         else:
-            ranked = _assemble_read_context(_mems, query, requester)[:limit]
+            ranked = _prepare_read_candidates(_mems, ranking_query, requester, limit)
             # Attention-weighted reranking (Phase 58): re-scores candidates using
             # recency, query-token relevance, and goal/incident alignment before
             # passing to SelfRag. Works on plain dicts — no DB access required.
             _query_tokens = frozenset(
-                re.findall(r"\b[a-z0-9_]+\b", query.lower())
+                re.findall(r"\b[a-z0-9_]+\b", ranking_query.lower())
             )
             ranked = AttentionRetrievalService().rank(
                 memories=ranked,
@@ -782,7 +1075,19 @@ class CognitiveGatewayService:
             context_assembled=len(compression.memories) > 0,
             retrieval_confidence=corrective.retrieval_confidence,
             corrected_by=corrective.corrected_by,
-            reasoning_steps=verification.reasoning_steps,
+            reasoning_steps=[
+                {
+                    "step": "query_intelligence",
+                    "intent": qi.get("query_intent"),
+                    "confidence": qi.get("confidence"),
+                    "entities": qi_entities,
+                    "applied_filters": qi_filters,
+                    "candidate_count_before": pre_qi_count,
+                    "candidate_count_after": len(_mems),
+                    "entity_match_count": entity_match_count,
+                },
+                *verification.reasoning_steps,
+            ],
             compression_ratio=compression.compression_ratio,
             information_density=compression.information_density,
         )
@@ -911,6 +1216,8 @@ class CognitiveGatewayService:
         model: str | None = None,
         num_ctx: int = 32768,
         prompt_override: str | None = None,
+        timeout_seconds: float | None = None,
+        keep_alive: int | None = None,
     ) -> GatewayAnswerResult:
         """Generate an answer to a question using retrieved memory context.
 
@@ -919,6 +1226,12 @@ class CognitiveGatewayService:
 
         If prompt_override is provided it is sent to Ollama directly, bypassing
         the default context-assembly and prompt template.
+
+        timeout_seconds: override the default OLLAMA_TIMEOUT_SECONDS config.
+          Benchmark callers pass 200s+ to avoid 30s hard-timeout fallbacks on
+          large models (qwen2.5:32b on CPU takes 60-120s including model load).
+        keep_alive: seconds to keep the model loaded (-1 = forever). Pass -1
+          during long benchmark runs to prevent model eviction between calls.
         """
         self._check("answer")
 
@@ -926,45 +1239,72 @@ class CognitiveGatewayService:
             prompt = prompt_override
             context_lines: list[str] = []
         else:
-            context_lines = [
-                str(m.get("content") or "").strip()
-                for m in memories[:80]
-                if str(m.get("content") or "").strip()
-            ]
+            context_lines = []
+            for memory in memories[:80]:
+                line = _answer_context_line(memory)
+                if line:
+                    context_lines.append(line)
             context_text = "\n".join(context_lines)
             prompt = (
                 "Answer the question using only the conversation turns below.\n"
-                "Output ONLY the answer — a name, place, date, or short phrase (1-12 words).\n"
-                "Do not say 'the conversation' or explain. Just the answer.\n\n"
+                "Output ONLY the answer — a name, place, date, or short phrase (1-20 words).\n"
+                "Use EXACT words from the conversation for named entities (people, places, countries).\n"
+                "Do not paraphrase or describe — copy the specific name/fact.\n\n"
                 f"Conversation:\n{context_text}\n\n"
                 f"Question: {question}\nAnswer:"
             )
 
         _model = model or str(settings.get_ollama_model("agents"))
+        # Use caller-provided timeout when available; the config default (30s) is too short
+        # for large models that need 60-120s to load+infer on first call after idle.
+        _default_timeout = float(getattr(settings, "OLLAMA_TIMEOUT_SECONDS", 30.0))
+        _timeout = float(timeout_seconds) if timeout_seconds is not None else _default_timeout
+        # Clamp: minimum 30s, maximum 300s to avoid unbounded waits
+        _timeout = max(30.0, min(300.0, _timeout))
+
         used_llm = False
+        answer_source = "gateway_empty"
+        llm_error: str | None = None
         answer_text = ""
 
         try:
             client = create_ollama_client(
                 base_url=str(getattr(settings, "OLLAMA_BASE_URL", "http://localhost:11434")),
                 model=_model,
-                timeout_seconds=float(getattr(settings, "OLLAMA_TIMEOUT_SECONDS", 30.0)),
+                timeout_seconds=_timeout,
                 max_concurrency=8,
             )
+            # keep_alive is handled by the base OllamaClient (hardcoded to -1 = never evict).
+            # The caller's keep_alive hint is noted for logging but not forwarded as a kwarg.
+            _ = keep_alive  # acknowledged; base client always uses keep_alive=-1
             answer_text = await client.complete_text(prompt=prompt, num_ctx=num_ctx)
             used_llm = bool(answer_text)
-        except Exception:
-            pass
+            if used_llm:
+                answer_source = "gateway"
+            else:
+                llm_error = str(getattr(client, "last_error", "") or "empty_response")
+        except Exception as exc:
+            llm_error = repr(exc)
+            logger.warning(
+                "ollama answer fallback: model=%s timeout=%s exc=%s: %s",
+                _model,
+                _timeout,
+                type(exc).__name__,
+                exc,
+            )
 
         if not answer_text:
             answer_text = _heuristic_answer(question, memories)
             _model = "heuristic"
+            answer_source = "heuristic"
 
         return GatewayAnswerResult(
             answer=answer_text,
             model=_model,
             context_turns=len(context_lines),
             used_llm=used_llm,
+            answer_source=answer_source,
+            llm_error=llm_error,
         )
 
     # ------------------------------------------------------------------

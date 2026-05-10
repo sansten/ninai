@@ -73,13 +73,51 @@ _DEFAULT_ORG_POLICY = SimpleNamespace(
 )
 
 
+_POLICY_CACHE_TTL = 60  # seconds
+
+
+async def _redis_get(key: str):
+    try:
+        from app.core.redis import RedisClient
+        rc = await RedisClient.get_client()
+        return await rc.get(key)
+    except Exception:
+        return None
+
+
+async def _redis_set(key: str, value: str, ttl: int = _POLICY_CACHE_TTL):
+    try:
+        from app.core.redis import RedisClient
+        rc = await RedisClient.get_client()
+        await rc.set(key, value, ex=ttl)
+    except Exception:
+        pass
+
+
 async def get_org_policy(db: AsyncSession, org_id: str):
-    """Load org policy from DB; return a safe default when no row exists."""
+    """Load org policy from Redis cache (60 s TTL) then DB; return a safe default when no row exists."""
+    import json
+    cache_key = f"org_policy:{org_id}"
+    cached = await _redis_get(cache_key)
+    if cached:
+        try:
+            return SimpleNamespace(**json.loads(cached))
+        except Exception:
+            pass
+
     try:
         row = await db.scalar(
             select(OrgIdentityPolicy).where(OrgIdentityPolicy.org_id == org_id)
         )
-        return row if row is not None else _DEFAULT_ORG_POLICY
+        result = row if row is not None else _DEFAULT_ORG_POLICY
+        payload = {
+            "mandate_actor_identity": bool(result.mandate_actor_identity),
+            "allowed_modes": list(result.allowed_modes or []),
+            "enrich_from_directory": bool(result.enrich_from_directory),
+            "audit_trail_always": bool(result.audit_trail_always),
+        }
+        await _redis_set(cache_key, json.dumps(payload))
+        return result
     except Exception as exc:
         logger.warning("Failed to load OrgIdentityPolicy for org=%s: %s", org_id, exc)
         return _DEFAULT_ORG_POLICY
@@ -88,13 +126,34 @@ async def get_org_policy(db: AsyncSession, org_id: str):
 async def get_user_pref(
     db: AsyncSession, user_id: str
 ) -> Optional[UserIdentityPreference]:
-    """Load user identity preference from DB; return None when no row exists."""
+    """Load user identity preference from Redis cache (60 s TTL) then DB."""
+    import json
+    cache_key = f"user_pref:{user_id}"
+    cached = await _redis_get(cache_key)
+    if cached:
+        try:
+            data = json.loads(cached)
+            if data is None:
+                return None
+            return SimpleNamespace(**data)  # type: ignore[return-value]
+        except Exception:
+            pass
+
     try:
-        return await db.scalar(
+        row = await db.scalar(
             select(UserIdentityPreference).where(
                 UserIdentityPreference.user_id == user_id
             )
         )
+        if row is None:
+            await _redis_set(cache_key, "null")
+            return None
+        payload = {
+            "user_id": str(row.user_id),
+            "preference": str(row.preference) if row.preference else "full",
+        }
+        await _redis_set(cache_key, json.dumps(payload))
+        return row
     except Exception as exc:
         logger.warning(
             "Failed to load UserIdentityPreference for user=%s: %s", user_id, exc

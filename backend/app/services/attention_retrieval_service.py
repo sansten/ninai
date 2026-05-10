@@ -15,6 +15,16 @@ class AttentionRetrievalService:
     BASE_RELEVANCE_WEIGHT = 0.1
 
     @staticmethod
+    def _coerce_score(value: Any) -> float | None:
+        try:
+            score = float(value)
+        except (TypeError, ValueError):
+            return None
+        if math.isnan(score):
+            return None
+        return max(0.0, min(1.0, score))
+
+    @staticmethod
     def _tokenize(text: str) -> set[str]:
         return set(re.findall(r"\b[a-z0-9_]+\b", (text or "").lower()))
 
@@ -75,6 +85,11 @@ class AttentionRetrievalService:
         recency_score = math.exp(-days_old / 30)
 
         relevance_score = self._jaccard(mem_tokens, set(query_tokens or frozenset()))
+        retrieval_score = self._coerce_score(
+            memory.get("_retrieval_score", memory.get("score"))
+        )
+        if retrieval_score is not None:
+            relevance_score = max(relevance_score, retrieval_score)
 
         total = (
             self.GOAL_WEIGHT * goal_score

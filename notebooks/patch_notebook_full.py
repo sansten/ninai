@@ -25,7 +25,7 @@ cells[5]['source'] = [
     "# Official LoCoMo dataset (snap-research/locomo, 10 convs, 1986 QA pairs)\n",
     "DATASET_PATH = _NB_DIR / 'locomo_dataset' / 'locomo10.json'\n",
     "\n",
-    "RETRIEVAL_LIMIT  = 50   # top-N from deduplicated unique turns per conversation\n",
+    "RETRIEVAL_LIMIT  = 20   # top-N from deduplicated unique turns per conversation\n",
     "ROUGE_TYPE       = 'rouge1'\n",
     "LLM_MODEL        = 'qwen2.5:7b'\n",
     "LLM_MODEL_HARD   = 'deepseek-coder-v2:16b'\n",
@@ -111,33 +111,12 @@ cells[9]['source'] = [
     "            'evidence': qa.get('evidence', []),\n",
     "        })\n",
     "\n",
-    "    # Build event overview from structured event_summary (per-person bullet points).\n",
-    "    # event_summary is ~1800 tokens avg (vs 5250 for full session_summary narratives).\n",
-    "    # Format: '[Session N | date]\\n  Person: event' -- directly answers 'What did X do?' Qs.\n",
-    "    _es = raw_conv.get('event_summary', {})\n",
-    "    _overview_lines = []\n",
-    "    for _ekey in sorted(_es.keys(), key=lambda k: int(k.replace('events_session_', ''))):\n",
-    "        _sess_data = _es[_ekey]\n",
-    "        if not isinstance(_sess_data, dict):\n",
-    "            continue\n",
-    "        _snum = _ekey.replace('events_session_', '')\n",
-    "        _date = _sess_data.get('date', '')\n",
-    "        _overview_lines.append(f'[Session {_snum} | {_date}]')\n",
-    "        for _person, _events in _sess_data.items():\n",
-    "            if _person == 'date':\n",
-    "                continue\n",
-    "            if isinstance(_events, list) and _events:\n",
-    "                for _ev in _events:\n",
-    "                    _overview_lines.append(f'  {_person}: {_ev}')\n",
-    "    session_overview = '\\n'.join(_overview_lines)\n",
-    "\n",
     "    conversations.append({\n",
-    "        'conv_id'          : cid,\n",
-    "        'speaker_a'        : speaker_a,\n",
-    "        'speaker_b'        : speaker_b,\n",
-    "        'sessions'         : sessions,\n",
-    "        'qa_pairs'         : qa_pairs,\n",
-    "        'session_overview' : session_overview,\n",
+    "        'conv_id'   : cid,\n",
+    "        'speaker_a' : speaker_a,\n",
+    "        'speaker_b' : speaker_b,\n",
+    "        'sessions'  : sessions,\n",
+    "        'qa_pairs'  : qa_pairs,\n",
     "    })\n",
     "\n",
     "total_turns = sum(len(s['turns']) for c in conversations for s in c['sessions'])\n",
@@ -471,87 +450,6 @@ _cell15_lines = [
     "            return m.group(1)",
     "    return answer",
     "",
-    "def _sharpen_boolean(answer, question):",
-    "    # For yes/no questions, collapse verbose answers to 'Yes'/'No'.",
-    "    q = question.lower().strip()",
-    "    _bool_starts = ('do ', 'did ', 'is ', 'are ', 'was ', 'were ', 'has ', 'have ', 'can ')",
-    "    if not any(q.startswith(s) for s in _bool_starts):",
-    "        return answer",
-    "    low = answer.lower()",
-    "    first = low.split()[:5]",
-    "    if 'yes' in first or low.startswith('yes'):",
-    "        return 'Yes'",
-    "    if 'no' in first or low.startswith('no') or 'not' in low.split()[:3]:",
-    "        return 'No'",
-    "    return answer",
-    "",
-    "def _iso_to_natural(answer):",
-    "    # Convert ISO date outputs (YYYY-MM-DD) from context prefixes into natural language.",
-    "    # LLMs sometimes echo the [YYYY-MM-DD] context prefix format as the answer.",
-    "    _months = ['January','February','March','April','May','June',",
-    "               'July','August','September','October','November','December']",
-    "    _a = answer.strip()",
-    "    # Strip leading/trailing brackets: '[2023-05-08]' → '2023-05-08'",
-    "    _a = re.sub(r'^\\[|\\]$', '', _a).strip()",
-    "    # Full ISO date: '2023-05-08' → '8 May 2023'",
-    "    _m = re.match(r'^(\\d{4})-(\\d{2})-(\\d{2})$', _a)",
-    "    if _m:",
-    "        _y, _mo, _d = int(_m.group(1)), int(_m.group(2)), int(_m.group(3))",
-    "        if 1 <= _mo <= 12:",
-    "            return '{} {} {}'.format(_d, _months[_mo-1], _y)",
-    "    # Year-month only: '2023-05' → 'May 2023'",
-    "    _m = re.match(r'^(\\d{4})-(\\d{2})$', _a)",
-    "    if _m:",
-    "        _y, _mo = int(_m.group(1)), int(_m.group(2))",
-    "        if 1 <= _mo <= 12:",
-    "            return '{} {}'.format(_months[_mo-1], _y)",
-    "    return answer",
-    "",
-    "def _resolve_temporal_references(answer, last_date):",
-    "    # Convert relative time expressions to absolute dates using the last session date.",
-    "    # Fixes: 'last year' → '2022', 'next month' → 'June 2023' etc.",
-    "    if not last_date or not answer:",
-    "        return answer",
-    "    try:",
-    "        from datetime import datetime as _dt, timedelta as _td",
-    "        _ref = _dt.strptime(last_date, '%Y-%m-%d').date()",
-    "    except Exception:",
-    "        return answer",
-    "    _a = answer.strip()",
-    "    _low = _a.lower()",
-    "    _months = ['January','February','March','April','May','June',",
-    "               'July','August','September','October','November','December']",
-    "    if re.search(r'\\blast\\s+year\\b', _low):",
-    "        return str(_ref.year - 1)",
-    "    if re.search(r'\\bnext\\s+year\\b', _low):",
-    "        return str(_ref.year + 1)",
-    "    if re.search(r'\\bthis\\s+year\\b', _low):",
-    "        return str(_ref.year)",
-    "    if re.search(r'\\blast\\s+month\\b', _low):",
-    "        _d = (_ref.replace(day=1) - _td(days=1))",
-    "        return _months[_d.month - 1] + ' ' + str(_d.year)",
-    "    if re.search(r'\\bnext\\s+month\\b', _low):",
-    "        _m2 = _ref.month % 12 + 1",
-    "        _y2 = _ref.year + (1 if _ref.month == 12 else 0)",
-    "        return _months[_m2 - 1] + ' ' + str(_y2)",
-    "    if re.search(r'\\bthis\\s+month\\b', _low):",
-    "        return _months[_ref.month - 1] + ' ' + str(_ref.year)",
-    "    if re.search(r'\\blast\\s+week\\b', _low):",
-    "        _w = _ref - _td(days=7)",
-    "        return _w.strftime('week of %B %d %Y')",
-    "    # 'X years ago' → compute year",
-    "    _m = re.search(r'\\b(\\d+)\\s+years?\\s+ago\\b', _low)",
-    "    if _m:",
-    "        return str(_ref.year - int(_m.group(1)))",
-    "    # 'X months ago'",
-    "    _m = re.search(r'\\b(\\d+)\\s+months?\\s+ago\\b', _low)",
-    "    if _m:",
-    "        _n = int(_m.group(1))",
-    "        _mo = (_ref.month - _n - 1) % 12 + 1",
-    "        _yr = _ref.year + (_ref.month - _n - 1) // 12",
-    "        return _months[_mo - 1] + ' ' + str(_yr)",
-    "    return _a",
-    "",
     "def _mem_obj_to_dict(m):",
     "    # prefer content (full text); fall back to content_preview",
     "    full = getattr(m, 'content', None) or getattr(m, 'content_preview', None) or m.title or ''",
@@ -629,17 +527,14 @@ _cell15_lines = [
     "              client=None, run_tag=None, conv_id=None):",
     "    # ── Primary: Ninai semantic search (hybrid lexical+vector) ──────────",
     "    if client is not None and run_tag is not None and conv_id is not None:",
-    "        k = limit if category not in ('multi_hop',) else min(limit * 2, 80)",
+    "        k = limit if category not in ('multi_hop',) else min(limit * 2, 40)",
     "        # QueryIntelligenceAgent: entity/intent-expanded query for stage-1 search",
     "        search_q = _query_expand(question, category)",
     "        hits = _search_semantic(search_q, conv_id, run_tag, client, k)",
-    "        # Always compute full-conversation BM25 as a parallel retrieval track.",
-    "        # Semantic may land on the wrong session; BM25 on all turns provides",
-    "        # a direct route to fact-bearing turns that semantic missed.",
-    "        unique_all = _dedup_by_content(mem_dicts)",
-    "        bm25_full = _top_k_bm25(question, unique_all, limit)",
     "        if len(hits) >= 3:",
-    "            # Session expansion: include ALL turns from sessions already hit by semantic search.",
+    "            # Session expansion: include ALL turns from identified sessions.",
+    "            # Fixes cases where the answer is in session_16 turn 15 but semantic",
+    "            # search only retrieves session_16 turns 1-3 (right session, wrong turns).",
     "            hits = _session_expand(hits, mem_dicts)",
     "            if category == 'multi_hop':",
     "                # Stage 2: expand with entity terms from stage-1 results",
@@ -662,24 +557,19 @@ _cell15_lines = [
     "                bridge_terms = [w for w, _ in sorted(pn_freq.items(), key=lambda x: -x[1])[:4]]",
     "                hits3 = _search_semantic(' '.join(bridge_terms), conv_id, run_tag, client, limit) if bridge_terms else []",
     "                seen_ids, merged = set(), []",
-    "                for h in hits + hits2 + hits3 + bm25_full:",
+    "                for h in hits + hits2 + hits3:",
     "                    if h['id'] not in seen_ids:",
     "                        seen_ids.add(h['id'])",
     "                        merged.append(h)",
-    "                # BM25 re-rank within merged pool (relevance over recency)",
-    "                merged = _top_k_bm25(question, merged, limit)",
+    "                # Cognitive gateway reranking: AttentionRetrieval + SelfRAG + CorrectiveRAG",
+    "                merged = _cognitive_rerank(question, merged, limit, BASE_URL, _token)",
     "                # EpisodicGroupingAgent: session diversity — ensures hits span multiple sessions",
+    "                unique_all = _dedup_by_content(mem_dicts)",
     "                merged = _episodic_diversify(merged, unique_all, question, limit)",
     "                return _sort_by_date(merged)",
-    "            # Merge semantic session-expanded pool with full-conversation BM25.",
-    "            # Dedup by id, then BM25 re-rank the combined pool.",
-    "            seen_ids = {h['id'] for h in hits}",
-    "            for h in bm25_full:",
-    "                if h['id'] not in seen_ids:",
-    "                    seen_ids.add(h['id'])",
-    "                    hits.append(h)",
-    "            hits = _top_k_bm25(question, hits, limit)",
-    "            return _sort_by_date(hits)",
+    "            # Cognitive gateway reranking for all other categories",
+    "            hits = _cognitive_rerank(question, hits, limit, BASE_URL, _token)",
+    "            return _sort_by_date(hits[:limit])",
     "    # ── Fallback: stemmed BM25 ───────────────────────────────────────────",
     "    unique = _dedup_by_content(mem_dicts)",
     "    if category == 'multi_hop':",
@@ -735,13 +625,7 @@ _cell15_lines = [
     "        k = min(limit, len(unique))",
     "        return _sort_by_date(_top_k_bm25(question, unique, k))",
     "",
-    "def _build_prompt(category, question, context, last_date='', session_overview=''):",
-    "    # Prepend event overview for all categories except multi_hop.",
-    "    # multi_hop needs clean retrieval context; overview adds noise for 2-hop reasoning.",
-    "    _overview_block = ''",
-    "    if session_overview:",
-    "        _overview_block = ('KEY EVENTS (all sessions):\\n'",
-    "                           + session_overview + '\\n\\n')",
+    "def _build_prompt(category, question, context, last_date=''):",
     "    q_lower = question.lower()",
     "    if category == 'temporal':",
     "        # Detect if question already contains a specific date/month anchor.",
@@ -772,19 +656,20 @@ _cell15_lines = [
     "            )",
     "        else:",
     "            inst = (",
-    "                'RULE: Use the session date prefixes to convert ALL relative time references (last Saturday, next week, 4 years ago) to specific calendar dates.\\n'",
-    "                'Examples of correct format: \"25 May 2023\", \"March 2019\", \"August 2022\", \"the Sunday before 25 May 2023\".\\n'",
+    "                'RULE: The turns are prefixed with their ISO date [YYYY-MM-DD].\\n'",
+    "                'Use the session date prefixes [YYYY-MM-DD] to convert ALL relative time references (last Saturday, next week, 4 years ago) to specific calendar dates.\\n'",
+    "                'State the date as it would appear naturally in conversation (e.g. \"the Sunday before 25 May 2023\", \"March 2019\", \"6 months after they met\").\\n'",
     "                'Reply with ONLY the date or time expression. No full sentence. No explanation.\\n'",
     "            )",
     "        return (",
-    "            _overview_block + 'Conversation turns with ISO dates:\\n' + context + '\\n\\n'",
+    "            'Conversation turns with ISO dates:\\n' + context + '\\n\\n'",
     "            'Question: ' + question + '\\n'",
     "            + inst +",
     "            'Answer:'",
     "        )",
     "    elif category == 'multi_hop':",
     "        return (",
-    "            _overview_block + 'Conversation excerpts (chronological):\\n' + context + '\\n\\n'",
+    "            'Conversation excerpts (chronological):\\n' + context + '\\n\\n'",
     "            'Question: ' + question + '\\n'",
     "            'RULE: Answer with ONLY the key fact (name, place, or short phrase). Prefer 1-5 words.\\n'",
     "            'Do NOT write a full sentence. Do NOT explain.\\n'",
@@ -792,18 +677,18 @@ _cell15_lines = [
     "        )",
     "    elif category == 'adversarial':",
     "        return (",
-    "            _overview_block + 'Conversation (chronological order):\\n' + context + '\\n\\n'",
+    "            'Conversation (chronological order):\\n' + context + '\\n\\n'",
     "            'Question: ' + question + '\\n'",
-    "            'RULE: Find the single most relevant fact in KEY EVENTS or conversation that answers this question.\\n'",
-    "            'Reply with ONLY that fact — 1 to 5 words. Exact names and terms only. No explanation.\\n'",
+    "            'RULE: The question may have slightly wrong details. Answer with ONLY the correct fact from the conversation.\\n'",
+    "            'Prefer 1-10 words. Use exact names and wording. No explanation.\\n'",
     "            'Answer:'",
     "        )",
     "    elif category == 'open_domain':",
     "        return (",
-    "            _overview_block + 'Conversation excerpts:\\n' + context + '\\n\\n'",
+    "            'Conversation excerpts:\\n' + context + '\\n\\n'",
     "            'Question: ' + question + '\\n'",
-    "            'RULE: Reply with ONLY the shortest exact span from KEY EVENTS or conversation that answers the question.\\n'",
-    "            'Prefer 3-12 words. Use exact names and wording from KEY EVENTS or conversation. No explanation.\\n'",
+    "            'RULE: Reply with ONLY the shortest exact span from the conversation that answers the question.\\n'",
+    "            'Prefer 3-12 words. Use exact names and wording from the conversation. No explanation.\\n'",
     "            'Answer:'",
     "        )",
     "    else:  # single_hop",
@@ -811,7 +696,7 @@ _cell15_lines = [
     "        if 'time' in q_lower and any(w in q_lower for w in ('marathon', 'finish', 'race', 'ran', 'run')):",
     "            time_inst = 'For race times like \"3:07\", write \"3 hours and 7 minutes\". '",
     "        return (",
-    "            _overview_block + 'Conversation (chronological order):\\n' + context + '\\n\\n'",
+    "            'Conversation (chronological order):\\n' + context + '\\n\\n'",
     "            'Question: ' + question + '\\n'",
     "            'RULE: Reply with ONLY the exact word, name, or short phrase that answers the question.\\n'",
     "            'Do NOT write a full sentence. Do NOT explain. ' + time_inst + '\\n'",
@@ -924,9 +809,6 @@ for cid in conv_ids:
     unique_n = len(set(m.get('content','') for m in conv_memories_dict[cid]) - {''})
     print(f'  {cid}: {raw} raw -> {unique_n} unique after content-dedup')
 
-# Build session overview lookup (conv_id → session summary text from raw dataset)
-conv_overview_dict = {conv['conv_id']: conv.get('session_overview', '') for conv in conversations}
-
 # ── Phase 1: semantic retrieval (stable sequential mode) ────────────────
 print('Phase 1: semantic retrieval (sequential for stability)...')
 import time as _time2
@@ -960,15 +842,14 @@ def _retrieve_one(args):
     else:
         context = '\n'.join(m.get('content') or '' for m in retrieved)
     return {
-        'conv_id'         : conv_id,
-        'qa_id'           : qa['id'],
-        'category'        : qa['category'],
-        'question'        : qa['question'],
-        'gold_answer'     : qa['answer'],
-        'context'         : context,
-        'retrieved'       : len(retrieved),
-        'last_date'       : (retrieved[-1].get('occurred_at') or '')[:10] if retrieved else '',
-        'session_overview': conv_overview_dict.get(conv_id, ''),
+        'conv_id'    : conv_id,
+        'qa_id'      : qa['id'],
+        'category'   : qa['category'],
+        'question'   : qa['question'],
+        'gold_answer': qa['answer'],
+        'context'    : context,
+        'retrieved'  : len(retrieved),
+        'last_date'  : (retrieved[-1].get('occurred_at') or '')[:10] if retrieved else '',
     }
 
 t0_ret = _time2.time()
@@ -987,18 +868,16 @@ for cat, cnt in sorted(cat_counts.items()):
 
 # ── Phase 2: build prompts ─────────────────────────────────────────────
 print('Phase 2: building prompts...')
-prompts = []
-for r in qa_records:
-    prompts.append(_build_prompt(r['category'], r['question'], r['context'],
-                                 last_date=r.get('last_date', ''),
-                                 session_overview=r.get('session_overview', '')))
+prompts = [_build_prompt(r['category'], r['question'], r['context'],
+                         last_date=r.get('last_date', ''))
+           for r in qa_records]
 
 # ── Phase 3: model-routed LLM inference ───────────────────────────────
 print(f'Phase 3: model-routed LLM inference ({LLM_WORKERS} workers, {len(prompts)} prompts)...')
 import time as _time
 t0 = _time.time()
 raw_answers = [''] * len(prompts)
-hard_cats = {'multi_hop'}
+hard_cats = {'temporal', 'multi_hop', 'open_domain'}
 easy_idx = [i for i, r in enumerate(qa_records) if r['category'] not in hard_cats]
 hard_idx = [i for i, r in enumerate(qa_records) if r['category'] in hard_cats]
 
@@ -1028,12 +907,8 @@ generated_answers = []
 for rec, raw in zip(qa_records, raw_answers):
     if raw:
         gen = _clean_answer(raw)
-        if rec['category'] in ('single_hop', 'adversarial'):
+        if rec['category'] == 'single_hop':
             gen = _sharpen_single_hop(gen, rec['question'])
-        if rec['category'] in ('single_hop',):
-            gen = _sharpen_boolean(gen, rec['question'])
-        if rec['category'] == 'temporal':
-            gen = _resolve_temporal_references(gen, rec.get('last_date', ''))
         generated_answers.append(gen)
         llm_used += 1
     else:
@@ -1046,15 +921,7 @@ print(f'  LLM: {llm_used} | Heuristic: {heuristic_used} | Time: {elapsed:.1f}s')
 print('Phase 4: ROUGE scoring...')
 results = []
 for rec, gen in zip(qa_records, generated_answers):
-    gold_norm = _normalize_for_rouge(rec['gold_answer'])
-    gen_norm  = _normalize_for_rouge(gen)
-    # Temporal: if gold is a bare year (e.g. "2022"), extract year from generated answer.
-    # LLM often outputs full date "August 2022" when gold is just "2022".
-    if rec['category'] == 'temporal' and re.match(r'^\d{4}$', gold_norm.strip()):
-        _years = re.findall(r'\b(20\d{2}|19\d{2})\b', gen_norm)
-        if _years:
-            gen_norm = _years[0]
-    score = scorer.score(gold_norm, gen_norm)
+    score = scorer.score(_normalize_for_rouge(rec['gold_answer']), _normalize_for_rouge(gen))
     f1    = score[ROUGE_TYPE].fmeasure * 100
     results.append({
         'conv_id'          : rec['conv_id'],

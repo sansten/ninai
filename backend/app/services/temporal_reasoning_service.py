@@ -4,8 +4,9 @@ PR-5: Temporal Reasoning Service
 Time-aware analysis, sequence detection, trajectory forecasting, and optimal timing.
 """
 
-from datetime import datetime, timedelta
-from typing import List, Dict, Optional, Tuple
+from datetime import datetime, timedelta, timezone
+import re
+from typing import Any, Dict, List, Optional, Tuple
 from uuid import uuid4
 import numpy as np
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -43,7 +44,7 @@ class TemporalReasoningService:
         valid_to: Optional[datetime] = None,
         change_type: str = "stable",
         confidence: float = 0.8,
-    ) -> Dict[str, any]:
+    ) -> Dict[str, Any]:
         """
         Tag a fact with temporal validity interval.
         
@@ -70,6 +71,118 @@ class TemporalReasoningService:
         }
         
         return temporal_fact
+
+    async def build_memory_timeline(
+        self,
+        *,
+        query: str,
+        memories: List[Dict[str, Any]],
+        facts: Optional[List[Dict[str, Any]]] = None,
+        extracted_entities: Optional[List[str]] = None,
+        max_events: int = 12,
+    ) -> Dict[str, Any]:
+        """Build a timeline-oriented evidence view from retrieved memories."""
+        entities = [str(item).strip() for item in (extracted_entities or []) if str(item).strip()]
+        query_tokens = self._query_tokens(query)
+
+        ranked_events: list[dict[str, Any]] = []
+        for memory in memories:
+            occurred_at = self._coerce_datetime(
+                memory.get("occurred_at")
+                or (memory.get("extra_metadata") or {}).get("event_time")
+                or memory.get("created_at")
+            )
+            title = str(memory.get("title") or "").strip()
+            preview = str(memory.get("content_preview") or memory.get("content") or "").strip()
+            text = " ".join(part for part in [title, preview] if part)
+            memory_entities = self._flatten_entities(memory.get("entities"))
+
+            entity_overlap = sum(
+                1 for entity in entities
+                if entity.lower() in text.lower() or entity.lower() in {item.lower() for item in memory_entities}
+            )
+            token_overlap = sum(1 for token in query_tokens if token and token in text.lower())
+            base_score = self._safe_float(memory.get("score"))
+            recency_anchor = occurred_at.timestamp() if occurred_at else 0.0
+
+            ranked_events.append(
+                {
+                    "memory_id": str(memory.get("id") or memory.get("memory_id") or "").strip(),
+                    "occurred_at": occurred_at.isoformat() if occurred_at else None,
+                    "title": title or None,
+                    "content_preview": preview or None,
+                    "entities": memory_entities,
+                    "score": base_score,
+                    "entity_overlap": entity_overlap,
+                    "token_overlap": token_overlap,
+                    "temporal_anchor": recency_anchor,
+                }
+            )
+
+        if not ranked_events:
+            return {
+                "timeline": [],
+                "memory_ids": [],
+                "anchor_count": 0,
+                "ordering": "chronological",
+                "earliest": None,
+                "latest": None,
+            }
+
+        ranked_events.sort(
+            key=lambda item: (
+                int(item["occurred_at"] is not None),
+                item["entity_overlap"],
+                item["token_overlap"],
+                item["score"],
+                item["temporal_anchor"],
+            ),
+            reverse=True,
+        )
+
+        selected = ranked_events[: max(1, int(max_events or 1))]
+        selected.sort(
+            key=lambda item: (
+                item["occurred_at"] is None,
+                item["occurred_at"] or "",
+                -self._safe_float(item.get("score")),
+            )
+        )
+
+        fact_map: dict[str, list[str]] = {}
+        for fact in facts or []:
+            source_memory_id = str(fact.get("source_memory_id") or "").strip()
+            if not source_memory_id:
+                continue
+            fact_map.setdefault(source_memory_id, []).append(
+                f"{fact.get('subject')} {fact.get('predicate')} {fact.get('object')}"
+            )
+
+        timeline: list[dict[str, Any]] = []
+        for item in selected:
+            memory_id = item["memory_id"]
+            timeline.append(
+                {
+                    "memory_id": memory_id,
+                    "occurred_at": item["occurred_at"],
+                    "title": item["title"],
+                    "content_preview": item["content_preview"],
+                    "entities": item["entities"],
+                    "score": round(self._safe_float(item["score"]), 4),
+                    "fact_summaries": fact_map.get(memory_id, [])[:3],
+                }
+            )
+
+        anchored = [item["occurred_at"] for item in timeline if item.get("occurred_at")]
+        return {
+            "timeline": timeline,
+            "memory_ids": [item["memory_id"] for item in timeline if item.get("memory_id")],
+            "anchor_count": len(anchored),
+            "ordering": "chronological",
+            "earliest": anchored[0] if anchored else None,
+            "latest": anchored[-1] if anchored else None,
+            "query_has_relative_temporal_language": self._has_relative_temporal_language(query),
+        }
     
     async def detect_sequences(
         self,
@@ -336,7 +449,7 @@ class TemporalReasoningService:
         org_id: str,
         query_type: str,
         **kwargs,
-    ) -> List[Dict]:
+    ) -> Any:
         """
         Execute temporal queries.
         
@@ -353,23 +466,52 @@ class TemporalReasoningService:
         Returns:
             Results matching the query criteria
         """
-        results = []
+        results: Any = []
         
         if query_type == "facts_valid_at_time":
             target_time = kwargs.get("timestamp")
-            # Would query: valid_from <= target_time AND (valid_to IS NULL OR valid_to >= target_time)
-            results = [{"message": "Facts valid at target time", "count": 0}]
+            target_dt = self._coerce_datetime(target_time)
+            facts = list(kwargs.get("candidate_facts") or [])
+            valid_facts: list[dict[str, Any]] = []
+            for fact in facts:
+                valid_from = self._coerce_datetime(fact.get("valid_from"))
+                valid_to = self._coerce_datetime(fact.get("valid_to"))
+                if target_dt is None:
+                    continue
+                if valid_from and valid_from > target_dt:
+                    continue
+                if valid_to and valid_to < target_dt:
+                    continue
+                valid_facts.append(dict(fact))
+            results = valid_facts
         
         elif query_type == "facts_updated_after":
             after_time = kwargs.get("after")
-            # Would query: created_at > after_time
-            results = [{"message": "Facts updated after time", "count": 0}]
+            after_dt = self._coerce_datetime(after_time)
+            facts = list(kwargs.get("candidate_facts") or [])
+            updated_facts: list[dict[str, Any]] = []
+            for fact in facts:
+                fact_dt = self._coerce_datetime(fact.get("valid_from") or fact.get("created_at"))
+                if after_dt is None or fact_dt is None:
+                    continue
+                if fact_dt > after_dt:
+                    updated_facts.append(dict(fact))
+            results = updated_facts
         
         elif query_type == "trajectory_crosses_threshold":
             threshold = kwargs.get("threshold")
             direction = kwargs.get("direction", "above")  # "above" or "below"
             # Would analyze trajectory and find crossing points
             results = [{"message": f"Trajectory crossing {direction} {threshold}", "crossings": []}]
+
+        elif query_type == "timeline_of_memories":
+            results = await self.build_memory_timeline(
+                query=str(kwargs.get("query") or ""),
+                memories=list(kwargs.get("candidate_memories") or []),
+                facts=list(kwargs.get("candidate_facts") or []),
+                extracted_entities=list(kwargs.get("extracted_entities") or []),
+                max_events=int(kwargs.get("max_events") or 12),
+            )
         
         return results
     
@@ -423,3 +565,68 @@ class TemporalReasoningService:
                 }
         
         return None
+
+    @staticmethod
+    def _coerce_datetime(value: Any) -> Optional[datetime]:
+        if value is None:
+            return None
+        if isinstance(value, datetime):
+            if value.tzinfo is None:
+                return value.replace(tzinfo=timezone.utc)
+            return value
+        if isinstance(value, str):
+            cleaned = value.strip()
+            if not cleaned:
+                return None
+            if cleaned.endswith("Z"):
+                cleaned = cleaned[:-1] + "+00:00"
+            try:
+                parsed = datetime.fromisoformat(cleaned)
+            except ValueError:
+                return None
+            if parsed.tzinfo is None:
+                return parsed.replace(tzinfo=timezone.utc)
+            return parsed
+        return None
+
+    @staticmethod
+    def _flatten_entities(entities: Any) -> List[str]:
+        if not isinstance(entities, dict):
+            return []
+        flattened: list[str] = []
+        for values in entities.values():
+            if isinstance(values, list):
+                flattened.extend(str(item).strip() for item in values if str(item).strip())
+            elif values is not None:
+                text = str(values).strip()
+                if text:
+                    flattened.append(text)
+        return list(dict.fromkeys(flattened))
+
+    @staticmethod
+    def _query_tokens(query: str) -> List[str]:
+        return re.findall(r"\b[a-z0-9_]{3,}\b", str(query or "").lower())
+
+    @staticmethod
+    def _has_relative_temporal_language(query: str) -> bool:
+        lowered = str(query or "").lower()
+        cues = (
+            "before",
+            "after",
+            "latest",
+            "last",
+            "first",
+            "earlier",
+            "later",
+            "previous",
+            "next",
+            "when",
+        )
+        return any(cue in lowered for cue in cues)
+
+    @staticmethod
+    def _safe_float(value: Any) -> float:
+        try:
+            return float(value or 0.0)
+        except (TypeError, ValueError):
+            return 0.0

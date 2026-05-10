@@ -497,7 +497,7 @@ class PermissionChecker:
         }
         allowed_permissions = permission_map.get(action, [])
         if allowed_permissions:
-            now = datetime.now(timezone.utc)
+            now = datetime.utcnow()
             share_stmt = select(MemorySharing.memory_id).where(
                 and_(
                     MemorySharing.memory_id.in_(eligible_ids),
@@ -594,7 +594,7 @@ class PermissionChecker:
         action: str,
     ) -> AccessDecision:
         """Check if user has explicit share-based access."""
-        now = datetime.now(timezone.utc)
+        now = datetime.utcnow()
         
         # Check for direct user share
         query = select(MemorySharing).where(

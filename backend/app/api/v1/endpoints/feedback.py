@@ -102,6 +102,8 @@ async def post_memory_feedback(
         feedback_type="relevance",
         payload=payload,
         target_agent=body.target_agent,
+        apply_immediately=True,
+        applied_by=tenant.user_id,
     )
 
     await AuditService(db).log_event(

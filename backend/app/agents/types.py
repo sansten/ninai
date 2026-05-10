@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Literal, TypedDict
 
@@ -7,6 +8,7 @@ from pydantic import BaseModel, Field
 
 
 AgentStatus = Literal["success", "retry", "failed", "skipped"]
+AgentTrigger = Literal["memory_write", "memory_reenrich"]
 
 
 class AgentContextTenant(TypedDict):
@@ -74,3 +76,20 @@ class AgentResult(BaseModel):
 
     # Provenance/citations used to produce outputs (best-effort)
     provenance: list[dict[str, Any]] = Field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class AgentExecutionSpec:
+    """Scheduling metadata for agents that can participate in async pipelines."""
+
+    key: str
+    agent_name: str
+    class_name: str
+    queue: str
+    tier: int
+    depends_on: tuple[str, ...] = ()
+    trigger_types: tuple[AgentTrigger, ...] = ("memory_write",)
+    aliases: tuple[str, ...] = ()
+    enabled_by_default: bool = True
+    description: str | None = None
+    identifiers: tuple[str, ...] = field(default_factory=tuple)

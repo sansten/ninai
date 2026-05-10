@@ -8,9 +8,15 @@
 
 set -e
 
+ENTRYPOINT_MODE="${ENTRYPOINT_MODE:-api}"
+CELERY_APP_MODULE="${CELERY_APP_MODULE:-app.core.celery_app:celery_app}"
+CELERY_LOG_LEVEL="${CELERY_LOG_LEVEL:-INFO}"
+CELERY_QUEUES="${CELERY_QUEUES:-q.agent_enrich,q.agent_topics,q.agent_patterns,q.agent_graph,q.agent_reasoning,q.agent_feedback,q.cognitive_loop,q.meta_agent,q.maintenance,q.webhooks}"
+
 echo "============================================================================="
 echo "Ninai Backend Starting..."
 echo "============================================================================="
+echo "Entrypoint mode: ${ENTRYPOINT_MODE}"
 
 # Wait for PostgreSQL to be ready
 echo "Waiting for PostgreSQL..."
@@ -228,4 +234,20 @@ echo "==========================================================================
 echo ""
 
 # Start the application
-exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+case "${ENTRYPOINT_MODE}" in
+  migrate)
+    echo "Running Alembic migrations..."
+    exec alembic upgrade head
+    ;;
+  worker)
+    echo "Starting Celery worker..."
+    exec celery -A "${CELERY_APP_MODULE}" worker --loglevel="${CELERY_LOG_LEVEL}" --queues="${CELERY_QUEUES}"
+    ;;
+  api|server|"")
+    exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    ;;
+  *)
+    echo "Unknown ENTRYPOINT_MODE: ${ENTRYPOINT_MODE}"
+    exit 1
+    ;;
+esac

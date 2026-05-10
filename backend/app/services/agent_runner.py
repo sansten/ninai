@@ -69,6 +69,8 @@ class PipelineContext:
     org_id: str
     memory_id: str
     initiator_user_id: Optional[str] = None
+    initiator_roles: str = ""
+    initiator_clearance_level: int = 0
     trace_id: Optional[str] = None
     storage: str = "long_term"  # long_term|short_term
 
@@ -76,6 +78,12 @@ class PipelineContext:
 class AgentRunner:
     def __init__(self, *, service_user_id: Optional[str] = None):
         self.service_user_id = service_user_id
+
+    def _worker_security_context(self, ctx: PipelineContext) -> tuple[str, int]:
+        """Resolve tenant roles/clearance for background agent execution."""
+        if self.service_user_id:
+            return "system,org_admin", 4
+        return ctx.initiator_roles or "", int(ctx.initiator_clearance_level or 0)
 
     @staticmethod
     def _stable_json(v: object) -> str:
@@ -198,6 +206,7 @@ class AgentRunner:
 
         if agent is None:
             effective_user_id = self.service_user_id or ctx.initiator_user_id or ""
+            roles, clearance_level = self._worker_security_context(ctx)
             buffered_tool_events: list[ToolEvent] = []
 
             async def _buffer_sink(event: ToolEvent) -> None:
@@ -210,8 +219,8 @@ class AgentRunner:
                     summary_text="get_tenant_session call",
                     payload={
                         "tool": "get_tenant_session",
-                        "roles_len": 0,
-                        "clearance_level": 0,
+                        "roles_len": len(roles),
+                        "clearance_level": clearance_level,
                         "justification": "agent_pipeline",
                         "has_user_id": bool(effective_user_id),
                         "has_org_id": bool(ctx.org_id),
@@ -225,8 +234,8 @@ class AgentRunner:
                             get_tenant_session(
                                 user_id=effective_user_id,
                                 org_id=ctx.org_id,
-                                roles="",
-                                clearance_level=0,
+                                roles=roles,
+                                clearance_level=clearance_level,
                                 justification="agent_pipeline",
                             )
                         )
@@ -308,7 +317,7 @@ class AgentRunner:
                     pass
 
         effective_user_id = self.service_user_id or ctx.initiator_user_id or ""
-        roles = ""  # workers run as system; keep minimal unless needed
+        roles, clearance_level = self._worker_security_context(ctx)
 
         buffered_tool_events: list[ToolEvent] = []
 
@@ -323,7 +332,7 @@ class AgentRunner:
                 payload={
                     "tool": "get_tenant_session",
                     "roles_len": len(roles),
-                    "clearance_level": 0,
+                    "clearance_level": clearance_level,
                     "justification": "agent_pipeline",
                     "has_user_id": bool(effective_user_id),
                     "has_org_id": bool(ctx.org_id),
@@ -338,7 +347,7 @@ class AgentRunner:
                             user_id=effective_user_id,
                             org_id=ctx.org_id,
                             roles=roles,
-                            clearance_level=0,
+                            clearance_level=clearance_level,
                             justification="agent_pipeline",
                         )
                     )

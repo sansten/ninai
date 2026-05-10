@@ -52,12 +52,24 @@ class QdrantService:
             QdrantClient: Configured Qdrant client
         """
         if cls._client is None:
-            cls._client = QdrantClient(
-                host=settings.QDRANT_HOST,
-                port=settings.QDRANT_PORT,
-                api_key=settings.QDRANT_API_KEY if settings.QDRANT_API_KEY else None,
-                timeout=float(getattr(settings, "QDRANT_TIMEOUT_SECONDS", 2.5) or 2.5),
-            )
+            api_key_raw = settings.QDRANT_API_KEY if settings.QDRANT_API_KEY else None
+            api_key = str(api_key_raw).strip() if api_key_raw else None
+            if api_key == '':
+                api_key = None
+            timeout = float(getattr(settings, "QDRANT_TIMEOUT_SECONDS", 2.5) or 2.5)
+            qdrant_url_raw = getattr(settings, "QDRANT_URL", None)
+            qdrant_url = str(qdrant_url_raw).strip() if qdrant_url_raw else None
+            if qdrant_url == '':
+                qdrant_url = None
+            if qdrant_url:
+                cls._client = QdrantClient(url=qdrant_url, api_key=api_key, timeout=timeout)
+            else:
+                cls._client = QdrantClient(
+                    host=settings.QDRANT_HOST,
+                    port=settings.QDRANT_PORT,
+                    api_key=api_key,
+                    timeout=timeout,
+                )
         return cls._client
 
     @classmethod
@@ -69,32 +81,52 @@ class QdrantService:
         )
     
     @classmethod
-    async def ensure_collection(cls) -> None:
-        """
-        Ensure the memories collection exists with proper configuration.
-        
-        Creates the collection if it doesn't exist with appropriate
-        vector dimensions and distance metric.
+    async def ensure_collection(cls) -> bool:
+        """Ensure the memories collection exists with the configured vector dimensions.
+
+        If the collection exists but was created with a different dimension (e.g. switching
+        from OpenAI 1536-dim to Ollama nomic-embed-text 768-dim), the old collection is
+        deleted and recreated automatically so embeddings remain consistent.
         """
         if cls._collection_ready:
-            return
+            return True
 
         client = cls.get_client()
         collection_name = settings.QDRANT_COLLECTION_NAME
+        target_dim = settings.EMBEDDING_DIMENSIONS
 
-        collections = await cls._run_sync_with_timeout(client.get_collections)
-        collection_names = [c.name for c in collections.collections]
+        try:
+            collections = await cls._run_sync_with_timeout(client.get_collections)
+            existing = {c.name for c in collections.collections}
 
-        if collection_name not in collection_names:
-            await cls._run_sync_with_timeout(
-                client.create_collection,
-                collection_name=collection_name,
-                vectors_config=VectorParams(
-                    size=settings.EMBEDDING_DIMENSIONS,
-                    distance=Distance.COSINE,
-                ),
-            )
-        cls._collection_ready = True
+            if collection_name in existing:
+                info = await cls._run_sync_with_timeout(client.get_collection, collection_name)
+                current_dim = info.config.params.vectors.size
+                if current_dim != target_dim:
+                    logger.warning(
+                        "Qdrant collection '%s' has dim=%d but config wants dim=%d — recreating",
+                        collection_name, current_dim, target_dim,
+                    )
+                    await cls._run_sync_with_timeout(client.delete_collection, collection_name)
+                    existing.discard(collection_name)
+
+            if collection_name not in existing:
+                await cls._run_sync_with_timeout(
+                    client.create_collection,
+                    collection_name=collection_name,
+                    vectors_config=VectorParams(
+                        size=target_dim,
+                        distance=Distance.COSINE,
+                    ),
+                )
+                logger.info("Created Qdrant collection '%s' with dim=%d", collection_name, target_dim)
+
+            cls._collection_ready = True
+            return True
+        except Exception as exc:
+            logger.warning("Qdrant unavailable during collection ensure; continuing in degraded mode: %s", exc)
+            cls._collection_ready = False
+            return False
     
     @classmethod
     def build_org_filter(
@@ -160,24 +192,29 @@ class QdrantService:
             logger.debug("Skipping Qdrant upsert for memory_id=%s: zero embedding vector.", memory_id)
             return False
 
-        await cls.ensure_collection()
+        if not await cls.ensure_collection():
+            return False
         client = cls.get_client()
         
         # Always include organization_id in payload for filtering
         payload["organization_id"] = org_id
         
-        await cls._run_sync_with_timeout(
-            client.upsert,
-            collection_name=settings.QDRANT_COLLECTION_NAME,
-            points=[
-                PointStruct(
-                    id=memory_id,
-                    vector=vector,
-                    payload=payload,
-                ),
-            ],
-        )
-        return True
+        try:
+            await cls._run_sync_with_timeout(
+                client.upsert,
+                collection_name=settings.QDRANT_COLLECTION_NAME,
+                points=[
+                    PointStruct(
+                        id=memory_id,
+                        vector=vector,
+                        payload=payload,
+                    ),
+                ],
+            )
+            return True
+        except Exception as exc:
+            logger.warning("Qdrant upsert failed for memory_id=%s: %s", memory_id, exc)
+            return False
     
     @classmethod
     async def search(
@@ -210,15 +247,18 @@ class QdrantService:
             List of search results with scores and payloads
         """
         client = cls.get_client()
+        timeout = float(getattr(settings, "QDRANT_TIMEOUT_SECONDS", 2.5) or 2.5)
 
         # If the query vector is all zeros (no embedding available), skip vector search.
         if not any(query_vector):
             return []
 
-        # Ensure the collection exists before searching; returns empty if unavailable.
-        try:
-            await cls.ensure_collection()
-        except Exception:
+        # Ensure the collection exists before searching.
+        # If Qdrant is configured but unavailable, surface the failure instead of
+        # pretending the query legitimately returned no vector matches.
+        if not await cls.ensure_collection():
+            if settings.QDRANT_URL or (settings.QDRANT_HOST and settings.QDRANT_PORT):
+                raise RuntimeError("Qdrant collection is unavailable for vector search")
             return []
 
         # Build filter conditions
@@ -254,16 +294,26 @@ class QdrantService:
         
         # Perform search
         try:
-            results = client.search(
+            results = await cls._run_sync_with_timeout(
+                client.search,
                 collection_name=settings.QDRANT_COLLECTION_NAME,
                 query_vector=query_vector,
                 query_filter=search_filter,
                 limit=limit,
                 score_threshold=score_threshold,
+                timeout=timeout,
             )
         except Exception as exc:
-            logger.warning("Qdrant search returned an error, falling back to empty results: %s", exc)
-            return []
+            logger.warning(
+                "Qdrant search failed for org_id=%s scope=%s team_id=%s tags=%s collection=%s: %s",
+                org_id,
+                scope_filter,
+                team_id,
+                tags,
+                settings.QDRANT_COLLECTION_NAME,
+                exc,
+            )
+            raise RuntimeError("Qdrant vector search failed") from exc
 
         return [
             {
@@ -296,18 +346,25 @@ class QdrantService:
         """
         client = cls.get_client()
 
+        if not await cls.ensure_collection():
+            return []
+
         recommend_filter = cls.build_org_filter(org_id)
 
-        results = client.recommend(
-            collection_name=settings.QDRANT_COLLECTION_NAME,
-            positive=[positive_point_id],
-            negative=None,
-            query_filter=recommend_filter,
-            limit=limit,
-            score_threshold=score_threshold,
-            with_payload=with_payload,
-            with_vectors=False,
-        )
+        try:
+            results = client.recommend(
+                collection_name=settings.QDRANT_COLLECTION_NAME,
+                positive=[positive_point_id],
+                negative=None,
+                query_filter=recommend_filter,
+                limit=limit,
+                score_threshold=score_threshold,
+                with_payload=with_payload,
+                with_vectors=False,
+            )
+        except Exception as exc:
+            logger.warning("Qdrant recommend failed for point_id=%s: %s", positive_point_id, exc)
+            return []
 
         return [
             {

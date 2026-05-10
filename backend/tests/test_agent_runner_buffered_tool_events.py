@@ -138,6 +138,93 @@ async def test_buffered_tool_events_flushed_into_run_sink(monkeypatch):
     )
 
 
+@pytest.mark.asyncio
+async def test_run_agent_uses_initiator_roles_and_clearance(monkeypatch):
+    import app.services.agent_runner as agent_runner_module
+
+    org_id = str(uuid4())
+    user_id = str(uuid4())
+    memory_id = str(uuid4())
+
+    captured: dict[str, object] = {}
+
+    @contextlib.asynccontextmanager
+    async def _capturing_tenant_session(**kwargs):
+        captured.update(kwargs)
+        yield SimpleNamespace()
+
+    runner = AgentRunner(service_user_id=None)
+
+    monkeypatch.setattr(agent_runner_module, "get_tenant_session", _capturing_tenant_session)
+    monkeypatch.setattr(agent_runner_module, "get_agent", lambda name: _FakeAgent() if name == "MetadataExtractionAgent" else None)
+
+    class _FakeSTM:
+        def __init__(self, user_id: str, org_id: str):
+            self.user_id = user_id
+            self.org_id = org_id
+
+        async def get(self, _memory_id: str):
+            return SimpleNamespace(content="hello", scope="personal")
+
+    monkeypatch.setattr(agent_runner_module, "ShortTermMemoryService", _FakeSTM)
+
+    async def _load_prior_enrichment(self, session, org_id, memory_id):
+        return {}
+
+    async def _get_or_create_run_row(self, **kwargs):
+        now = datetime(2026, 1, 23, tzinfo=timezone.utc)
+        return SimpleNamespace(
+            id="ar1",
+            organization_id=kwargs.get("org_id"),
+            memory_id=kwargs.get("memory_id"),
+            agent_name=kwargs.get("agent_name"),
+            agent_version=kwargs.get("agent_version"),
+            inputs_hash=kwargs.get("inputs_hash"),
+            status="retry",
+            confidence=0.0,
+            outputs={},
+            warnings=[],
+            errors=[],
+            started_at=now,
+            finished_at=now,
+            trace_id=kwargs.get("trace_id"),
+        )
+
+    async def _persist_result(self, session, row, result, inputs_hash):
+        return
+
+    async def _materialize_side_effects(self, **kwargs):
+        return
+
+    async def _sink(_e: dict) -> None:
+        return
+
+    def _create_tool_event_sink(self, *, session, run_row):
+        return _sink
+
+    monkeypatch.setattr(AgentRunner, "_load_prior_enrichment", _load_prior_enrichment)
+    monkeypatch.setattr(AgentRunner, "_get_or_create_run_row", _get_or_create_run_row)
+    monkeypatch.setattr(AgentRunner, "_persist_result", _persist_result)
+    monkeypatch.setattr(AgentRunner, "_materialize_side_effects", _materialize_side_effects)
+    monkeypatch.setattr(AgentRunner, "_create_tool_event_sink", _create_tool_event_sink)
+
+    ctx = PipelineContext(
+        org_id=org_id,
+        memory_id=memory_id,
+        initiator_user_id=user_id,
+        initiator_roles="org_admin,member",
+        initiator_clearance_level=3,
+        trace_id="t1",
+        storage="short_term",
+    )
+
+    result = await runner.run_agent(ctx=ctx, agent_name="MetadataExtractionAgent")
+    assert result.status == "success"
+    assert captured["user_id"] == user_id
+    assert captured["roles"] == "org_admin,member"
+    assert captured["clearance_level"] == 3
+
+
 class _FakeCacheSvc:
     def __init__(self, session):
         self.session = session

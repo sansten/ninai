@@ -11,7 +11,6 @@ from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Request, UploadFile, File
 from fastapi.responses import FileResponse
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -50,8 +49,10 @@ from app.services.embedding_service import EmbeddingService
 from app.tasks.memory_pipeline import enqueue_memory_pipeline
 from app.tasks.episode_pipeline import enqueue_episode_pipeline
 from app.tasks.fact_pipeline import enqueue_fact_pipeline
+from app.tasks.embed_task import enqueue_embed_and_index
 from app.services.fact_service import FactService
 from app.services.playbook_service import PlaybookService
+from app.services.cognitive_read_planner import CognitiveReadPlanner
 from app.services.memory_attachment_service import (
     MemoryAttachmentService,
     AttachmentNotFoundError,
@@ -68,10 +69,11 @@ from app.schemas.feedback import (
     MemoryFeedbackResponse,
 )
 from app.schemas.base import BaseSchema
+from app.services.cognitive_evidence_service import CognitiveEvidenceService
+from app.services.cognitive_ingestion_service import CognitiveIngestionService
 from app.services.memory_feedback_service import MemoryFeedbackService
 from app.services.usage_service import UsageService
 from app.tasks.memory_pipeline import enqueue_feedback_learning
-from app.models.memory import MemoryMetadata
 
 
 router = APIRouter()
@@ -167,18 +169,30 @@ async def create_memory(
         call_anonymous=body.anonymous,
     )
 
-    embedding = await EmbeddingService.embed(body.content)
-    
+    # Skip synchronous embedding — embed_and_index_task will call EmbeddingService
+    # and upsert to Qdrant in a background Celery task. The memory is immediately
+    # searchable via Postgres FTS (search_vector) while the vector index is built.
     try:
+        ingestion_service = CognitiveIngestionService(
+            session=db,
+            user_id=tenant.user_id,
+            org_id=tenant.org_id,
+            clearance_level=tenant.clearance_level,
+            roles_string=tenant.roles_string,
+            memory_service=service,
+        )
         memory = await service.create_memory(
             data=body,
-            embedding=embedding,
+            embedding=[],  # zero-len → Qdrant upsert skipped inside create_memory
             request_id=request_id,
             actor_ctx=actor_ctx,
         )
-        usage = UsageService(db, tenant.org_id)
-        await usage.increment(metric="memory_writes", value=1)
-        await db.commit()
+        await ingestion_service.finalize_created_memory(
+            memory=memory,
+            content=body.content,
+            request_id=request_id,
+            storage="long_term",
+        )
 
         # Emit webhook event (best-effort). In tests, avoid invoking webhook
         # persistence with mocked DB sessions to prevent un-awaited AsyncMock warnings.
@@ -206,19 +220,6 @@ async def create_memory(
                 pass
             await db.commit()
 
-        # Pipelines are best-effort and must never block the write response.
-        for enqueue_fn in (enqueue_memory_pipeline, enqueue_episode_pipeline, enqueue_fact_pipeline):
-            try:
-                enqueue_fn(
-                    org_id=tenant.org_id,
-                    memory_id=memory.id,
-                    initiator_user_id=tenant.user_id,
-                    trace_id=request_id,
-                    storage="long_term",
-                )
-            except Exception:
-                pass
-        
         return MemoryResponse.model_validate(memory)
     
     except PermissionError as e:
@@ -686,9 +687,16 @@ async def search_memories(
     query: str = Query(..., min_length=1, max_length=1000, description="Search query text"),
     scope: Optional[str] = Query(None, description="Filter by scope: personal, team, department, organization"),
     team_id: Optional[str] = Query(None, description="Filter by team ID (requires scope=team)"),
+    tags: Optional[List[str]] = Query(None, description="Require all tags to be present on matched memories"),
+    date_from: Optional[datetime] = Query(None, description="Filter memories with occurred_at on/after this timestamp"),
+    date_to: Optional[datetime] = Query(None, description="Filter memories with occurred_at on/before this timestamp"),
     hybrid: bool = Query(
         True, 
         description="Enable hybrid search (BM25 + vector similarity). When true, combines full-text lexical search with semantic vector search for better recall."
+    ),
+    use_graph: bool = Query(
+        False,
+        description="Enable graph-guided expansion to pull linked vector chunks from graph relationships.",
     ),
     hnms_mode: Optional[SearchHnmsMode] = Query(
         None,
@@ -709,10 +717,9 @@ async def search_memories(
         },
     ),
     limit: int = Query(10, ge=1, le=100, description="Maximum number of results to return"),
-    tags: Optional[List[str]] = Query(None, description="Filter results to memories that have ALL specified tags"),
-    use_graph: bool = Query(False, description="Augment results with entity-graph neighbours"),
     include_enrichment: bool = Query(False, description="Include facts_used and disputed_facts enrichment"),
     include_playbooks: bool = Query(False, description="Include playbook matches for this query"),
+    include_evidence: bool = Query(False, description="Include a structured evidence package for downstream reasoning."),
     tenant: TenantContext = Depends(get_tenant_context),
     db: AsyncSession = Depends(get_db),
     service: MemoryService = Depends(get_memory_service),
@@ -777,25 +784,72 @@ async def search_memories(
     
     request_id = getattr(request.state, "request_id", None)
 
-    query_embedding = await EmbeddingService.embed(query)
-    
     search_request = MemorySearchRequest(
         query=query,
         scope=scope,
         team_id=team_id,
+        tags=tags,
+        date_from=date_from,
+        date_to=date_to,
         limit=limit,
         hybrid=hybrid,
-        hnms_mode=hnms_mode,
-        tags=tags,
         use_graph=use_graph,
+        hnms_mode=hnms_mode,
     )
+    planner_enabled = bool(getattr(settings, "SEARCH_USE_COGNITIVE_PLANNER", False))
     
     try:
-        results = await service.search_memories(
-            query_embedding=query_embedding,
-            request=search_request,
-            request_id=request_id,
-        )
+        results = []
+        planner_meta: dict[str, object] | None = None
+
+        if planner_enabled:
+            try:
+                planner = CognitiveReadPlanner(
+                    db,
+                    user_id=tenant.user_id,
+                    org_id=tenant.org_id,
+                    clearance_level=tenant.clearance_level,
+                )
+                planned = await planner.plan_and_read(
+                    query=query,
+                    limit=limit,
+                    scope=scope,
+                    team_id=team_id,
+                    filter_tags=tags,
+                    hybrid=hybrid,
+                    use_graph=use_graph,
+                    hnms_mode=hnms_mode,
+                )
+                results = [
+                    MemoryResponse.model_validate(m)
+                    for m in (planned.memories or [])
+                ]
+                planner_meta = {
+                    "planner_enabled": True,
+                    "retrieval_strategy": planned.retrieval_strategy,
+                    "target_memory_level": planned.target_memory_level,
+                    "expanded_query": planned.expanded_query,
+                }
+            except Exception as planner_exc:
+                query_embedding = await EmbeddingService.embed(query)
+                results = await service.search_memories(
+                    query_embedding=query_embedding,
+                    request=search_request,
+                    request_id=request_id,
+                )
+                planner_meta = {
+                    "planner_enabled": True,
+                    "planner_fallback": True,
+                    "planner_fallback_reason": str(type(planner_exc).__name__),
+                }
+        else:
+            query_embedding = await EmbeddingService.embed(query)
+            results = await service.search_memories(
+                query_embedding=query_embedding,
+                request=search_request,
+                request_id=request_id,
+            )
+            planner_meta = {"planner_enabled": False}
 
         elapsed_ms = (time.perf_counter() - start_time) * 1000
 
@@ -812,16 +866,35 @@ async def search_memories(
             playbook_service = PlaybookService(db, tenant.org_id)
             playbooks = await playbook_service.search_playbooks(query=query, limit=5)
 
+        response_items = [
+            item if isinstance(item, MemoryResponse) else MemoryResponse.model_validate(item)
+            for item in results
+        ]
+        evidence_package = None
+        if include_evidence:
+            try:
+                evidence_service = CognitiveEvidenceService(db, org_id=tenant.org_id)
+                evidence_package = await evidence_service.build_package(
+                    query=query,
+                    memories=[item.model_dump(mode="python") for item in response_items],
+                )
+            except Exception:
+                evidence_package = None
+
         return MemorySearchResponse(
             trace_id=request_id,
             query=query,
-            results=[MemoryResponse.model_validate(m) for m in results],
+            results=response_items,
             total=len(results),
             took_ms=round(elapsed_ms, 2),
-            ranking_meta=service.get_search_ranking_meta(search_request),
+            ranking_meta={
+                **service.get_search_ranking_meta(search_request),
+                **(planner_meta or {}),
+            },
             facts_used=enrichment["facts_used"],
             disputed_facts=enrichment["disputed_facts"],
             playbooks=playbooks,
+            evidence_package=evidence_package,
         )
 
     except PermissionError as e:
@@ -908,6 +981,8 @@ async def submit_memory_feedback(
             feedback_type=body.feedback_type,
             payload=body.payload,
             target_agent=body.target_agent,
+            apply_immediately=True,
+            applied_by=tenant.user_id,
         )
         await db.commit()
 
@@ -972,6 +1047,8 @@ async def submit_memory_relevance_feedback(
             feedback_type="relevance",
             payload=payload,
             target_agent=body.target_agent,
+            apply_immediately=True,
+            applied_by=tenant.user_id,
         )
         await db.commit()
 
@@ -1077,29 +1154,56 @@ async def update_memory(
     request_id = getattr(request.state, "request_id", None)
     
     try:
-        async with db.begin():
-            memory = await service.update_memory(
-                memory_id=memory_id,
-                data=body,
-                request_id=request_id,
+        memory = await service.update_memory(
+            memory_id=memory_id,
+            data=body,
+            request_id=request_id,
+        )
+        await db.commit()
+
+        # Emit webhook event
+        webhook_svc = WebhookService(db)
+        await webhook_svc.emit_event(
+            organization_id=tenant.org_id,
+            event_type="memory.updated",
+            payload={
+                "memory_id": memory.id,
+                "title": memory.title,
+                "user_id": tenant.user_id,
+                "updated_at": memory.updated_at.isoformat() if memory.updated_at else None,
+            },
+        )
+        await db.commit()
+
+        if body.content is not None:
+            enqueue_embed_and_index(
+                memory_id=memory.id,
+                content=body.content,
+                org_id=tenant.org_id,
             )
-            await db.commit()
-            
-            # Emit webhook event
-            webhook_svc = WebhookService(db)
-            await webhook_svc.emit_event(
-                organization_id=tenant.org_id,
-                event_type="memory.updated",
-                payload={
-                    "memory_id": memory.id,
-                    "title": memory.title,
-                    "user_id": tenant.user_id,
-                    "updated_at": memory.updated_at.isoformat() if memory.updated_at else None,
-                },
-            )
-            await db.commit()
-            
-            return MemoryResponse.model_validate(memory)
+        enqueue_memory_pipeline(
+            org_id=tenant.org_id,
+            memory_id=memory.id,
+            initiator_user_id=tenant.user_id,
+            trace_id=request_id,
+            storage="long_term",
+        )
+        enqueue_episode_pipeline(
+            org_id=tenant.org_id,
+            memory_id=memory.id,
+            initiator_user_id=tenant.user_id,
+            trace_id=request_id,
+            storage="long_term",
+        )
+        enqueue_fact_pipeline(
+            org_id=tenant.org_id,
+            memory_id=memory.id,
+            initiator_user_id=tenant.user_id,
+            trace_id=request_id,
+            storage="long_term",
+        )
+
+        return MemoryResponse.model_validate(memory)
     
     except PermissionError as e:
         raise HTTPException(
@@ -1307,96 +1411,5 @@ async def consolidate_memory(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=str(e),
         )
-
-
-@router.post(
-    "/enrich/bulk",
-    summary="Trigger enrichment agents on existing memories",
-    status_code=status.HTTP_202_ACCEPTED,
-)
-async def bulk_enrich_memories(
-    tags: Optional[List[str]] = Query(None, description="Filter memories by ALL of these tags"),
-    agents: Optional[List[str]] = Query(
-        None,
-        description="Agent names to run. Defaults to: entity_resolution, world_model, temporal_reasoning, episodic_grouping, causal_reasoning",
-    ),
-    limit: int = Query(1000, ge=1, le=10000, description="Max memories to process"),
-    tenant: TenantContext = Depends(get_tenant_context),
-    db: AsyncSession = Depends(get_db),
-):
-    """Queue enrichment tasks for existing memories and return immediately."""
-    from celery import chain as celery_chain
-    from app.tasks.memory_pipeline import (
-        entity_resolution_task,
-        world_model_task,
-        temporal_reasoning_task,
-        episodic_grouping_task,
-        causal_reasoning_task,
-    )
-
-    await set_tenant_context(
-        db, tenant.user_id, tenant.org_id, tenant.roles_string, tenant.clearance_level
-    )
-
-    default_agents = [
-        "entity_resolution",
-        "world_model",
-        "temporal_reasoning",
-        "episodic_grouping",
-        "causal_reasoning",
-    ]
-    task_map = {
-        "entity_resolution": entity_resolution_task,
-        "world_model": world_model_task,
-        "temporal_reasoning": temporal_reasoning_task,
-        "episodic_grouping": episodic_grouping_task,
-        "causal_reasoning": causal_reasoning_task,
-    }
-
-    requested = [a.lower() for a in (agents or default_agents)]
-    unknown = [a for a in requested if a not in task_map]
-    if unknown:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"Unknown agents: {unknown}")
-
-    stmt = (
-        select(MemoryMetadata)
-        .where(
-            MemoryMetadata.organization_id == tenant.org_id,
-            MemoryMetadata.is_active.is_(True),
-        )
-        .limit(limit)
-    )
-    if tags:
-        stmt = stmt.where(MemoryMetadata.tags.contains(tags))
-
-    result = await db.execute(stmt)
-    memories = result.scalars().all()
-
-    execution_order = [
-        "entity_resolution",
-        "world_model",
-        "temporal_reasoning",
-        "episodic_grouping",
-        "causal_reasoning",
-    ]
-    tasks_in_order = [name for name in execution_order if name in requested]
-
-    enqueued: list[str] = []
-    for memory in memories:
-        kwargs = {
-            "org_id": str(tenant.org_id),
-            "memory_id": str(memory.id),
-            "initiator_user_id": str(tenant.user_id),
-            "trace_id": None,
-            "storage": str(getattr(memory, "memory_type", None) or "long_term"),
-        }
-        celery_chain(*[task_map[name].si(**kwargs) for name in tasks_in_order]).apply_async()
-        enqueued.append(str(memory.id))
-
-    return {
-        "queued_count": len(enqueued),
-        "memory_ids": enqueued[:50],
-        "agents": requested,
-    }
 
 

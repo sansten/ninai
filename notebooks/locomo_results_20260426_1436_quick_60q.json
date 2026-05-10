@@ -1,0 +1,615 @@
+{
+  "run_tag": "locomo-full-254a9493",
+  "scores": {
+    "single_hop": 28.8,
+    "multi_hop": 27.9,
+    "temporal": 0.0,
+    "adversarial": 0.0,
+    "open_domain": 0.0,
+    "overall": 28.4
+  },
+  "results": [
+    {
+      "qa_id": "locomo_007_q017",
+      "category": "multi_hop",
+      "question": "What is the game with different colored cards that was John talking about with James?",
+      "gold_answer": "UNO",
+      "generated_answer": "Card Game",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 60,
+      "semantic_correct": 0
+    },
+    {
+      "qa_id": "locomo_010_q014",
+      "category": "multi_hop",
+      "question": "Would Calvin enjoy performing at the Hollywood Bowl?",
+      "gold_answer": "Yes; because he enjoys the rush of performing onstage to large crowds",
+      "generated_answer": "Yes",
+      "rouge1_f1": 15.38,
+      "retrieved_count": 60,
+      "semantic_correct": 1
+    },
+    {
+      "qa_id": "locomo_005_q029",
+      "category": "multi_hop",
+      "question": "Which popular music composer's tunes does Tim enjoy playing on the piano?",
+      "gold_answer": "John Williams",
+      "generated_answer": "George R R Martin",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 60,
+      "semantic_correct": 0
+    },
+    {
+      "qa_id": "locomo_001_q028",
+      "category": "multi_hop",
+      "question": "Would Caroline pursue writing as a career option?",
+      "gold_answer": "LIkely no; though she likes reading, she wants to be a counselor",
+      "generated_answer": "No",
+      "rouge1_f1": 15.38,
+      "retrieved_count": 60,
+      "semantic_correct": 0
+    },
+    {
+      "qa_id": "locomo_010_q043",
+      "category": "multi_hop",
+      "question": "Based on the conversation, did Calvin and Dave have a meeting in Boston between August and November 2023? Answer in yes or no.",
+      "gold_answer": "No",
+      "generated_answer": "No",
+      "rouge1_f1": 100.0,
+      "retrieved_count": 60,
+      "semantic_correct": 1
+    },
+    {
+      "qa_id": "locomo_010_q022",
+      "category": "multi_hop",
+      "question": "Does Calvin wish to become more popular?",
+      "gold_answer": "Yes; he want's to grow his fanbase",
+      "generated_answer": "Expanding brand worldwide and growing fanbase",
+      "rouge1_f1": 28.57,
+      "retrieved_count": 60,
+      "semantic_correct": 0
+    },
+    {
+      "qa_id": "locomo_009_q020",
+      "category": "multi_hop",
+      "question": "Considering their conversations and personal growth, what advice might Evan and Sam give to someone facing a major life transition or challenge?",
+      "gold_answer": "Evan and Sam would likely advise embracing small, consistent changes\u200b\u200b, finding stress-relieving activities like hiking\u200b\u200b, painting, and road trips\u200b\u200b, and the importance of friendship and support in navigating challenges\u200b\u200b.",
+      "generated_answer": "Make small changes and find support.",
+      "rouge1_f1": 27.78,
+      "retrieved_count": 60,
+      "semantic_correct": 0
+    },
+    {
+      "qa_id": "locomo_001_q070",
+      "category": "multi_hop",
+      "question": "What personality traits might Melanie say Caroline has?",
+      "gold_answer": "Thoughtful, authentic, driven",
+      "generated_answer": "passionate, strong, inspiring",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 60,
+      "semantic_correct": 0
+    },
+    {
+      "qa_id": "locomo_008_q049",
+      "category": "multi_hop",
+      "question": "Which US state did Jolene visit during her internship?",
+      "gold_answer": "Alaska",
+      "generated_answer": "Alaska",
+      "rouge1_f1": 100.0,
+      "retrieved_count": 60,
+      "semantic_correct": 1
+    },
+    {
+      "qa_id": "locomo_005_q006",
+      "category": "multi_hop",
+      "question": "Based on Tim's collections, what is a shop that he would enjoy visiting in New York city?",
+      "gold_answer": "House of MinaLima",
+      "generated_answer": "Bookshop Yorkers",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 60,
+      "semantic_correct": 0
+    },
+    {
+      "qa_id": "locomo_006_q021",
+      "category": "multi_hop",
+      "question": "Which meat does Audrey prefer eating more than others?",
+      "gold_answer": "chicken",
+      "generated_answer": "California or salmon roll",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 60,
+      "semantic_correct": 0
+    },
+    {
+      "qa_id": "locomo_005_q028",
+      "category": "multi_hop",
+      "question": "Which popular time management technique does Tim use to prepare for exams?",
+      "gold_answer": "Pomodoro technique",
+      "generated_answer": "Breaking it down into smaller parts",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 60,
+      "semantic_correct": 0
+    },
+    {
+      "qa_id": "locomo_007_q036",
+      "category": "multi_hop",
+      "question": "What additional country did James visit during his trip to Canada?",
+      "gold_answer": "Greenland",
+      "generated_answer": "Nuuk",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 60,
+      "semantic_correct": 0
+    },
+    {
+      "qa_id": "locomo_006_q034",
+      "category": "multi_hop",
+      "question": "What can Andrew potentially do to improve his stress and accomodate his living situation with his dogs?",
+      "gold_answer": "Change to a hybrid or remote job so he can move away from the city to the suburbs to have a larger living space and be closer to nature.",
+      "generated_answer": "take an extra day off for outdoor activities",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 60,
+      "semantic_correct": 0
+    },
+    {
+      "qa_id": "locomo_007_q018",
+      "category": "multi_hop",
+      "question": "What is the board game where you have to find the imposter that John mentions to James?",
+      "gold_answer": "Mafia",
+      "generated_answer": "Dungeons of the Dragons",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 60,
+      "semantic_correct": 0
+    },
+    {
+      "qa_id": "locomo_004_q088",
+      "category": "multi_hop",
+      "question": "What state did Nate visit?",
+      "gold_answer": "Florida",
+      "generated_answer": "Florida",
+      "rouge1_f1": 100.0,
+      "retrieved_count": 60,
+      "semantic_correct": 1
+    },
+    {
+      "qa_id": "locomo_007_q031",
+      "category": "multi_hop",
+      "question": "Which country did James book tickets for in July 2022?",
+      "gold_answer": "Canada",
+      "generated_answer": "Canada",
+      "rouge1_f1": 100.0,
+      "retrieved_count": 60,
+      "semantic_correct": 1
+    },
+    {
+      "qa_id": "locomo_009_q052",
+      "category": "multi_hop",
+      "question": "What challenges does Sam face in his quest for a healthier lifestyle, and how does he address them?",
+      "gold_answer": "Sam faces challenges like maintaining motivation and making dietary changes. He addresses them by enrolling in cooking classes and seeking support from friends like Evan.",
+      "generated_answer": "health checkup scares, weight issues, cravings, lack of motivation",
+      "rouge1_f1": 5.88,
+      "retrieved_count": 60,
+      "semantic_correct": 0
+    },
+    {
+      "qa_id": "locomo_003_q018",
+      "category": "multi_hop",
+      "question": "What might John's degree be in?",
+      "gold_answer": "Political science, Public administration, Public affairs",
+      "generated_answer": "policymaking",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 60,
+      "semantic_correct": 0
+    },
+    {
+      "qa_id": "locomo_003_q046",
+      "category": "multi_hop",
+      "question": "Would John be open to moving to another country?",
+      "gold_answer": "No, he has goals specifically in the U.S. like joining the military and running for office.",
+      "generated_answer": "No",
+      "rouge1_f1": 11.11,
+      "retrieved_count": 60,
+      "semantic_correct": 0
+    },
+    {
+      "qa_id": "locomo_009_q006",
+      "category": "multi_hop",
+      "question": "Which country was Evan visiting in May 2023?",
+      "gold_answer": "Canada",
+      "generated_answer": "Canada",
+      "rouge1_f1": 100.0,
+      "retrieved_count": 60,
+      "semantic_correct": 1
+    },
+    {
+      "qa_id": "locomo_008_q076",
+      "category": "multi_hop",
+      "question": "What card game is Deborah talking about?",
+      "gold_answer": "Exploding Kittens",
+      "generated_answer": "Cat Attack",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 60,
+      "semantic_correct": 0
+    },
+    {
+      "qa_id": "locomo_008_q006",
+      "category": "multi_hop",
+      "question": "In what country did Jolene's mother buy her the pendant?",
+      "gold_answer": "In France",
+      "generated_answer": "Paris",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 60,
+      "semantic_correct": 0
+    },
+    {
+      "qa_id": "locomo_001_q082",
+      "category": "multi_hop",
+      "question": "Would Caroline want to move back to her home country soon?",
+      "gold_answer": "No; she's in the process of adopting children.",
+      "generated_answer": "No",
+      "rouge1_f1": 20.0,
+      "retrieved_count": 60,
+      "semantic_correct": 1
+    },
+    {
+      "qa_id": "locomo_008_q041",
+      "category": "multi_hop",
+      "question": "Does Deborah live close to the beach or the mountains?",
+      "gold_answer": "beach",
+      "generated_answer": "beach",
+      "rouge1_f1": 100.0,
+      "retrieved_count": 60,
+      "semantic_correct": 1
+    },
+    {
+      "qa_id": "locomo_006_q044",
+      "category": "multi_hop",
+      "question": "Which US state do Audrey and Andrew potentially live in?",
+      "gold_answer": "Minnesota",
+      "generated_answer": "California",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 60,
+      "semantic_correct": 0
+    },
+    {
+      "qa_id": "locomo_001_q023",
+      "category": "multi_hop",
+      "question": "Would Caroline likely have Dr. Seuss books on her bookshelf?",
+      "gold_answer": "Yes, since she collects classic children's books",
+      "generated_answer": "No",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 60,
+      "semantic_correct": 0
+    },
+    {
+      "qa_id": "locomo_009_q072",
+      "category": "multi_hop",
+      "question": "Which major holiday season conincides with Evan's wedding?",
+      "gold_answer": "Christmas",
+      "generated_answer": "Christmas",
+      "rouge1_f1": 100.0,
+      "retrieved_count": 60,
+      "semantic_correct": 1
+    },
+    {
+      "qa_id": "locomo_001_q043",
+      "category": "multi_hop",
+      "question": "Would Melanie be more interested in going to a national park or a theme park?",
+      "gold_answer": "National park; she likes the outdoors",
+      "generated_answer": "Yes",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 60,
+      "semantic_correct": 0
+    },
+    {
+      "qa_id": "locomo_005_q035",
+      "category": "multi_hop",
+      "question": "What could John do after his basketball career?",
+      "gold_answer": "become a basketball coach since he likes giving back and leadership",
+      "generated_answer": "coach or mentor young players",
+      "rouge1_f1": 12.5,
+      "retrieved_count": 60,
+      "semantic_correct": 1
+    },
+    {
+      "qa_id": "locomo_008_q089",
+      "category": "single_hop",
+      "question": "What activities does Deborah pursue besides practicing and teaching yoga?",
+      "gold_answer": "biking, going to art shows, running, organizing workshops to practice mindfulness and self-care, surfing, gardening",
+      "generated_answer": "teaching classes, spending time with loved ones, attending community events",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 50,
+      "semantic_correct": 0
+    },
+    {
+      "qa_id": "locomo_004_q057",
+      "category": "single_hop",
+      "question": "What animal do both Nate and Joanna like?",
+      "gold_answer": "Turtles.",
+      "generated_answer": "pets",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 50,
+      "semantic_correct": 0
+    },
+    {
+      "qa_id": "locomo_005_q026",
+      "category": "single_hop",
+      "question": "What similar sports collectible do Tim and John own?",
+      "gold_answer": "signed basketball",
+      "generated_answer": "jerseys",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 50,
+      "semantic_correct": 0
+    },
+    {
+      "qa_id": "locomo_004_q071",
+      "category": "single_hop",
+      "question": "What activities does Nate do with his turtles?",
+      "gold_answer": "takes them onwalks, holds them,feeds themstrawberries, givesthem baths.",
+      "generated_answer": "takes them out for a walk, visits a beach in Tampa",
+      "rouge1_f1": 20.0,
+      "retrieved_count": 50,
+      "semantic_correct": 0
+    },
+    {
+      "qa_id": "locomo_009_q082",
+      "category": "single_hop",
+      "question": "What is a stress reliever for Evan?",
+      "gold_answer": "Drawing, traveling, places with a beautiful view, yoga, sunsets or something comfortable for Evan",
+      "generated_answer": "painting, going for a drive",
+      "rouge1_f1": 21.05,
+      "retrieved_count": 50,
+      "semantic_correct": 0
+    },
+    {
+      "qa_id": "locomo_005_q036",
+      "category": "single_hop",
+      "question": "What outdoor activities does John enjoy?",
+      "gold_answer": "Hiking, surfing",
+      "generated_answer": "hiking in a gorgeous forest",
+      "rouge1_f1": 28.57,
+      "retrieved_count": 50,
+      "semantic_correct": 0
+    },
+    {
+      "qa_id": "locomo_003_q003",
+      "category": "single_hop",
+      "question": "What martial arts has John done?",
+      "gold_answer": "Kickboxing, Taekwondo",
+      "generated_answer": "kickboxing",
+      "rouge1_f1": 66.67,
+      "retrieved_count": 50,
+      "semantic_correct": 0
+    },
+    {
+      "qa_id": "locomo_010_q059",
+      "category": "single_hop",
+      "question": "Which events in Dave's life inspired him to take up auto engineering?",
+      "gold_answer": "attending a car show with Dad, working on an old car in a neighbor's garage when he was young, spent a summer restoring an old car with Dad",
+      "generated_answer": "fixing an old car in a neighbor's garage",
+      "rouge1_f1": 42.11,
+      "retrieved_count": 50,
+      "semantic_correct": 0
+    },
+    {
+      "qa_id": "locomo_006_q015",
+      "category": "single_hop",
+      "question": "What is something that Andrew really misses while working in the city?",
+      "gold_answer": "being in nature",
+      "generated_answer": "nature",
+      "rouge1_f1": 50.0,
+      "retrieved_count": 50,
+      "semantic_correct": 1
+    },
+    {
+      "qa_id": "locomo_009_q017",
+      "category": "single_hop",
+      "question": "What recurring issue frustrates Sam at the grocery store?",
+      "gold_answer": "Malfunctioning self-checkout machines.",
+      "generated_answer": "self-checkout machines being broken",
+      "rouge1_f1": 66.67,
+      "retrieved_count": 50,
+      "semantic_correct": 1
+    },
+    {
+      "qa_id": "locomo_006_q022",
+      "category": "single_hop",
+      "question": "What are the classes that Audrey took for her dogs to?",
+      "gold_answer": "Positive reinforcement training class for bonding, dog training course, agility class",
+      "generated_answer": "agility classes",
+      "rouge1_f1": 30.77,
+      "retrieved_count": 50,
+      "semantic_correct": 0
+    },
+    {
+      "qa_id": "locomo_006_q029",
+      "category": "single_hop",
+      "question": "What is something that Audrey often dresses up her dogs with?",
+      "gold_answer": "Hats",
+      "generated_answer": "collars and tags",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 50,
+      "semantic_correct": 0
+    },
+    {
+      "qa_id": "locomo_008_q015",
+      "category": "single_hop",
+      "question": "What were Deborah's mother's hobbies?",
+      "gold_answer": "reading, traveling, art, cooking",
+      "generated_answer": "reading",
+      "rouge1_f1": 40.0,
+      "retrieved_count": 50,
+      "semantic_correct": 0
+    },
+    {
+      "qa_id": "locomo_008_q009",
+      "category": "single_hop",
+      "question": "What helped Deborah find peace when grieving deaths of her loved ones?",
+      "gold_answer": "yoga, old photos, the roses and dahlias in a flower garden, nature",
+      "generated_answer": "visiting flower gardens",
+      "rouge1_f1": 26.67,
+      "retrieved_count": 50,
+      "semantic_correct": 0
+    },
+    {
+      "qa_id": "locomo_009_q043",
+      "category": "single_hop",
+      "question": "How did Evan get into painting?",
+      "gold_answer": "His friend got him into it by gifting him a painting and giving him some advice. The painting inspired Evan.",
+      "generated_answer": "A friend gave him a painting and he joined classes.",
+      "rouge1_f1": 33.33,
+      "retrieved_count": 50,
+      "semantic_correct": 0
+    },
+    {
+      "qa_id": "locomo_003_q010",
+      "category": "single_hop",
+      "question": "Who gave Maria's family money when she was younger and her family was going through tough times?",
+      "gold_answer": "Her aunt",
+      "generated_answer": "Maria's aunt",
+      "rouge1_f1": 40.0,
+      "retrieved_count": 50,
+      "semantic_correct": 1
+    },
+    {
+      "qa_id": "locomo_004_q035",
+      "category": "single_hop",
+      "question": "What book recommendations has Joanna given to Nate?",
+      "gold_answer": "\"Little Women\",'A Court of Thorns andRoses'.",
+      "generated_answer": "None",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 50,
+      "semantic_correct": 0
+    },
+    {
+      "qa_id": "locomo_001_q053",
+      "category": "single_hop",
+      "question": "What are Melanie's pets' names?",
+      "gold_answer": "Oliver, Luna, Bailey",
+      "generated_answer": "Oliver, Bailey",
+      "rouge1_f1": 80.0,
+      "retrieved_count": 50,
+      "semantic_correct": 0
+    },
+    {
+      "qa_id": "locomo_008_q014",
+      "category": "single_hop",
+      "question": "What places give Deborah peace?",
+      "gold_answer": "sitting in a spot by the window in her Mom's house, sitting by the beach, Bali, forest trail in a nearby park",
+      "generated_answer": "park with a forest trail, beach, Bali",
+      "rouge1_f1": 40.0,
+      "retrieved_count": 50,
+      "semantic_correct": 1
+    },
+    {
+      "qa_id": "locomo_004_q002",
+      "category": "single_hop",
+      "question": "What kind of interests do Joanna and Nate share?",
+      "gold_answer": "Watching movies, making desserts",
+      "generated_answer": "writing, gaming, cooking, hiking, pets",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 50,
+      "semantic_correct": 0
+    },
+    {
+      "qa_id": "locomo_001_q067",
+      "category": "single_hop",
+      "question": "What does Melanie do with her family on hikes?",
+      "gold_answer": "Roast marshmallows, tell stories",
+      "generated_answer": "roast marshmallows around the campfire",
+      "rouge1_f1": 44.44,
+      "retrieved_count": 50,
+      "semantic_correct": 0
+    },
+    {
+      "qa_id": "locomo_001_q004",
+      "category": "single_hop",
+      "question": "What did Caroline research?",
+      "gold_answer": "Adoption agencies",
+      "generated_answer": "adoption agencies",
+      "rouge1_f1": 100.0,
+      "retrieved_count": 50,
+      "semantic_correct": 0
+    },
+    {
+      "qa_id": "locomo_009_q022",
+      "category": "single_hop",
+      "question": "How does Evan describe the woman and his feelings for her that he met in Canada?",
+      "gold_answer": "He says she's cool, incredible, like something out of a movie, and that he feels alive around her. Every moment with her is fun and energetic, also Evan feels really lucky to have someone who gets him.",
+      "generated_answer": "Evan was in love with her at first sight!",
+      "rouge1_f1": 12.77,
+      "retrieved_count": 50,
+      "semantic_correct": 0
+    },
+    {
+      "qa_id": "locomo_010_q054",
+      "category": "single_hop",
+      "question": "Who supports Calvin in tough times?",
+      "gold_answer": "friends and team",
+      "generated_answer": "Dave",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 50,
+      "semantic_correct": 0
+    },
+    {
+      "qa_id": "locomo_006_q032",
+      "category": "single_hop",
+      "question": "What has Andrew done with his dogs?",
+      "gold_answer": "Taking walks and hiking",
+      "generated_answer": "Adopted another dog named Scout.",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 50,
+      "semantic_correct": 0
+    },
+    {
+      "qa_id": "locomo_007_q006",
+      "category": "single_hop",
+      "question": "What are John and James' favorite games?",
+      "gold_answer": "John's favorite game is CS:GO, and James's is Apex Legends.",
+      "generated_answer": "2077, Witcher 3",
+      "rouge1_f1": 0.0,
+      "retrieved_count": 50,
+      "semantic_correct": 0
+    },
+    {
+      "qa_id": "locomo_009_q002",
+      "category": "single_hop",
+      "question": "What kinds of things did Evan have broken?",
+      "gold_answer": "His old Prius and his new Prius.",
+      "generated_answer": "Evan's new Prius broke down.",
+      "rouge1_f1": 30.77,
+      "retrieved_count": 50,
+      "semantic_correct": 0
+    },
+    {
+      "qa_id": "locomo_010_q055",
+      "category": "single_hop",
+      "question": "What does help Calvin stay connected to the creative process?",
+      "gold_answer": "Calvin stays connected to the creative process by always staying up-to-date on world events and watching documentaries about artists.",
+      "generated_answer": "Watching music videos, concerts, and documentaries",
+      "rouge1_f1": 22.22,
+      "retrieved_count": 50,
+      "semantic_correct": 0
+    },
+    {
+      "qa_id": "locomo_007_q046",
+      "category": "single_hop",
+      "question": "What kind of beer does McGee's bar serve?",
+      "gold_answer": "Stout, lager",
+      "generated_answer": "a great stout",
+      "rouge1_f1": 40.0,
+      "retrieved_count": 50,
+      "semantic_correct": 0
+    },
+    {
+      "qa_id": "locomo_006_q028",
+      "category": "single_hop",
+      "question": "How does Andrew feel about his current work?",
+      "gold_answer": "Stressful",
+      "generated_answer": "Work's been tough and stressful.",
+      "rouge1_f1": 28.57,
+      "retrieved_count": 50,
+      "semantic_correct": 1
+    }
+  ],
+  "timestamp": "2026-04-26T14:36:54.150663",
+  "n_questions": 60
+}
