@@ -257,7 +257,38 @@ class FalkorDBGraphService:
         
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, self._execute_query, query, params)
-    
+
+    async def get_neighbours_with_scores(
+        self,
+        memory_ids: list[str],
+        org_id: str,
+        limit: int = 40,
+    ) -> list[dict[str, Any]]:
+        """
+        Return direct neighbors of the given seed memories with relationship scores.
+
+        Returns list of {"neighbor_id": str, "score": float} sorted by score desc.
+        """
+        if not self.redis or not memory_ids:
+            return []
+
+        # Build IN list for Cypher (FalkorDB uses string substitution)
+        id_list = "[" + ", ".join(f"'{mid}'" for mid in memory_ids) + "]"
+        query = f"""
+        MATCH (m:Memory)-[r:RELATES_TO]->(n:Memory)
+        WHERE m.id IN {id_list}
+          AND m.org_id = '{org_id}'
+          AND n.org_id = '{org_id}'
+          AND NOT n.id IN {id_list}
+        RETURN n.id AS neighbor_id, r.similarity_score AS score
+        ORDER BY score DESC
+        LIMIT {limit}
+        """
+
+        loop = asyncio.get_event_loop()
+        rows = await loop.run_in_executor(None, self._execute_query, query, None)
+        return [{"neighbor_id": r.get("neighbor_id", ""), "score": float(r.get("score") or 0.0)} for r in rows if r.get("neighbor_id")]
+
     async def find_shortest_path(
         self,
         from_id: str,

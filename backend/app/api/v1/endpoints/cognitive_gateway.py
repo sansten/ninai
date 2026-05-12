@@ -360,6 +360,10 @@ async def gateway_read(
     if filter_tags and not isinstance(filter_tags, list):
         filter_tags = None
 
+    filter_tags = payload.get("filter_tags") or None
+    if filter_tags and not isinstance(filter_tags, list):
+        filter_tags = None
+
     try:
         planner = CognitiveReadPlanner(
             db,
@@ -371,6 +375,7 @@ async def gateway_read(
         planned = await planner.plan_and_read(
             query=query,
             limit=int(payload.get("limit") or 10),
+            filter_tags=filter_tags,
             context_id=context_id,
             scope=payload.get("scope"),
             team_id=payload.get("team_id"),

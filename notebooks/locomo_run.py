@@ -3876,6 +3876,54 @@ def _fill_fallback(indices, answers, model, num_ctx, request_timeout, workers):
             }
     return result
 
+def _run_gateway_batch(indices, model, num_ctx=32768, timeout=LLM_TIMEOUT + 10, workers=LLM_WORKERS):
+    """Call _gateway_answer in parallel for a batch of QA record indices.
+    Returns list of answer strings aligned to indices.
+    Passes the pre-built category-specific prompt as prompt_override so the gateway
+    uses it directly instead of rebuilding a generic prompt from raw memories.
+    """
+    results = [''] * len(indices)
+    def _call(j_i):
+        j, i = j_i
+        r = qa_records[i]
+        ans = _gateway_answer(
+            r['question'], r.get('hits', []),
+            model=model, num_ctx=num_ctx, timeout=timeout,
+            prompt_override=prompts[i],
+        )
+        return j, ans
+    pool = concurrent.futures.ThreadPoolExecutor(max_workers=workers)
+    try:
+        futs = {pool.submit(_call, (j, i)): j for j, i in enumerate(indices)}
+        for fut in concurrent.futures.as_completed(futs, timeout=max(300, len(indices) * timeout)):
+            j, ans = fut.result()
+            results[j] = ans
+    except Exception:
+        pass
+    finally:
+        pool.shutdown(wait=False, cancel_futures=True)
+    return results
+
+def _fill_fallback(indices, answers, model, num_ctx, request_timeout, workers):
+    """For any empty gateway answer, fall back to local Ollama."""
+    fallback_idx = [indices[j] for j, a in enumerate(answers) if not a]
+    if not fallback_idx:
+        return answers
+    fb_prompts = [prompts[i] for i in fallback_idx]
+    fb_raw = _run_prompts_parallel(
+        fb_prompts,
+        models=[model] * len(fb_prompts),
+        workers=workers,
+        num_ctx=num_ctx,
+        request_timeout=request_timeout,
+        progress_every=100,
+    )
+    result = list(answers)
+    fb_map = {indices[j]: j for j, a in enumerate(answers) if not a}
+    for k, i in enumerate(fallback_idx):
+        result[fb_map[i]] = fb_raw[k]
+    return result
+
 if qwen_idx:
     if _GATEWAY_LIVE:
         print(f'  qwen ({LLM_MODEL}): {len(qwen_idx)} prompts (gateway)')
