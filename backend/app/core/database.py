@@ -68,16 +68,19 @@ async def create_db_and_tables() -> None:
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """
     Database session dependency.
-    
+
     Creates a new database session for each request and ensures
     proper cleanup after the request is complete.
-    
+
     Yields:
         AsyncSession: Database session for the request
     """
     async with async_session_factory() as session:
         try:
             yield session
+        except Exception:
+            await session.rollback()
+            raise
         finally:
             await session.close()
 
