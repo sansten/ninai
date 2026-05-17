@@ -10,7 +10,7 @@ from typing import Optional, List
 from datetime import datetime, timezone
 
 from sqlalchemy import (
-    String, Text, Boolean, Integer, Float,
+    String, Text, Boolean, Integer, Float, DateTime,
     ForeignKey, Index, CheckConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -187,6 +187,7 @@ class MemoryMetadata(Base, UUIDMixin, TimestampMixin):
         doc="How many times this exact content was ingested; repetition = stronger memory",
     )
     last_ingested_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True),
         nullable=True,
         doc="Most recent ingest timestamp; used by decay agent for reinforcement window",
     )
