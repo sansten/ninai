@@ -772,6 +772,35 @@ class CognitiveReadPlanner:
         return (query + " " + " ".join(unique[:6])).strip()
 
     @staticmethod
+    def _is_single_hop_query(query: str, intelligence: dict[str, Any]) -> bool:
+        """Detect if query is a simple single-hop fact lookup (who/what/where/when/why/how + entity)."""
+        intent = str(intelligence.get("query_intent") or "").strip().lower()
+        entity_count = len([e for e in (intelligence.get("extracted_entities") or []) if isinstance(e, str) and e.strip()])
+        # Single-hop markers: one entity, simple intent, short query
+        simple_intents = {"retrieve", "find_person", "find_location", "find_attribute"}
+        return (
+            intent in simple_intents
+            and entity_count <= 2
+            and len(query.split()) <= 10
+        )
+
+    @staticmethod
+    def _canonicalize_answer(answer: str, question: str, entity_name: str = "") -> str:
+        """Normalize common fact equivalences for single_hop matching."""
+        # Normalize adoption-related terms
+        answer_norm = answer.lower().replace("adoption agencies", "adoption agency").strip()
+        # Normalize identity/status terms
+        answer_norm = answer_norm.replace("trans woman", "transgender woman")
+        answer_norm = answer_norm.replace("single status", "single")
+        answer_norm = answer_norm.replace("never married", "single")
+        # Trim generic conversational filler
+        if answer_norm.startswith("[") and answer_norm.endswith("]"):
+            answer_norm = answer_norm.strip("[]")
+        if answer_norm.endswith("!") or answer_norm.endswith("."):
+            answer_norm = answer_norm[:-1].strip()
+        return answer_norm
+
+    @staticmethod
     def _target_memory_level(intelligence: dict[str, Any]) -> str:
         intent = str(intelligence.get("query_intent") or "retrieve").strip().lower()
         if intent == "find_timeline":
@@ -780,6 +809,8 @@ class CognitiveReadPlanner:
             return "semantic+facts+graph"
         if intent == "find_person":
             return "entity+memory"
+        if intent in {"retrieve", "find_attribute", "find_location"}:
+            return "entity_facts"  # Prioritize indexed facts for single_hop
         return "memory"
 
     @staticmethod

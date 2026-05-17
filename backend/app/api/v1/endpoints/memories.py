@@ -79,6 +79,29 @@ from app.tasks.memory_pipeline import enqueue_feedback_learning
 router = APIRouter()
 
 
+def _normalize_query_tags(tags: Optional[List[str]]) -> Optional[List[str]]:
+    """Accept repeated tags params and comma-delimited tag lists.
+
+    Some clients send `tags=a,b` while FastAPI's `List[str]` query parsing
+    naturally handles `?tags=a&tags=b`. Normalize both into a flat list.
+    """
+    if not tags:
+        return None
+
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for raw in tags:
+        if raw is None:
+            continue
+        for part in str(raw).split(","):
+            tag = part.strip()
+            if not tag or tag in seen:
+                continue
+            seen.add(tag)
+            normalized.append(tag)
+    return normalized or None
+
+
 def _memory_matches_reader_role(memory, reader_ctx: dict) -> bool:
     """Apply role-specific filtering only when reader context is role-specific."""
     if not reader_ctx.get("role_specific"):
@@ -247,9 +270,11 @@ async def list_memories(
         db, tenant.user_id, tenant.org_id, tenant.roles_string, tenant.clearance_level
     )
 
+    normalized_tags = _normalize_query_tags(tags)
+
     items, total, has_more = await service.list_memories(
         scope=scope,
-        tags=tags,
+        tags=normalized_tags,
         memory_type=memory_type,
         page=page,
         page_size=page_size,
@@ -784,11 +809,13 @@ async def search_memories(
     
     request_id = getattr(request.state, "request_id", None)
 
+    normalized_tags = _normalize_query_tags(tags)
+
     search_request = MemorySearchRequest(
         query=query,
         scope=scope,
         team_id=team_id,
-        tags=tags,
+        tags=normalized_tags,
         date_from=date_from,
         date_to=date_to,
         limit=limit,
@@ -815,7 +842,7 @@ async def search_memories(
                     limit=limit,
                     scope=scope,
                     team_id=team_id,
-                    filter_tags=tags,
+                    filter_tags=normalized_tags,
                     hybrid=hybrid,
                     use_graph=use_graph,
                     hnms_mode=hnms_mode,
@@ -881,6 +908,9 @@ async def search_memories(
             except Exception:
                 evidence_package = None
 
+        _diag_fn = getattr(service, "get_last_search_diagnostics", None)
+        diagnostics = _diag_fn() if callable(_diag_fn) else {}
+
         return MemorySearchResponse(
             trace_id=request_id,
             query=query,
@@ -889,6 +919,7 @@ async def search_memories(
             took_ms=round(elapsed_ms, 2),
             ranking_meta={
                 **service.get_search_ranking_meta(search_request),
+                **diagnostics,
                 **(planner_meta or {}),
             },
             facts_used=enrichment["facts_used"],

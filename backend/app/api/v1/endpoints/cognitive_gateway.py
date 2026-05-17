@@ -360,10 +360,6 @@ async def gateway_read(
     if filter_tags and not isinstance(filter_tags, list):
         filter_tags = None
 
-    filter_tags = payload.get("filter_tags") or None
-    if filter_tags and not isinstance(filter_tags, list):
-        filter_tags = None
-
     try:
         planner = CognitiveReadPlanner(
             db,
@@ -379,7 +375,6 @@ async def gateway_read(
             context_id=context_id,
             scope=payload.get("scope"),
             team_id=payload.get("team_id"),
-            filter_tags=filter_tags,
             hybrid=bool(payload.get("hybrid", True)),
             use_graph=bool(payload.get("use_graph")) if "use_graph" in payload else None,
             hnms_mode=_coerce_hnms_mode(payload.get("hnms_mode")),

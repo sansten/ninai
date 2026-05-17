@@ -32,8 +32,8 @@ async def _build_service_with_memories(memories: list[SimpleNamespace]) -> Memor
     session.add_all = MagicMock()
 
     svc = MemoryService(session=session, user_id="user", org_id="org", clearance_level=0)
-    svc.permission_checker.check_memory_access = AsyncMock(
-        return_value=SimpleNamespace(allowed=True, method="rls", reason="")
+    svc.permission_checker.filter_memory_ids_with_access = AsyncMock(
+        return_value=[m.id for m in memories]
     )
     svc.audit_service.log_memory_access = AsyncMock()
     return svc
@@ -56,6 +56,7 @@ async def test_hnms_mode_performance_overrides_base_decay_and_downranks_old(monk
     )
 
     # Base temporal decay disabled, but mode=performance should still apply.
+    monkeypatch.setattr(memory_service_module.settings, "SEARCH_HEURISTICS_ENABLED", True, raising=False)
     monkeypatch.setattr(memory_service_module.settings, "SEARCH_TEMPORAL_DECAY_ENABLED", False, raising=False)
     monkeypatch.setattr(memory_service_module.settings, "SEARCH_HNMS_MODE_ALLOW_REQUEST_OVERRIDE", True, raising=False)
     monkeypatch.setattr(memory_service_module.settings, "SEARCH_HNMS_MODE_PERFORMANCE_HALF_LIFE_DAYS", 1.0, raising=False)
@@ -120,6 +121,7 @@ async def test_hnms_mode_research_is_less_aggressive_than_performance(monkeypatc
         ),
     )
 
+    monkeypatch.setattr(memory_service_module.settings, "SEARCH_HEURISTICS_ENABLED", True, raising=False)
     monkeypatch.setattr(memory_service_module.settings, "SEARCH_TEMPORAL_DECAY_ENABLED", False, raising=False)
     monkeypatch.setattr(memory_service_module.settings, "SEARCH_HNMS_MODE_ALLOW_REQUEST_OVERRIDE", True, raising=False)
     monkeypatch.setattr(memory_service_module.settings, "SEARCH_HNMS_MODE_RESEARCH_HALF_LIFE_DAYS", 1000.0, raising=False)

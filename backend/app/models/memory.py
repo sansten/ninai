@@ -7,7 +7,7 @@ Actual embeddings are stored in Qdrant; this stores structured metadata.
 """
 
 from typing import Optional, List
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import (
     String, Text, Boolean, Integer, Float,
@@ -178,7 +178,25 @@ class MemoryMetadata(Base, UUIDMixin, TimestampMixin):
         nullable=True,
         doc="Source identifier (agent_id, integration reference, etc.)",
     )
-    
+
+    # Reinforcement tracking (dedup — same content written again increments these)
+    ingest_count: Mapped[int] = mapped_column(
+        Integer,
+        default=1,
+        nullable=False,
+        doc="How many times this exact content was ingested; repetition = stronger memory",
+    )
+    last_ingested_at: Mapped[Optional[datetime]] = mapped_column(
+        nullable=True,
+        doc="Most recent ingest timestamp; used by decay agent for reinforcement window",
+    )
+    unique_sources: Mapped[List[str]] = mapped_column(
+        ARRAY(String),
+        default=list,
+        nullable=False,
+        doc="Distinct source_ids that have written this content; diversity amplifies credibility",
+    )
+
     # Vector reference
     vector_id: Mapped[str] = mapped_column(
         String(100),

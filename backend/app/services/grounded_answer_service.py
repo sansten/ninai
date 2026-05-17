@@ -114,8 +114,8 @@ class GroundedAnswerService:
         world_state = dict(goal_context.get("world_state") or {})
 
         memory_lines = []
-        for hit in memory_hits[:6]:
-            preview = str(hit.get("content_preview") or "").strip()
+        for hit in memory_hits[:20]:
+            preview = str(hit.get("content_preview") or hit.get("content") or "").strip()
             title = str(hit.get("title") or "").strip()
             memory_id = str(hit.get("memory_id") or "").strip()
             parts = [part for part in [title, preview] if part]
@@ -123,7 +123,7 @@ class GroundedAnswerService:
                 memory_lines.append(f"- [{memory_id}] {' | '.join(parts)}")
 
         fact_lines = []
-        for fact in facts[:8]:
+        for fact in facts[:15]:
             fact_lines.append(
                 f"- FACT: {fact.get('subject')} {fact.get('predicate')} {fact.get('object')} "
                 f"(status={fact.get('status')}, confidence={self._safe_float(fact.get('confidence')):.2f})"
@@ -176,14 +176,20 @@ class GroundedAnswerService:
         sections = [
             "You are Ninai's grounded answer engine.",
             "Answer the question using only the structured evidence below.",
-            "If evidence is missing or contradictory, say so briefly instead of guessing.",
-            "Return only the answer text. No markdown, no bullet list, no extra explanation.",
-            "",
-            "MEMORY HITS:",
-            "\n".join(memory_lines) or "- none",
+            "Rules:",
+            "- For SINGLE-VALUE questions (what is X's Y, who is, where is, when did): return ONLY the exact name, place, date, or attribute — no extra words.",
+            "- For LIST questions (what activities, what events, what did X do, what has X, what types): list EVERY distinct item found across ALL evidence, comma-separated.",
+            "- Scan ALL memory hits for relevant items — do not stop at the first match.",
+            "- Prefer FACTS entries over narrative text when both contain relevant information.",
+            "- Use EXACT words from the evidence for named entities (people, places, countries).",
+            "- If evidence is missing or contradictory, say so briefly instead of guessing.",
+            "- Return only the answer text. No markdown, no extra explanation.",
             "",
             "FACTS:",
             "\n".join(fact_lines) or "- none",
+            "",
+            "MEMORY HITS:",
+            "\n".join(memory_lines) or "- none",
             "",
             "CONTRADICTIONS:",
             "\n".join(contradiction_lines) or "- none",

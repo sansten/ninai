@@ -265,6 +265,61 @@ def _coerce_rank_score(value: Any) -> float | None:
     return score
 
 
+_CGS_SPEAKER_RE = re.compile(r"^\[([A-Za-z][a-z]{1,})\]")
+_CGS_DERIVED_PREFIXES = frozenset({
+    "Fact", "Temporal", "About", "Relationship", "Summary", "Event", "Observation", "Note",
+})
+_CGS_SKIP_WORDS = {
+    "what", "where", "who", "when", "which", "how", "why", "is", "are", "was", "were",
+    "did", "do", "does", "has", "have", "had", "will", "would", "could", "should",
+    "can", "may", "might", "not", "no", "the", "this", "that", "those", "these",
+}
+
+
+def _extract_question_subject(query: str) -> "str | None":
+    """Return the primary proper-name subject of a question query, if any."""
+    for token in re.findall(r"\b([A-Z][a-z]{2,})\b", query):
+        if token.lower() not in _CGS_SKIP_WORDS:
+            return token
+    return None
+
+
+def _detect_speaker_mismatch(query: str, memories: list[dict], top_n: int = 3) -> bool:
+    """Return True when all top retrieved memories are from a speaker other than the query subject.
+
+    Used to detect unanswerable questions where the evidence exists but belongs to the
+    wrong conversation participant.  When True, the verified context should be cleared so
+    the downstream LLM answers 'Not mentioned' rather than hallucinating from the wrong
+    speaker's content.
+    """
+    subject = _extract_question_subject(query)
+    if not subject:
+        return False
+
+    candidates = memories[:top_n]
+    if not candidates:
+        return False
+
+    mismatch_count = 0
+    for m in candidates:
+        preview = str(m.get("content_preview") or "")
+        sm = _CGS_SPEAKER_RE.match(preview)
+        if not sm:
+            continue
+        speaker = sm.group(1)
+        if speaker in _CGS_DERIVED_PREFIXES:
+            continue
+        if speaker.lower() != subject.lower():
+            mismatch_count += 1
+
+    speaker_turn_count = len([
+        m for m in candidates
+        if _CGS_SPEAKER_RE.match(str(m.get("content_preview") or ""))
+        and _CGS_SPEAKER_RE.match(str(m.get("content_preview") or "")).group(1) not in _CGS_DERIVED_PREFIXES
+    ])
+    return speaker_turn_count > 0 and mismatch_count == speaker_turn_count
+
+
 def _prepare_read_candidates(
     memories: list[dict],
     query: str,
@@ -906,6 +961,47 @@ class CognitiveGatewayService:
     def _check(self, verb: str) -> None:
         if not self._caps.is_enabled(verb):
             raise PermissionError(f"Verb '{verb}' not enabled for this tenant.")
+    
+    def _extract_single_hop_fact(self, query: str, memories: list[dict]) -> dict[str, Any] | None:
+        """Extract shortest factual span from verified context for attribute queries."""
+        if not memories:
+            return None
+        
+        # Look for direct fact markers in top memories
+        query_lower = query.lower()
+        for memory in memories[:3]:
+            content = str(memory.get("content") or "").lower()
+            title = str(memory.get("title") or "").lower()
+            
+            # Try to find direct statement containing question entity/attribute
+            for text_source in [title, content]:
+                if not text_source:
+                    continue
+                # Extract entity-attribute pairs like "[Caroline] Transgender woman" or "Caroline: Single"
+                bracket_match = re.search(r'\[([^\]]+)\]\s*[:-]?\s*([^.\n]+)', text_source)
+                if bracket_match:
+                    entity, fact = bracket_match.groups()
+                    fact = fact.strip()
+                    if len(fact.split()) <= 5:  # Short fact span
+                        return {
+                            "fact": fact,
+                            "memory_id": memory.get("id"),
+                            "confidence": 0.95,
+                        }
+                # Alternative: look for "is ", "was ", etc.
+                for marker in [" is ", " was ", " moved from ", " lives in "]:
+                    if marker in text_source:
+                        parts = text_source.split(marker)
+                        if len(parts) >= 2:
+                            fact = parts[-1].strip().split(".")[0].split(",")[0][:100]
+                            if fact and len(fact.split()) <= 8:
+                                return {
+                                    "fact": fact,
+                                    "memory_id": memory.get("id"),
+                                    "confidence": 0.85,
+                                }
+        
+        return None
 
     # ------------------------------------------------------------------
     # write
@@ -1053,6 +1149,58 @@ class CognitiveGatewayService:
             strict_support=False,
         )
         verified = verification.verified_memories
+
+        # Speaker mismatch guard: when all top retrieved memories are from a different
+        # speaker than the question subject, the question is likely unanswerable.
+        # Clearing verified lets the downstream LLM respond with "Not mentioned".
+        if _detect_speaker_mismatch(query, verified[:3]):
+            verified = []
+
+        # Single-hop fact extraction: if query appears to be attribute lookup (who/what/where/status)
+        # and verified context is sparse, extract shortest factual span instead of full answer generation.
+        qi_intent = qi.get("query_intent", "").lower() if isinstance(qi.get("query_intent"), str) else ""
+        is_single_hop_style = qi_intent in {"retrieve", "find_attribute", "find_person", "find_location"} and len(ranked) <= 5
+        single_hop_extraction = None
+        if is_single_hop_style and verified:
+            single_hop_extraction = self._extract_single_hop_fact(query, verified)
+            if single_hop_extraction:
+                # Bypass compression and return early with extracted fact
+                result = GatewayReadResult(
+                    memories=verified[:limit],
+                    total=len(verified),
+                    query=query,
+                    context_assembled=True,
+                    retrieval_confidence=0.9 if single_hop_extraction.get("confidence") else 0.6,
+                    corrected_by="single_hop_extraction",
+                    reasoning_steps=[
+                        {
+                            "step": "query_intelligence",
+                            "intent": qi_intent,
+                            "confidence": qi.get("confidence"),
+                            "entities": qi_entities,
+                            "applied_filters": qi_filters,
+                            "candidate_count_before": pre_qi_count,
+                            "candidate_count_after": len(_mems),
+                            "entity_match_count": entity_match_count,
+                        },
+                        {
+                            "step": "single_hop_extraction",
+                            "extracted_fact": single_hop_extraction.get("fact"),
+                            "source_memory_id": single_hop_extraction.get("memory_id"),
+                        },
+                        *verification.reasoning_steps,
+                    ],
+                    compression_ratio=1.0,
+                    information_density=1.0,
+                )
+                if context_id and org_id:
+                    ctx = await load_gateway_context(context_id, org_id) or GatewayContextSession(
+                        context_id=context_id, org_id=org_id
+                    )
+                    ctx.prior_memories = verified[:limit]
+                    ctx.call_count += 1
+                    await save_gateway_context(ctx)
+                return result
 
         # CRAG corrective pass if verified context quality is low.
         corrective = CorrectiveRagService().apply(

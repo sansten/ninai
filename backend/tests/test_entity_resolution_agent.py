@@ -11,6 +11,7 @@ from app.agents.entity_resolution_agent import (
     build_cross_silo_links,
     extract_entities_from_content,
     resolve_entity,
+    _extract_personal_attributes,
 )
 from app.agents.types import AgentContext, AgentResult
 
@@ -490,6 +491,98 @@ class TestEntityResolutionAgentLLM:
 
         assert result.outputs["rationale"] == "heuristic"
 
+    @pytest.mark.asyncio
+    async def test_llm_personal_attribute_extraction(self):
+        """LLM path returns personal_attribute entities; they pass validate_outputs."""
+        agent = EntityResolutionAgent()
+        mock_resp = {
+            "resolved_entities": [
+                {
+                    "entity_type": "personal_attribute",
+                    "canonical": "caroline_origin",
+                    "subject": "Caroline",
+                    "attribute": "origin",
+                    "value": "Sweden",
+                    "domains": ["personal"],
+                    "match_type": "extracted",
+                    "confidence": 0.8,
+                }
+            ],
+            "unresolved_entities": [],
+            "cross_silo_links": [],
+            "confidence": 0.8,
+            "rationale": "llm",
+        }
+        mock_client = AsyncMock()
+        mock_client.complete_json = AsyncMock(return_value=mock_resp)
+
+        with patch("app.agents.entity_resolution_agent.settings") as mock_s, \
+             patch("app.agents.entity_resolution_agent.create_ollama_client", return_value=mock_client):
+            mock_s.ENTITY_RESOLUTION_STRATEGY = None
+            mock_s.AGENT_STRATEGY = "llm"
+            mock_s.OLLAMA_BASE_URL = "http://localhost:11434"
+            mock_s.get_ollama_model = lambda _: "qwen2.5:0.5b"
+            mock_s.OLLAMA_TIMEOUT_SECONDS = 5.0
+            mock_s.OLLAMA_MAX_CONCURRENCY = 2
+            result = await agent.run(
+                "mem-1",
+                _make_context("[Caroline] I moved from my home country, Sweden."),
+            )
+
+        assert result.status == "success"
+        personal = [
+            e for e in result.outputs["resolved_entities"]
+            if e.get("entity_type") == "personal_attribute"
+        ]
+        assert len(personal) == 1
+        assert personal[0]["attribute"] == "origin"
+        assert personal[0]["value"] == "Sweden"
+
+    @pytest.mark.asyncio
+    async def test_llm_merges_heuristic_date_entities(self):
+        """LLM response is merged with deterministic heuristic date entities."""
+        agent = EntityResolutionAgent()
+        # LLM finds a personal attribute but misses the date
+        mock_resp = {
+            "resolved_entities": [
+                {
+                    "entity_type": "personal_attribute",
+                    "canonical": "caroline_research_topic",
+                    "subject": "Caroline",
+                    "attribute": "research_topic",
+                    "value": "adoption agencies",
+                    "domains": ["personal"],
+                    "match_type": "extracted",
+                    "confidence": 0.8,
+                }
+            ],
+            "unresolved_entities": [],
+            "cross_silo_links": [],
+            "confidence": 0.8,
+            "rationale": "llm",
+        }
+        mock_client = AsyncMock()
+        mock_client.complete_json = AsyncMock(return_value=mock_resp)
+
+        with patch("app.agents.entity_resolution_agent.settings") as mock_s, \
+             patch("app.agents.entity_resolution_agent.create_ollama_client", return_value=mock_client):
+            mock_s.ENTITY_RESOLUTION_STRATEGY = None
+            mock_s.AGENT_STRATEGY = "llm"
+            mock_s.OLLAMA_BASE_URL = "http://localhost:11434"
+            mock_s.get_ollama_model = lambda _: "qwen2.5:0.5b"
+            mock_s.OLLAMA_TIMEOUT_SECONDS = 5.0
+            mock_s.OLLAMA_MAX_CONCURRENCY = 2
+            result = await agent.run(
+                "mem-1",
+                _make_context("[Caroline] Researching adoption agencies on June 14, 2026."),
+            )
+
+        canonicals = {e["canonical"] for e in result.outputs["resolved_entities"]}
+        # LLM result preserved
+        assert "caroline_research_topic" in canonicals
+        # Date entity merged in from heuristic
+        assert "2026-06-14" in canonicals
+
 
 # ---------------------------------------------------------------------------
 # Agent: metadata
@@ -504,6 +597,88 @@ class TestAgentMetadata:
     def test_dependencies(self):
         agent = EntityResolutionAgent()
         assert "SemanticNormalizationAgent" in agent.dependencies()
+
+
+# ---------------------------------------------------------------------------
+# Personal attribute extraction
+# ---------------------------------------------------------------------------
+
+class TestExtractPersonalAttributes:
+    def test_no_speaker_prefix_returns_empty(self):
+        result = _extract_personal_attributes("I moved from my home country, Sweden")
+        assert result == []
+
+    def test_origin_extraction(self):
+        result = _extract_personal_attributes("[Caroline] I moved from my home country, Sweden last year.")
+        attrs = {a["attribute"]: a for a in result}
+        assert "origin" in attrs
+        assert attrs["origin"]["value"] == "Sweden"
+        assert attrs["origin"]["subject"] == "Caroline"
+        assert attrs["origin"]["entity_type"] == "personal_attribute"
+
+    def test_relationship_status_single_parent(self):
+        result = _extract_personal_attributes("[Caroline] It'll be tough as a single parent.")
+        attrs = {a["attribute"]: a for a in result}
+        assert "relationship_status" in attrs
+        assert attrs["relationship_status"]["value"] == "single"
+
+    def test_research_topic(self):
+        result = _extract_personal_attributes("[Caroline] Researching adoption agencies in my area.")
+        attrs = {a["attribute"]: a for a in result}
+        assert "research_topic" in attrs
+        assert "adoption agencies" in attrs["research_topic"]["value"]
+
+    def test_book_read_double_quote(self):
+        result = _extract_personal_attributes('[Melanie] I loved reading "Charlotte\'s Web" last week.')
+        attrs = {a["attribute"]: a for a in result}
+        assert "book_read" in attrs
+        assert "Charlotte" in attrs["book_read"]["value"]
+
+    def test_painted_subject(self):
+        result = _extract_personal_attributes("[Melanie] I painted that lake sunrise last year.")
+        attrs = {a["attribute"]: a for a in result}
+        assert "painted" in attrs
+        assert "lake sunrise" in attrs["painted"]["value"]
+
+    def test_destress_activity_running(self):
+        result = _extract_personal_attributes("[Melanie] I've been running farther to de-stress.")
+        attrs = {a["attribute"]: a for a in result}
+        assert "destress_activity" in attrs
+        assert attrs["destress_activity"]["value"] == "running"
+
+    def test_identity_trans_experience(self):
+        result = _extract_personal_attributes("[Caroline] Sharing my trans experience with others feels important.")
+        attrs = {a["attribute"]: a for a in result}
+        assert "identity" in attrs
+        assert attrs["identity"]["value"] == "transgender"
+
+    def test_canonical_keyed_by_subject(self):
+        result = _extract_personal_attributes("[Melanie] I painted that sunset scene.")
+        assert any(a["canonical"].startswith("melanie_") for a in result)
+
+    def test_no_duplicate_canonical(self):
+        # Two patterns that would emit the same canonical should appear only once
+        content = "[Caroline] my home country, Sweden and my home country, Sweden again."
+        result = _extract_personal_attributes(content)
+        origins = [a for a in result if a["attribute"] == "origin"]
+        assert len(origins) == 1
+
+    def test_integration_heuristic_does_not_include_personal_attrs(self):
+        # Personal attributes are extracted only by the LLM path (not heuristic).
+        # Regex extraction is too fragile for production; LLM handles open-ended facts.
+        agent = EntityResolutionAgent()
+        outputs = agent._heuristic(
+            content="[Caroline] I moved from my home country, Sweden.",
+            relationships=[],
+        )
+        entity_types = {e["entity_type"] for e in outputs["resolved_entities"]}
+        assert "personal_attribute" not in entity_types
+
+    def test_career_interest(self):
+        result = _extract_personal_attributes("[Caroline] I've been interested in mental health counseling for years.")
+        attrs = {a["attribute"]: a for a in result}
+        assert "career_interest" in attrs
+        assert "mental health" in attrs["career_interest"]["value"]
 
 
 # ---------------------------------------------------------------------------

@@ -14,8 +14,10 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 import contextlib
 import contextvars
+import hashlib
 import json
 import time
+import uuid
 from typing import Optional
 import itertools
 
@@ -1099,7 +1101,79 @@ class AgentRunner:
                 }
         if entities:
             mem.entities = entities
-        return {"updated": True, "entity_count": len(entities)}
+
+        # Write derived [Fact] memories for personal attributes so semantic search
+        # can retrieve structured facts directly without vocabulary gap.
+        personal_attrs = [
+            e for e in resolved
+            if isinstance(e, dict) and e.get("entity_type") == "personal_attribute"
+        ]
+        derived_count = 0
+        for attr in personal_attrs:
+            subject = attr.get("subject", "")
+            attribute = attr.get("attribute", "")
+            value = attr.get("value", "")
+            if not (subject and attribute and value):
+                continue
+            fact_content = f"[Fact] {subject} {attribute}: {value}"
+            content_hash = hashlib.sha256(fact_content.encode()).hexdigest()
+            try:
+                dup = await session.execute(
+                    select(MemoryMetadata).where(
+                        MemoryMetadata.organization_id == mem.organization_id,
+                        MemoryMetadata.scope == mem.scope,
+                        MemoryMetadata.scope_id == mem.scope_id,
+                        MemoryMetadata.content_hash == content_hash,
+                        MemoryMetadata.is_active.is_(True),
+                    ).limit(1)
+                )
+                if dup.scalar_one_or_none() is not None:
+                    continue
+            except Exception:
+                continue
+            try:
+                from app.tasks.embed_task import enqueue_embed_and_index
+                derived_id = str(uuid.uuid4())
+                vector_id = str(uuid.uuid4())
+                derived = MemoryMetadata(
+                    id=derived_id,
+                    organization_id=mem.organization_id,
+                    owner_id=mem.owner_id,
+                    scope=mem.scope,
+                    scope_id=mem.scope_id,
+                    memory_type="long_term",
+                    classification=mem.classification,
+                    required_clearance=mem.required_clearance,
+                    content_preview=fact_content[:2000],
+                    content_hash=content_hash,
+                    tags=["derived_fact", "personal_attribute", attribute],
+                    entities={},
+                    extra_metadata={
+                        "derived_from": memory_id,
+                        "derived_by": "EntityResolutionAgent",
+                        "attribute": attribute,
+                        "subject": subject,
+                        "value": value,
+                    },
+                    source_type="derived",
+                    source_id=memory_id,
+                    vector_id=vector_id,
+                    embedding_model=getattr(settings, "EMBEDDING_MODEL", None) or "text-embedding-3-small",
+                    ingest_count=1,
+                    unique_sources=[],
+                )
+                session.add(derived)
+                await session.flush()
+                enqueue_embed_and_index(
+                    memory_id=derived_id,
+                    content=fact_content,
+                    org_id=mem.organization_id,
+                )
+                derived_count += 1
+            except Exception:
+                pass
+
+        return {"updated": True, "entity_count": len(entities), "derived_facts": derived_count}
 
     async def _apply_semantic_normalization(
         self,

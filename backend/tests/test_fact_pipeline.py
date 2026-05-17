@@ -27,6 +27,7 @@ async def _seed_memory(
     user_id: str,
     title: str,
     content_preview: str,
+    entities: dict | None = None,
 ) -> str:
     memory_id = str(uuid4())
     now = datetime.now(timezone.utc)
@@ -45,7 +46,7 @@ async def _seed_memory(
             "content_preview": content_preview,
             "content_hash": _hash(content_preview),
             "tags": [],
-            "entities": {},
+            "entities": entities or {},
             "extra_metadata": {},
             "source_type": "manual",
             "source_id": None,
@@ -97,6 +98,82 @@ async def test_fact_extraction_creates_facts(db_session: AsyncSession, test_org_
     )
     assert len(facts) >= 1
     assert all(f.status == MemoryFactStatus.ACTIVE for f in facts)
+
+
+@pytest.mark.asyncio
+async def test_fact_extraction_handles_speaker_state_and_origin_relation(
+    db_session: AsyncSession,
+    test_org_id: str,
+    test_user_id: str,
+):
+    memory_id = await _seed_memory(
+        db_session,
+        org_id=test_org_id,
+        user_id=test_user_id,
+        title="Conversation note",
+        content_preview="Caroline: I'm single and I moved from Sweden four years ago.",
+    )
+    await db_session.commit()
+
+    result = await extract_facts_from_memory(
+        org_id=test_org_id,
+        memory_id=memory_id,
+        actor_user_id=test_user_id,
+    )
+    assert result["created_count"] >= 2
+
+    facts = list(
+        (
+            await db_session.execute(
+                select(MemoryFact).where(
+                    MemoryFact.organization_id == test_org_id,
+                    MemoryFact.source_memory_id == memory_id,
+                )
+            )
+        ).scalars().all()
+    )
+    fact_tuples = {(f.subject, f.predicate, f.object) for f in facts}
+
+    assert ("caroline", "relationship_status", "single") in fact_tuples
+    assert any(subject == "caroline" and predicate == "moved_from" and obj.startswith("sweden") for subject, predicate, obj in fact_tuples)
+
+
+@pytest.mark.asyncio
+async def test_fact_extraction_does_not_use_entity_only_hint_for_first_person_state(
+    db_session: AsyncSession,
+    test_org_id: str,
+    test_user_id: str,
+):
+    memory_id = await _seed_memory(
+        db_session,
+        org_id=test_org_id,
+        user_id=test_user_id,
+        title="Ambiguous first person",
+        content_preview="I'm single and moved from Sweden.",
+        entities={"name": "Melanie"},
+    )
+    await db_session.commit()
+
+    _ = await extract_facts_from_memory(
+        org_id=test_org_id,
+        memory_id=memory_id,
+        actor_user_id=test_user_id,
+    )
+
+    facts = list(
+        (
+            await db_session.execute(
+                select(MemoryFact).where(
+                    MemoryFact.organization_id == test_org_id,
+                    MemoryFact.source_memory_id == memory_id,
+                )
+            )
+        ).scalars().all()
+    )
+    fact_tuples = {(f.subject, f.predicate, f.object) for f in facts}
+
+    assert ("melanie", "relationship_status", "single") not in fact_tuples
+    assert ("melanie", "moved_from", "sweden") not in fact_tuples
 
 
 @pytest.mark.asyncio

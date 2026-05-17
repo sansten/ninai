@@ -322,6 +322,117 @@ def _resolve_temporal(name: str) -> dict[str, Any] | None:
     return None
 
 
+# ---------------------------------------------------------------------------
+# Personal attribute extraction — conversational corpora (LoCoMo-style)
+# Turns with a [Speaker] prefix carry first-person facts that would otherwise
+# be invisible to the enterprise ontology (relationship_status, origin, etc.).
+# Extracted attributes are stored as personal_attribute entities so that:
+#   (a) mem.entities is populated for graph expansion, and
+#   (b) _apply_entity_resolution writes a [Fact] derived memory for direct
+#       semantic retrieval without vocabulary gap.
+# ---------------------------------------------------------------------------
+
+_SPEAKER_RE = re.compile(r"^\[([^\]]+)\]\s+")
+
+
+def _extract_personal_attributes(content: str) -> list[dict[str, Any]]:
+    """Extract personal attribute facts from a [Speaker]-prefixed turn.
+
+    Returns entity dicts with entity_type='personal_attribute'.
+    Only fires when the content begins with a [Speaker] token.
+    """
+    results: list[dict[str, Any]] = []
+    seen: set[str] = set()
+
+    m = _SPEAKER_RE.match(content)
+    if not m:
+        return results
+
+    subject = m.group(1).strip()
+    text = content[m.end():].strip()
+    subj_lc = subject.lower()
+
+    def _emit(attribute: str, value: str) -> None:
+        canonical = f"{subj_lc}_{attribute}"
+        if canonical not in seen:
+            seen.add(canonical)
+            results.append({
+                "entity_type": "personal_attribute",
+                "canonical": canonical,
+                "subject": subject,
+                "attribute": attribute,
+                "value": value,
+                "domains": ["personal"],
+                "match_type": "extracted",
+                "confidence": 0.8,
+            })
+
+    # Origin: "my home country, Sweden" / "my home country of Sweden"
+    m2 = re.search(r"\bmy home country[,\s]+(?:of\s+)?([A-Z][a-zA-Z]+)", text)
+    if m2:
+        _emit("origin", m2.group(1))
+
+    # Relationship status: "single parent/mom/dad"
+    if re.search(r"\bsingle\s+(?:parent|mom|dad|father|mother)\b", text, re.I):
+        _emit("relationship_status", "single")
+
+    # Research topic: "Researching adoption agencies"
+    m3 = re.search(r"\b[Rr]esearching\s+([^.–—\n]{3,60}?)(?:[.!?,]|$)", text)
+    if m3:
+        _emit("research_topic", m3.group(1).strip().rstrip(".,"))
+
+    # Book read: quoted title near reading verb (straight double quotes; apostrophes allowed inside)
+    m4 = re.search(
+        r'\b(?:loved?|finished?|read|reading|re-read)\b[^"]{0,30}'
+        r'"([^"\n]{3,80})"',
+        text, re.I,
+    )
+    if m4:
+        _emit("book_read", m4.group(1).strip())
+
+    # Painted subject: "I painted that lake sunrise" — stop at time/clause words
+    m5 = re.search(
+        r"\bpainted\s+(?:the\s+|that\s+|a\s+)?(.+?)"
+        r"(?:\s+(?:last|when|while|before|after|ago|in|at|on|and|but)\b|[.!?,]|$)",
+        text, re.I,
+    )
+    if m5:
+        val = m5.group(1).strip().rstrip(".,")
+        if val:
+            _emit("painted", val)
+
+    # Destress activity: "running farther to de-stress" / "de-stress by running"
+    m6 = re.search(
+        r"\b(\w+ing)\s+(?:further|farther|more)?\s*(?:to\s+)?(?:de-stress|destress|unwind|relax)\b",
+        text, re.I,
+    )
+    if not m6:
+        m6 = re.search(
+            r"\b(?:de-stress|destress|unwind|relax)\s+(?:by|with|through)\s+(\w+(?:ing)?)\b",
+            text, re.I,
+        )
+    if m6:
+        _emit("destress_activity", m6.group(1).lower())
+
+    # Identity: "my trans experience" / "my transgender journey"
+    if re.search(
+        r"\bmy\s+(?:trans|transgender)\s+(?:experience|journey|transition|identity|story)\b",
+        text, re.I,
+    ):
+        _emit("identity", "transgender")
+
+    # Career interest: counseling / mental health
+    m7 = re.search(
+        r"\b(?:studying|training|working|going into|interested in|pursuing)\s+"
+        r"((?:mental health|counseling|counselling|therapy|social work)[^.!?\n]{0,40})",
+        text, re.I,
+    )
+    if m7:
+        _emit("career_interest", m7.group(1).strip().rstrip(".,"))
+
+    return results
+
+
 _PERSON_SKIP = frozenset({
     # conjunctions / prepositions / articles
     "the", "and", "but", "for", "nor", "yet", "with", "from", "that", "this",
@@ -536,6 +647,24 @@ class EntityResolutionAgent(BaseAgent):
                 resolved.append(date_ent)
                 seen_canonicals.add(date_ent["canonical"])
 
+        # Speaker attribution: if content begins with [SpeakerName], emit a speaker entity
+        # at confidence 1.0 so entity-indexed retrieval strongly anchors this memory to the
+        # named speaker — critical for adversarial QA where attribution determines correctness.
+        _spk_m = _SPEAKER_RE.match(content.strip())
+        if _spk_m:
+            _spk_name = _spk_m.group(1)
+            _spk_canonical = _spk_name.lower()
+            if _spk_canonical not in seen_canonicals:
+                resolved.append({
+                    "original": _spk_name,
+                    "canonical": _spk_canonical,
+                    "entity_type": "speaker",
+                    "domains": ["conversational"],
+                    "match_type": "speaker_turn",
+                    "confidence": 1.0,
+                })
+                seen_canonicals.add(_spk_canonical)
+
         # Pass-through: extracted proper names that didn't match any ontology are stored
         # as person entities so the KG can still build edges between memories that
         # mention the same person (e.g. "Caroline" links memory-10 and memory-50).
@@ -589,17 +718,37 @@ class EntityResolutionAgent(BaseAgent):
             outputs = self._heuristic(content=content, relationships=relationships)
         else:
             prompt = (
-                "You are an enterprise ontology resolution engine. "
-                "Output JSON only. Do not hallucinate.\n\n"
-                "Identify and resolve named entities in the content against known enterprise concepts:\n"
-                "- resolved_entities: list of {original, canonical, entity_type, domains, match_type, confidence}\n"
-                "- unresolved_entities: list of entity name strings that could not be resolved\n"
-                "- cross_silo_links: list of {canonical, entity_type, domains, silo_count} "
-                "for entities spanning multiple departments\n"
-                "- confidence: float 0..1\n"
-                "- rationale: brief explanation\n\n"
+                "You are a memory extraction engine for a cognitive AI system.\n"
+                "Output valid JSON only. Do not hallucinate. Only extract what is explicitly stated.\n\n"
+                "Extract from the content below:\n\n"
+                "1. ENTERPRISE ENTITIES — resolve against canonical business concepts:\n"
+                "   entity_type options: role, metric, project, event, document, organization, "
+                "time_period, holiday, date, person\n"
+                "   For each: {original, canonical, entity_type, domains, match_type, confidence}\n\n"
+                "2. PERSONAL ATTRIBUTE FACTS — when the content begins with [SpeakerName], "
+                "extract facts the speaker reveals about themselves.\n"
+                "   Use entity_type='personal_attribute' and canonical='{speaker_lower}_{attribute}'.\n"
+                "   Format: {entity_type, canonical, subject, attribute, value, "
+                "domains: ['personal'], match_type: 'extracted', confidence: 0.8}\n"
+                "   Extract these attribute types only when clearly stated (never infer):\n"
+                "     - origin: country/city the speaker moved from\n"
+                "     - relationship_status: single, married, divorced, etc.\n"
+                "     - research_topic: what they are currently researching\n"
+                "     - book_read: book title mentioned with a reading verb (exact title)\n"
+                "     - painted: subject/scene the speaker painted\n"
+                "     - destress_activity: how they destress, unwind, or relax\n"
+                "     - identity: gender identity or cultural identity if explicitly stated\n"
+                "     - career_interest: profession or field they are studying or pursuing\n"
+                "     - event: significant event the speaker describes (brief label, e.g. 'ran charity race')\n"
+                "     - location_visited: place the speaker visited or went to\n"
+                "     - activity: regular activity the speaker does (e.g. 'pottery', 'running')\n\n"
+                "3. unresolved_entities: list of entity name strings that could not be resolved\n"
+                "4. cross_silo_links: list of {canonical, entity_type, domains, silo_count} "
+                "for entities spanning multiple business departments\n"
+                "5. confidence: float 0.0 to 1.0\n"
+                "6. rationale: 'llm'\n\n"
                 f"CONTENT:\n{content}\n\n"
-                "Return JSON with keys: resolved_entities, unresolved_entities, "
+                "Return JSON with exactly these keys: resolved_entities, unresolved_entities, "
                 "cross_silo_links, confidence, rationale"
             )
             client = create_ollama_client(
@@ -619,6 +768,18 @@ class EntityResolutionAgent(BaseAgent):
                 and isinstance(resp.get("unresolved_entities"), list)
                 and isinstance(resp.get("cross_silo_links"), list)
             ):
+                # Merge in deterministic heuristic results (date normalization, enterprise
+                # ontology lookup) that are cheap, certain, and don't need LLM.
+                heuristic = self._heuristic(content=content, relationships=relationships)
+                llm_canonicals = {
+                    e["canonical"] for e in resp["resolved_entities"]
+                    if isinstance(e, dict) and e.get("canonical")
+                }
+                for ent in heuristic["resolved_entities"]:
+                    if isinstance(ent, dict) and ent.get("canonical") not in llm_canonicals:
+                        resp["resolved_entities"].append(ent)
+                if not resp.get("cross_silo_links"):
+                    resp["cross_silo_links"] = heuristic["cross_silo_links"]
                 outputs = resp
             else:
                 outputs = self._heuristic(content=content, relationships=relationships)

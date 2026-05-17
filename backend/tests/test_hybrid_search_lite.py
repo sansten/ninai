@@ -50,9 +50,7 @@ async def test_hybrid_search_can_return_lexical_results_when_qdrant_empty(monkey
     session.add_all = MagicMock()
 
     svc = MemoryService(session=session, user_id=user_id, org_id=org_id, clearance_level=0)
-    svc.permission_checker.check_memory_access = AsyncMock(
-        return_value=SimpleNamespace(allowed=True, method="rls", reason="")
-    )
+    svc.permission_checker.filter_memory_ids_with_access = AsyncMock(return_value=["m1"])
     svc.audit_service.log_memory_access = AsyncMock()
 
     req = MemorySearchRequest(query="hello", limit=10, hybrid=True)

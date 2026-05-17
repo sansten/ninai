@@ -382,7 +382,7 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str | None = None
     ANTHROPIC_API_KEY: str | None = None
     EMBEDDING_MODEL: str = "text-embedding-3-small"
-    EMBEDDING_DIMENSIONS: int = 1536
+    EMBEDDING_DIMENSIONS: int = 768  # nomic-embed-text dimension (matches Qdrant collection)
     EMBEDDING_PROVIDER: str = "auto"
     OLLAMA_EMBEDDING_MODEL: str = "nomic-embed-text"
 
@@ -409,8 +409,13 @@ class Settings(BaseSettings):
     # -------------------------------------------------------------------------
     # Search Ranking
     # -------------------------------------------------------------------------
+    # Master toggle for heuristic retrieval behavior (query rewrites, graph expansion,
+    # heuristic rerank multipliers, temporal decay, and feedback reranking).
+    # Set to False for strict non-heuristic retrieval scoring.
+    SEARCH_HEURISTICS_ENABLED: bool = False
+
     # If enabled, downranks older memories using a half-life decay.
-    SEARCH_TEMPORAL_DECAY_ENABLED: bool = False
+    SEARCH_TEMPORAL_DECAY_ENABLED: bool = True
     # Half-life in days for ranking decay (smaller = more aggressive).
     SEARCH_TEMPORAL_DECAY_HALF_LIFE_DAYS: float = 30.0
 
@@ -425,7 +430,7 @@ class Settings(BaseSettings):
 
     # Optional feedback-driven reranking (closed-loop retrieval).
     # If enabled, recent per-user relevance feedback can boost/downrank results.
-    SEARCH_FEEDBACK_RERANK_ENABLED: bool = False
+    SEARCH_FEEDBACK_RERANK_ENABLED: bool = True
     # How far back to consider relevance feedback when reranking.
     SEARCH_FEEDBACK_RERANK_WINDOW_DAYS: float = 90.0
     # Multiplier applied to the base score for positive/negative relevance.
@@ -442,6 +447,24 @@ class Settings(BaseSettings):
     SEARCH_GRAPH_SEED_LIMIT: int = 12
     SEARCH_GRAPH_NEIGHBOR_LIMIT: int = 32
     SEARCH_MULTI_QUERY_MAX_VARIANTS: int = 4
+
+    # Core query expansion for retrieval robustness.
+    # Applies lightweight lexical rewrites before semantic search.
+    SEARCH_QUERY_EXPANSION_ENABLED: bool = True
+    SEARCH_QUERY_EXPANSION_MAX_VARIANTS: int = 3
+
+    # Auto-enable lexical leg when semantic retrieval confidence is weak.
+    SEARCH_AUTO_HYBRID_ENABLED: bool = True
+    SEARCH_AUTO_HYBRID_MIN_VECTOR_HITS: int = 4
+    SEARCH_AUTO_HYBRID_MAX_TOP_SCORE: float = 0.55
+
+    # Multi-hop decomposition for complex questions.
+    SEARCH_MULTI_HOP_SUBQUERY_ENABLED: bool = True
+    SEARCH_MULTI_HOP_MAX_SUBQUERIES: int = 3
+
+    # If vector retrieval is temporarily unavailable, allow hybrid lexical fallback
+    # instead of failing the request.
+    SEARCH_ALLOW_LEXICAL_FALLBACK_ON_VECTOR_ERROR: bool = True
 
     # -------------------------------------------------------------------------
     # Logseq Integration

@@ -93,17 +93,19 @@ class EmbeddingService:
         model = str(getattr(settings, "OLLAMA_EMBEDDING_MODEL", None) or "nomic-embed-text")
         timeout = float(getattr(settings, "OLLAMA_TIMEOUT_SECONDS", 5.0) or 5.0)
 
-        payload: dict[str, Any] = {"model": model, "prompt": text}
+        payload: dict[str, Any] = {"model": model, "input": text}
 
         async with cls._ollama_semaphore():
             async with httpx.AsyncClient(timeout=timeout) as client:
-                resp = await client.post(f"{base_url}/api/embeddings", json=payload)
+                resp = await client.post(f"{base_url}/api/embed", json=payload)
                 resp.raise_for_status()
                 data = resp.json()
 
-        emb = data.get("embedding") if isinstance(data, dict) else None
+        # /api/embed returns {"embeddings": [[...floats...]]} (Ollama ≥0.4.x)
+        raw = data.get("embeddings") if isinstance(data, dict) else None
+        emb = raw[0] if isinstance(raw, list) and raw else None
         if not isinstance(emb, list) or not emb:
-            raise ValueError("Ollama embedding response missing 'embedding' list")
+            raise ValueError("Ollama embedding response missing 'embeddings' list")
 
         # Normalize to floats.
         return [float(x) for x in emb]

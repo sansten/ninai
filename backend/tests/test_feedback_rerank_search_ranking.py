@@ -45,6 +45,7 @@ async def test_feedback_rerank_downranks_negative_feedback(monkeypatch):
     )
 
     # Enable feedback rerank, keep temporal decay out of the way.
+    monkeypatch.setattr(memory_service_module.settings, "SEARCH_HEURISTICS_ENABLED", True, raising=False)
     monkeypatch.setattr(memory_service_module.settings, "SEARCH_TEMPORAL_DECAY_ENABLED", False, raising=False)
     monkeypatch.setattr(memory_service_module.settings, "SEARCH_FEEDBACK_RERANK_ENABLED", True, raising=False)
     monkeypatch.setattr(memory_service_module.settings, "SEARCH_FEEDBACK_RERANK_NEGATIVE_MULTIPLIER", 0.1, raising=False)
@@ -100,9 +101,7 @@ async def test_feedback_rerank_downranks_negative_feedback(monkeypatch):
     session.add_all = MagicMock()
 
     svc = MemoryService(session=session, user_id=user_id, org_id=org_id, clearance_level=0)
-    svc.permission_checker.check_memory_access = AsyncMock(
-        return_value=SimpleNamespace(allowed=True, method="rls", reason="")
-    )
+    svc.permission_checker.filter_memory_ids_with_access = AsyncMock(return_value=["m_old", "m_new"])
     svc.audit_service.log_memory_access = AsyncMock()
 
     req = MemorySearchRequest(query="hello", limit=10, hybrid=False)
@@ -130,6 +129,7 @@ async def test_feedback_rerank_boosts_positive_feedback(monkeypatch):
         ),
     )
 
+    monkeypatch.setattr(memory_service_module.settings, "SEARCH_HEURISTICS_ENABLED", True, raising=False)
     monkeypatch.setattr(memory_service_module.settings, "SEARCH_TEMPORAL_DECAY_ENABLED", False, raising=False)
     monkeypatch.setattr(memory_service_module.settings, "SEARCH_FEEDBACK_RERANK_ENABLED", True, raising=False)
     monkeypatch.setattr(memory_service_module.settings, "SEARCH_FEEDBACK_RERANK_NEGATIVE_MULTIPLIER", 1.0, raising=False)
@@ -185,9 +185,7 @@ async def test_feedback_rerank_boosts_positive_feedback(monkeypatch):
     session.add_all = MagicMock()
 
     svc = MemoryService(session=session, user_id=user_id, org_id=org_id, clearance_level=0)
-    svc.permission_checker.check_memory_access = AsyncMock(
-        return_value=SimpleNamespace(allowed=True, method="rls", reason="")
-    )
+    svc.permission_checker.filter_memory_ids_with_access = AsyncMock(return_value=["m_old", "m_new"])
     svc.audit_service.log_memory_access = AsyncMock()
 
     req = MemorySearchRequest(query="hello", limit=10, hybrid=False)

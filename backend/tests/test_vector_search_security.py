@@ -42,9 +42,7 @@ async def test_search_memories_postgres_recheck_filters_missing_ids(monkeypatch)
     session.execute = _execute
 
     svc = MemoryService(session=session, user_id=user_id, org_id=org_id, clearance_level=0)
-    svc.permission_checker.check_memory_access = AsyncMock(
-        return_value=SimpleNamespace(allowed=True, method="rls", reason="")
-    )
+    svc.permission_checker.filter_memory_ids_with_access = AsyncMock(return_value=["m_allowed"])
     svc.audit_service.log_memory_access = AsyncMock()
 
     req = MemorySearchRequest(query="hello", limit=10)

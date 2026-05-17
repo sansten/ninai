@@ -256,6 +256,67 @@ async def test_search_memories_passes_use_graph_flag(client, auth_headers, test_
 
 
 @pytest.mark.asyncio
+async def test_search_memories_normalizes_comma_delimited_tags(
+    client, auth_headers, test_org_id, test_user_id, monkeypatch
+):
+    monkeypatch.setattr(memories_endpoints.EmbeddingService, "embed", AsyncMock(return_value=[0.4, 0.5, 0.6]))
+
+    captured = {"tags": None}
+
+    class StubMemoryService:
+        async def search_memories(self, query_embedding, request, request_id=None):
+            captured["tags"] = request.tags
+            return [
+                SimpleNamespace(
+                    **_memory_response_dict(
+                        memory_id="m1",
+                        org_id=test_org_id,
+                        owner_id=test_user_id,
+                        content_preview="preview",
+                    )
+                )
+            ]
+
+        def get_search_ranking_meta(self, request):
+            return {"hnms_mode_effective": "balanced"}
+
+        def get_last_search_diagnostics(self):
+            return {}
+
+    app.dependency_overrides[get_memory_service] = lambda: StubMemoryService()
+
+    resp = await client.get(
+        "/api/v1/memories/search",
+        headers=auth_headers,
+        params={"query": "find this", "tags": "locomo_001,locomo-full-abc"},
+    )
+
+    assert resp.status_code == 200, resp.text
+    assert captured["tags"] == ["locomo_001", "locomo-full-abc"]
+
+
+@pytest.mark.asyncio
+async def test_list_memories_normalizes_comma_delimited_tags(client, auth_headers):
+    captured = {"tags": None}
+
+    class StubMemoryService:
+        async def list_memories(self, scope=None, tags=None, memory_type=None, page=1, page_size=20):
+            captured["tags"] = tags
+            return [], 0, False
+
+    app.dependency_overrides[get_memory_service] = lambda: StubMemoryService()
+
+    resp = await client.get(
+        "/api/v1/memories",
+        headers=auth_headers,
+        params={"tags": "locomo_001,locomo-full-abc"},
+    )
+
+    assert resp.status_code == 200, resp.text
+    assert captured["tags"] == ["locomo_001", "locomo-full-abc"]
+
+
+@pytest.mark.asyncio
 async def test_bulk_enrich_memories_queues_tasks(client, auth_headers, monkeypatch):
     class _Scalars:
         def __init__(self, items):

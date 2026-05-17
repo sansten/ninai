@@ -39,6 +39,7 @@ async def test_temporal_decay_downranks_older_memories(monkeypatch):
         ),
     )
 
+    monkeypatch.setattr(memory_service_module.settings, "SEARCH_HEURISTICS_ENABLED", True, raising=False)
     monkeypatch.setattr(memory_service_module.settings, "SEARCH_TEMPORAL_DECAY_ENABLED", True, raising=False)
     monkeypatch.setattr(memory_service_module.settings, "SEARCH_TEMPORAL_DECAY_HALF_LIFE_DAYS", 1.0, raising=False)
 
@@ -90,9 +91,7 @@ async def test_temporal_decay_downranks_older_memories(monkeypatch):
     session.add_all = MagicMock()
 
     svc = MemoryService(session=session, user_id=user_id, org_id=org_id, clearance_level=0)
-    svc.permission_checker.check_memory_access = AsyncMock(
-        return_value=SimpleNamespace(allowed=True, method="rls", reason="")
-    )
+    svc.permission_checker.filter_memory_ids_with_access = AsyncMock(return_value=["m_old", "m_new"])
     svc.audit_service.log_memory_access = AsyncMock()
 
     req = MemorySearchRequest(query="hello", limit=10, hybrid=False)
