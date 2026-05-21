@@ -2,6 +2,34 @@
 
 All notable changes to the Ninai Python SDK are documented in this file.
 
+## 0.2.0 (2026-05-21)
+
+### Added — v2 Graph-RAG + DNC Engine support
+
+- `NinaiClient(engine_version="v1"|"v2")` — constructor-level default engine selector.
+  `"v1"` (default) keeps all existing behaviour. `"v2"` routes `memories.create()` and
+  `memories.search()` to the new Graph-RAG + DNC pipeline.
+
+- `engine_version` per-call override on `memories.create()` and `memories.search()`.
+  Takes precedence over the constructor default, enabling mixed usage within one client.
+
+- `session_id` parameter on `memories.create()` and `memories.search()` for v2 turn chaining.
+  Auto-generated (UUID4) when omitted.
+
+- `client.v2` — dedicated `V2EngineResource` with three methods:
+  - `interact(user_input, session_id, prev_utterance_id)` — full 3-phase cognitive loop
+    (dual-path retrieval → Graph-RAG inference → FalkorDB write-back + decay).
+  - `graph_inspect(entity_ids, hops, limit)` — inspect the FalkorDB knowledge graph.
+  - `health()` — verify FalkorDB + Ollama connectivity.
+
+- `V2InteractResult` model — response, `cited_node_ids`, `extracted_entities`,
+  `graph_nodes_retrieved`, `qdrant_chunks_retrieved`, `graph_writes`, `decay_stats`, `latency_ms`.
+
+- `V2GraphInspectResult`, `V2GraphNode`, `V2HealthResult` models.
+
+### Deploy
+Tag `sdk-python-v0.2.0` to publish to PyPI via the existing GitHub Actions workflow.
+
 ## 1.1.0a1 (2026-04-08)
 
 ### Changed

@@ -5,7 +5,8 @@ Ninai SDK Resources
 Resource classes for different API endpoints.
 """
 
-from typing import Optional, List, Dict, Any, TYPE_CHECKING
+import uuid
+from typing import Optional, List, Dict, Any, TYPE_CHECKING, Union
 from pathlib import Path
 from datetime import datetime
 
@@ -24,8 +25,12 @@ from ninai.models import (
     LLMCompleteJsonResponse,
     TopicReassignmentRatio,
     TopicRestructureResult,
-        ProofScorecard,
-        MonthlyImpactReport,
+    ProofScorecard,
+    MonthlyImpactReport,
+    V2InteractResult,
+    V2GraphInspectResult,
+    V2GraphNode,
+    V2HealthResult,
 )
 
 
@@ -57,6 +62,10 @@ class MemoriesResource:
     def __init__(self, client: "NinaiClient"):
         self._client = client
     
+    def _resolved_version(self, per_call: Optional[str]) -> str:
+        """Resolve the effective engine version for this call."""
+        return per_call or getattr(self._client, "engine_version", "v1")
+
     def create(
         self,
         content: str,
@@ -75,7 +84,9 @@ class MemoriesResource:
         write_actor_type: Optional[str] = None,
         write_role: Optional[str] = None,
         write_responsibility: Optional[str] = None,
-    ) -> Memory:
+        engine_version: Optional[str] = None,
+        session_id: Optional[str] = None,
+    ) -> Union[Memory, V2InteractResult]:
         """
         Create a new memory.
         
@@ -96,10 +107,23 @@ class MemoriesResource:
             write_actor_type: Writer type (employee|bot|anonymous)
             write_role: Writer role key
             write_responsibility: Writer responsibility description
+            engine_version: Override engine for this call ("v1" or "v2").
+                            Falls back to the client's constructor-level engine_version.
+            session_id: Session ID for v2 graph chaining. Auto-generated when omitted.
 
         Returns:
-            Memory: The created memory object
+            Memory when engine_version="v1" (default).
+            V2InteractResult when engine_version="v2" — runs the full 3-phase
+            Graph-RAG + DNC pipeline (ingest → entity extract → graph write-back).
         """
+        if self._resolved_version(engine_version) == "v2":
+            sid = session_id or str(uuid.uuid4())
+            response = self._client._post(
+                "/v2/interact",
+                json={"user_input": content, "session_id": sid},
+            )
+            return V2InteractResult(**response)
+
         payload = {
             "content": content,
             "scope": scope,
@@ -109,7 +133,7 @@ class MemoriesResource:
             "entities": entities or {},
             "extra_metadata": metadata or {},
         }
-        
+
         if title:
             payload["title"] = title
         # Auto-resolve scope_id from the client's organization when not provided
@@ -132,7 +156,7 @@ class MemoriesResource:
             payload["write_role"] = write_role
         if write_responsibility:
             payload["write_responsibility"] = write_responsibility
-        
+
         response = self._client._post("/memories", json=payload)
         return Memory(**response)
     
@@ -227,11 +251,14 @@ class MemoriesResource:
         limit: int = 10,
         threshold: float = 0.7,
         hybrid: bool = False,
+        use_graph: bool = False,
         read_actor_id: Optional[str] = None,
         read_actor_type: Optional[str] = None,
         read_role: Optional[str] = None,
         read_responsibility: Optional[str] = None,
-    ) -> SearchResult:
+        engine_version: Optional[str] = None,
+        session_id: Optional[str] = None,
+    ) -> Union[SearchResult, V2InteractResult]:
         """
         Search memories using semantic similarity.
         
@@ -242,19 +269,34 @@ class MemoriesResource:
             limit: Maximum number of results
             threshold: Minimum similarity score (0-1)
             hybrid: Enable hybrid lexical+vector ranking
+            use_graph: Enable knowledge graph entity/relationship traversal for multi-hop retrieval
             read_actor_id: Reader identity (employee ID, bot ID, or anonymous)
             read_actor_type: Reader type (employee|bot|anonymous)
             read_role: Reader role key
             read_responsibility: Reader responsibility description
+            engine_version: Override engine for this call ("v1" or "v2").
+                            Falls back to the client's constructor-level engine_version.
+            session_id: Session ID for v2 graph chaining. Auto-generated when omitted.
 
         Returns:
-            SearchResult: Search results with matching memories
+            SearchResult when engine_version="v1" (default).
+            V2InteractResult when engine_version="v2" — runs the full 3-phase
+            Graph-RAG + DNC retrieval pipeline and returns a grounded response
+            with cited_node_ids and the graph nodes that informed the answer.
         """
+        if self._resolved_version(engine_version) == "v2":
+            sid = session_id or str(uuid.uuid4())
+            response = self._client._post(
+                "/v2/interact",
+                json={"user_input": query, "session_id": sid},
+            )
+            return V2InteractResult(**response)
+
         params = {
             "query": query,
             "limit": limit,
         }
-        
+
         if scope:
             params["scope"] = scope
         if tags:
@@ -263,6 +305,8 @@ class MemoriesResource:
             params["score_threshold"] = threshold
         if hybrid:
             params["hybrid"] = True
+        if use_graph:
+            params["use_graph"] = True
         if read_actor_id:
             params["read_actor_id"] = read_actor_id
         if read_actor_type:
@@ -1458,3 +1502,123 @@ class CognitiveGatewayResource:
             Dict with full context session state.
         """
         return self._client._get(f"/cognitive/gateway/context/{context_id}")
+
+
+class V2EngineResource:
+    """
+    Direct access to the v2 Graph-RAG + DNC cognitive architecture.
+
+    Available at ``client.v2`` regardless of the client's default engine_version.
+    Use this when you want explicit v2 control without changing the client default.
+
+    Architecture:
+        Component A — Ollama reasoning engine (stateless LLM)
+        Component B — FalkorDB chronological knowledge graph (hippocampus)
+        Component C — DNC memory router (read/write/purge weighting)
+
+    Three-phase loop per call:
+        Phase 1 (Read)  — dual-path retrieval: Qdrant dense + FalkorDB subgraph
+        Phase 2 (Infer) — Graph-RAG prompt → Ollama → response + cited_node_ids
+        Phase 3 (Learn) — graph write-back, edge reinforcement, decay, pruning
+
+    Usage::
+
+        # Single conversational turn (ingest + retrieve in one call)
+        result = client.v2.interact(
+            user_input="What is the Q4 deadline for Project Alpha?",
+            session_id="sess-abc",
+        )
+        print(result.response)
+        print(result.cited_node_ids)
+
+        # Multi-turn session (chain utterances chronologically in the graph)
+        r1 = client.v2.interact("Project Alpha starts Monday", session_id="sess-1")
+        r2 = client.v2.interact(
+            "When does it finish?",
+            session_id="sess-1",
+            prev_utterance_id=r1.assistant_utterance_id,
+        )
+
+        # Inspect the knowledge graph around specific entities
+        graph = client.v2.graph_inspect(entity_ids=["project_alpha"], hops=2)
+        for node in graph.nodes:
+            print(f"{node.label} {node.id}: {node.content} (w={node.weight:.2f})")
+
+        # Check v2 component health
+        health = client.v2.health()
+        print(health.graph_available, health.ollama_available)
+    """
+
+    def __init__(self, client: "NinaiClient") -> None:
+        self._client = client
+
+    def interact(
+        self,
+        user_input: str,
+        session_id: Optional[str] = None,
+        prev_utterance_id: Optional[str] = None,
+        tenant_id: Optional[str] = None,
+    ) -> V2InteractResult:
+        """
+        Run one full cognitive turn through the v2 pipeline.
+
+        Combines ingest (Phase 3 write-back) and retrieval (Phase 1 read) in a
+        single call — the model reads the graph before responding and writes the
+        interaction back after.
+
+        Args:
+            user_input: The user's message or content to ingest.
+            session_id: Conversation session ID. Auto-generated if omitted.
+            prev_utterance_id: Explicit previous utterance id for turn chaining.
+                               Inferred from session state on the server when omitted.
+            tenant_id: Tenant override. Defaults to the authenticated org.
+
+        Returns:
+            V2InteractResult with response, cited_node_ids, extracted_entities,
+            graph write stats, and decay stats.
+        """
+        sid = session_id or str(uuid.uuid4())
+        payload: Dict[str, Any] = {
+            "user_input": user_input,
+            "session_id": sid,
+        }
+        if prev_utterance_id:
+            payload["prev_utterance_id"] = prev_utterance_id
+        if tenant_id:
+            payload["tenant_id"] = tenant_id
+        response = self._client._post("/v2/interact", json=payload)
+        return V2InteractResult(**response)
+
+    def graph_inspect(
+        self,
+        entity_ids: List[str],
+        hops: int = 2,
+        limit: int = 30,
+        tenant_id: Optional[str] = None,
+    ) -> V2GraphInspectResult:
+        """
+        Return the FalkorDB subgraph around the given entity seed ids.
+
+        Args:
+            entity_ids: List of entity ids to use as traversal seeds.
+            hops: Traversal depth (1–4). Default 2.
+            limit: Maximum nodes to return. Default 30.
+            tenant_id: Tenant override.
+
+        Returns:
+            V2GraphInspectResult with nodes sorted by weight.
+        """
+        payload: Dict[str, Any] = {
+            "entity_ids": entity_ids,
+            "hops": hops,
+            "limit": limit,
+        }
+        if tenant_id:
+            payload["tenant_id"] = tenant_id
+        response = self._client._post("/v2/graph/inspect", json=payload)
+        return V2GraphInspectResult(**response)
+
+    def health(self) -> V2HealthResult:
+        """Check v2 component health (FalkorDB + Ollama connectivity)."""
+        response = self._client._get("/v2/health")
+        return V2HealthResult(**response)

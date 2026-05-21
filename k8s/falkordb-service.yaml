@@ -1,0 +1,22 @@
+# FalkorDB ClusterIP Service
+# Internal DNS: falkordb-service.default.svc.cluster.local:6379
+# Set GRAPH_REDIS_URL=redis://falkordb-service:6379/0 in ninai-config ConfigMap.
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: falkordb-service
+  namespace: ninai-enterprise
+  labels:
+    app: ninai
+    component: falkordb
+spec:
+  type: ClusterIP
+  selector:
+    app: ninai
+    component: falkordb
+  ports:
+  - name: redis
+    port: 6379
+    targetPort: 6379
+    protocol: TCP

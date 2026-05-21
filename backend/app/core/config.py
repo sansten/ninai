@@ -211,6 +211,13 @@ class Settings(BaseSettings):
     # Falls back to REDIS_URL when not provided.
     GRAPH_REDIS_URL: str | None = None
 
+    # -------------------------------------------------------------------------
+    # Engine Version Gate
+    # -------------------------------------------------------------------------
+    # "v1" — legacy multi-agent architecture (all 80 phases, existing routes)
+    # "v2" — Graph-RAG + DNC architecture (FalkorDB KG + Qdrant episodic + Ollama)
+    NINAI_ENGINE_VERSION: str = "v1"
+
     # When True, graph edges are created immediately after each memory write
     # via graph_realtime_sync_task fired at the end of graph_linking_task.
     # Nightly graph_population still runs as a full-org reconciliation pass.
@@ -465,6 +472,19 @@ class Settings(BaseSettings):
     # If vector retrieval is temporarily unavailable, allow hybrid lexical fallback
     # instead of failing the request.
     SEARCH_ALLOW_LEXICAL_FALLBACK_ON_VECTOR_ERROR: bool = True
+    # Keep read-time query embedding on a short leash so /memories/search
+    # fails open to lexical-capable retrieval instead of stalling on a cold
+    # or unavailable embedding backend.
+    SEARCH_QUERY_EMBED_TIMEOUT_SECONDS: float = 5.0
+    # Bound the main retrieval leg so failed search requests degrade quickly
+    # into deterministic fallbacks instead of holding open notebook probes.
+    SEARCH_EXECUTION_TIMEOUT_SECONDS: float = 8.0
+    # Prefer a fast deterministic lexical pass before semantic retrieval on
+    # interactive reads so the system can answer even when embedding/model
+    # backends are overloaded.
+    SEARCH_DETERMINISTIC_FIRST_ENABLED: bool = True
+    SEARCH_DETERMINISTIC_FIRST_TIMEOUT_SECONDS: float = 1.5
+    SEARCH_DETERMINISTIC_FIRST_MIN_RESULTS: int = 3
 
     # -------------------------------------------------------------------------
     # Logseq Integration

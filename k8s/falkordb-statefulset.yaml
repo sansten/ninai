@@ -1,0 +1,77 @@
+# FalkorDB — Chronological Knowledge Graph store for NINAI v2
+#
+# FalkorDB is a Redis-compatible property graph database.
+# It cannot run as a Memorystore module, so it runs as its own StatefulSet.
+# The NINAI backend reaches it via GRAPH_REDIS_URL=redis://falkordb-service:6379/0
+#
+# Deploy:
+#   kubectl apply -f k8s/falkordb-statefulset.yaml
+#
+# Verify:
+#   kubectl exec -it falkordb-0 -- redis-cli GRAPH.QUERY ninai_v2_demo "RETURN 1"
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: falkordb
+  namespace: ninai-enterprise
+  labels:
+    app: ninai
+    component: falkordb
+spec:
+  serviceName: falkordb-service
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ninai
+      component: falkordb
+  template:
+    metadata:
+      labels:
+        app: ninai
+        component: falkordb
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        fsGroup: 999
+      containers:
+      - name: falkordb
+        image: falkordb/falkordb:latest
+        ports:
+        - containerPort: 6379
+          name: redis
+        resources:
+          requests:
+            cpu: "500m"
+            memory: "1Gi"
+          limits:
+            cpu: "2"
+            memory: "4Gi"
+        volumeMounts:
+        - name: falkordb-data
+          mountPath: /data
+        env:
+        # Persist graph data across pod restarts
+        - name: REDIS_ARGS
+          value: "--save 60 1 --appendonly yes --appendfsync everysec"
+        livenessProbe:
+          exec:
+            command: ["redis-cli", "ping"]
+          initialDelaySeconds: 15
+          periodSeconds: 20
+          failureThreshold: 3
+        readinessProbe:
+          exec:
+            command: ["redis-cli", "ping"]
+          initialDelaySeconds: 5
+          periodSeconds: 10
+  volumeClaimTemplates:
+  - metadata:
+      name: falkordb-data
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      storageClassName: standard-rwo   # GKE standard SSD; use premium-rwo for faster I/O
+      resources:
+        requests:
+          storage: 10Gi

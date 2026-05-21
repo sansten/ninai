@@ -249,3 +249,46 @@ class MonthlyImpactReport(BaseModel):
     net_impact: float
     roi_pct: float
     reproducibility_hash: str
+
+
+class V2InteractResult(BaseModel):
+    """
+    Response from the v2 Graph-RAG + DNC cognitive loop.
+
+    Returned by client.memories.create() / .search() when engine_version="v2",
+    and by client.v2.interact() directly.
+    """
+
+    response: str = ""
+    session_id: str = ""
+    user_utterance_id: str = ""
+    assistant_utterance_id: str = ""
+    cited_node_ids: List[str] = Field(default_factory=list)
+    extracted_entities: List[Dict[str, Any]] = Field(default_factory=list)
+    graph_nodes_retrieved: int = 0
+    qdrant_chunks_retrieved: int = 0
+    graph_writes: int = 0
+    decay_stats: Dict[str, int] = Field(default_factory=dict)
+    latency_ms: int = 0
+    error: str = ""
+
+
+class V2GraphNode(BaseModel):
+    id: str = ""
+    label: str = ""
+    content: str = ""
+    weight: float = 0.0
+    created_at: int = 0
+
+
+class V2GraphInspectResult(BaseModel):
+    nodes: List[V2GraphNode] = Field(default_factory=list)
+    seed_count: int = 0
+    tenant_id: str = ""
+
+
+class V2HealthResult(BaseModel):
+    engine_version: str = "v2"
+    graph_available: bool = False
+    ollama_available: bool = False
+    message: str = ""

@@ -59,3 +59,19 @@ jobs:
           name: openapi-spec-${{ github.sha }}
           path: backend/openapi.json
           retention-days: 90
+
+  test-sdk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install SDK dependencies
+        working-directory: sdk/python
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+      - name: Run SDK tests (v1 + v2 engine_version)
+        working-directory: sdk/python
+        run: python -m pytest tests/ -q

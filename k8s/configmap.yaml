@@ -2,6 +2,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: ninai-config
+  namespace: ninai-enterprise
   labels:
     app: ninai
 data:
@@ -16,7 +17,14 @@ data:
   
   # Redis settings
   REDIS_URL: "redis://redis-service:6379/0"
-  
+
+  # FalkorDB — chronological knowledge graph (NINAI v2)
+  # Separate from Memorystore Redis; runs as a StatefulSet (falkordb-statefulset.yaml)
+  GRAPH_REDIS_URL: "redis://falkordb-service:6379/0"
+
+  # Engine version gate: "v1" = legacy multi-agent, "v2" = Graph-RAG + DNC
+  NINAI_ENGINE_VERSION: "v2"
+
   # Vector database settings
   QDRANT_HOST: "qdrant-service"
   QDRANT_PORT: "6333"
