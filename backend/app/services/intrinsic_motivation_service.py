@@ -124,7 +124,7 @@ class IntrinsicMotivationService:
                 "status": "proposed",
                 "created_at": datetime.utcnow(),
                 "metadata": {
-                    "gap_id": str(gap["id"]),
+                    "gap_id": str(gap.get("id") or ""),
                     "original_gap_type": gap["gap_type"],
                     "suggested_approach": gap.get("suggested_learning_approach"),
                 },

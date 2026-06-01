@@ -79,7 +79,10 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
         try:
             yield session
         except Exception:
-            await session.rollback()
+            try:
+                await session.rollback()
+            except Exception:
+                pass
             raise
         finally:
             await session.close()
@@ -142,7 +145,10 @@ async def get_tenant_session(
                 yield session
                 await session.commit()
             except Exception:
-                await session.rollback()
+                try:
+                    await session.rollback()
+                except Exception:
+                    pass
                 raise
 
 

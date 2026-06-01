@@ -186,7 +186,7 @@ def create_application() -> FastAPI:
 
     # V2 Graph-RAG + DNC routes — mounted when NINAI_ENGINE_VERSION=v2
     import os as _os
-    _engine = _os.environ.get("NINAI_ENGINE_VERSION") or getattr(settings, "NINAI_ENGINE_VERSION", "v1")
+    _engine = _os.environ.get("NINAI_ENGINE_VERSION") or getattr(settings, "NINAI_ENGINE_VERSION", "v2")
     if _engine == "v2":
         from app.v2.api.v2_router import v2_router
         app.include_router(v2_router, prefix=settings.API_PREFIX)

@@ -41,7 +41,6 @@ from ninai.resources import (
     CompositionResource,
     ProofResource,
     CognitiveGatewayResource,
-    V2EngineResource,
 )
 from ninai.agents import GoalPlannerAgent, GoalLinkingAgent, MetaAgent
 from ninai.models import AuthTokens, User
@@ -90,27 +89,20 @@ class NinaiClient:
         base_url: Optional[str] = None,
         organization_id: Optional[str] = None,
         timeout: float = 30.0,
-        engine_version: str = "v1",
     ):
         """
         Initialize the Ninai client.
-
+        
         Args:
             api_key: Ninai API key (starts with 'nai_')
             access_token: JWT access token (if already authenticated)
             base_url: API base URL (default: https://admin.ninai.sansten.com/api/v1)
             organization_id: Organization ID for multi-tenant requests
             timeout: Request timeout in seconds
-            engine_version: Default cognitive engine for all calls ("v1" or "v2").
-                "v1" — legacy multi-agent architecture (default, backward-compatible).
-                "v2" — Graph-RAG + DNC architecture (FalkorDB KG + Qdrant + Ollama).
-                Can be overridden per-call via the engine_version parameter on
-                memories.create() / memories.search(), or use client.v2 directly.
         """
         self.base_url = base_url or os.getenv("NINAI_API_URL", self.DEFAULT_BASE_URL)
         self.api_key = api_key or os.getenv("NINAI_API_KEY")
         self.organization_id = organization_id or os.getenv("NINAI_ORGANIZATION_ID")
-        self.engine_version: str = engine_version
         
         self._access_token = access_token
         self._refresh_token: Optional[str] = None
@@ -141,7 +133,6 @@ class NinaiClient:
         self.compliance = ComplianceResource(self)   # Phase 46: GDPR Compliance
         self.proof = ProofResource(self)             # Phase 54: Proof scorecard + ROI
         self.cognitive = type('CognitiveGateway', (), {'gateway': CognitiveGatewayResource(self)})()
-        self.v2 = V2EngineResource(self)             # v2 Graph-RAG + DNC engine (direct access)
 
         # Typed agent helpers
         self._goal_planner_agent: GoalPlannerAgent | None = None

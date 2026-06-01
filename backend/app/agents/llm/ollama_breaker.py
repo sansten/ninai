@@ -150,11 +150,27 @@ def create_ollama_client(
     explicit_base_url = str(base_url or "").strip()
     primary_base_url = explicit_base_url or cpu_base_url or "http://localhost:11434"
 
-    secondary_base_url = gpu_base_url or None
-    if secondary_base_url and secondary_base_url.rstrip("/") == primary_base_url.rstrip("/"):
-        secondary_base_url = None
+    secondary_candidates = [gpu_base_url, cpu_base_url]
+    secondary_base_url = None
+    for candidate in secondary_candidates:
+        candidate = str(candidate or "").strip()
+        if not candidate:
+            continue
+        if candidate.rstrip("/") == primary_base_url.rstrip("/"):
+            continue
+        secondary_base_url = candidate
+        break
 
     resolved_token = auth_token or getattr(settings, "OLLAMA_AUTH_TOKEN", None) or None
+    fallback_models = [
+        str(candidate).strip()
+        for candidate in (
+            settings.get_ollama_model("agents"),
+            settings.get_ollama_model(),
+            getattr(settings, "OLLAMA_MODEL_FAST", None),
+        )
+        if str(candidate or "").strip()
+    ]
 
     client = BaseOllamaClient(
         base_url=primary_base_url,
@@ -165,6 +181,7 @@ def create_ollama_client(
         secondary_base_url=secondary_base_url,
         overflow_enabled=overflow_enabled,
         overflow_primary_max_inflight=overflow_primary_max_inflight,
+        fallback_models=fallback_models,
     )
 
     if use_circuit_breaker:
@@ -177,6 +194,7 @@ def create_ollama_client(
             secondary_base_url=secondary_base_url,
             overflow_enabled=overflow_enabled,
             overflow_primary_max_inflight=overflow_primary_max_inflight,
+            fallback_models=fallback_models,
         )
 
     return client

@@ -383,6 +383,96 @@ class TestV2CognitiveLoop:
 
 
 # ---------------------------------------------------------------------------
+# Entity extraction — bench21+ patterns
+# ---------------------------------------------------------------------------
+
+class TestEntityExtractionBench21:
+    """Unit tests for new entity extraction patterns added in bench21+."""
+
+    def _run(self, text: str, speaker: str = "Alice") -> list[dict]:
+        from app.v2.memory.entity_extraction import extract_v2_entities
+        full = f"[2023-05-25] [{speaker}] {text}"
+        return extract_v2_entities(full)
+
+    def _attrs(self, entities: list[dict]) -> dict[str, str]:
+        return {e["attribute"]: e["value"] for e in entities if e.get("type") == "personal_attribute"}
+
+    def test_multiple_snake_names(self):
+        ents = self._run("My snakes are named Susie and Seraphim.", "Deborah")
+        attrs = self._attrs(ents)
+        assert "pet_snake_names" in attrs
+        assert "Susie" in attrs["pet_snake_names"]
+        assert "Seraphim" in attrs["pet_snake_names"]
+
+    def test_book_by_author(self):
+        ents = self._run("I recently read Avalanche by Neal Stephenson.", "Deborah")
+        attrs = self._attrs(ents)
+        assert "book_read" in attrs
+        assert "Avalanche" in attrs["book_read"]
+
+    def test_got_into_hobby(self):
+        ents = self._run("I got into watercolor painting after a friend suggested it.", "Sam")
+        attrs = self._attrs(ents)
+        assert "hobby" in attrs or "hobby_introduced_by_friend" in attrs
+
+    def test_friend_suggested_hobby(self):
+        ents = self._run("A friend suggested watercolor painting and I loved it.", "Sam")
+        attrs = self._attrs(ents)
+        assert any("watercolor" in str(v) for v in attrs.values())
+
+    def test_vehicle_prius(self):
+        ents = self._run("I got a new Prius after my old one broke down.", "Sam")
+        attrs = self._attrs(ents)
+        assert "vehicle" in attrs
+        assert "Prius" in attrs["vehicle"]
+
+    def test_vehicle_ferrari(self):
+        ents = self._run("I bought a Ferrari 488 GTB in March 2023.", "Calvin")
+        attrs = self._attrs(ents)
+        assert "vehicle" in attrs
+        assert "Ferrari" in attrs["vehicle"]
+
+    def test_programming_languages_direct(self):
+        ents = self._run("I work with Python and C++ in my projects.", "James")
+        attrs = self._attrs(ents)
+        assert "programming_languages" in attrs
+        val = attrs["programming_languages"]
+        assert "Python" in val and "C++" in val
+
+    def test_book_read_quoted(self):
+        ents = self._run('I finished reading "Sapiens" last week.', "Deborah")
+        attrs = self._attrs(ents)
+        assert "book_read" in attrs
+        assert "Sapiens" in attrs["book_read"]
+
+    def test_sports_team_signed(self):
+        ents = self._run("I just signed with the Minnesota Wolves as a shooting guard!", "John")
+        attrs = self._attrs(ents)
+        assert "sports_team" in attrs
+        assert "Minnesota Wolves" in attrs["sports_team"]
+        assert "sports_position" in attrs
+        assert "shooting guard" in attrs["sports_position"]
+
+    def test_tattoo_of(self):
+        ents = self._run("I have a tattoo of sunflowers on my arm.", "Andrew")
+        attrs = self._attrs(ents)
+        assert "tattoo" in attrs
+        assert "sunflower" in attrs["tattoo"].lower()
+
+    def test_musical_instrument(self):
+        ents = self._run("I started playing drums again after years away.", "John")
+        attrs = self._attrs(ents)
+        assert "instrument" in attrs
+        assert "drum" in attrs["instrument"].lower()
+
+    def test_pet_adoption(self):
+        ents = self._run("I adopted a puppy last month.", "John")
+        attrs = self._attrs(ents)
+        assert "has_pet" in attrs
+        assert attrs["has_pet"] == "dog"
+
+
+# ---------------------------------------------------------------------------
 # Config gate
 # ---------------------------------------------------------------------------
 

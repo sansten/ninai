@@ -14,10 +14,25 @@ class V2InteractRequest(BaseModel):
         default=None,
         description="Override tenant; defaults to the authenticated org's tenant_id",
     )
+    disable_write: bool = Field(
+        default=False,
+        description="When true, skip Phase 3 write-back so evaluation does not mutate memory.",
+    )
+    ingest_only: bool = Field(
+        default=False,
+        description="When true, skip LLM inference (Phase 2) and only run write-back (Phase 3). "
+                    "Populates both Qdrant and FalkorDB without paying LLM latency per turn.",
+    )
     prev_utterance_id: str | None = Field(
         default=None,
         description="Explicit previous utterance id for turn chaining; "
                     "inferred from session if omitted",
+    )
+    model_hint: str | None = Field(
+        default=None,
+        description="Override the inference model for this request only "
+                    "(e.g. 'qwen2.5:7b' for fast SLM, 'qwen2.5:32b' for deep reasoning). "
+                    "Falls back to the server-configured OLLAMA_MODEL when omitted.",
     )
 
 

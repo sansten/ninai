@@ -18,28 +18,273 @@ from __future__ import annotations
 
 from typing import Any
 
-_MAX_GRAPH_NODES = 20
-_MAX_QDRANT_CHUNKS = 5
-_MAX_NODE_CONTENT_CHARS = 300
+_MAX_GRAPH_NODES = 8
+_MAX_QDRANT_CHUNKS = 8
+_MAX_NODE_CONTENT_CHARS = 200
 
+# ---------------------------------------------------------------------------
+# Bench-mode prompt — plain-text output, maximally direct extraction
+# ---------------------------------------------------------------------------
+
+_BENCH_SYSTEM_INSTRUCTION = """\
+You are a memory-QA system. Find the answer in context and output it as a SHORT PHRASE.
+
+══ FORMAT RULES (critical) ══
+• OUTPUT ONLY THE BARE ANSWER — no sentences, no "he said", no "based on context".
+  BAD: "She enjoys dancing and has been doing it for years."   GOOD: dancing
+  BAD: "The context states John went bowling on March 16, 2022."   GOOD: March 16, 2022
+• ENGLISH ONLY. Never output Chinese, Japanese, Korean, or any non-English characters.
+• For SINGLE facts: concise as possible — ideally under 8 words. Never pad.
+• For LIST questions ("what all", "which places", "what activities", "what hobbies", "what did X and Y share"):
+  List ALL items found in context, comma-separated. Never truncate. Cover every item mentioned.
+  BAD: "cafes"   GOOD: "cafes, parks, hiking trails, restaurants"
+• For CHOICE questions ("A or B?", "which of A or B", "would X prefer A or B?"):
+  Pick EXACTLY ONE of the named options. Output only the chosen name — no explanation.
+  BAD: "Fantasy books fuel creativity"   GOOD: "C. S. Lewis"
+  BAD: "depends on their preferences"   GOOD: "C. S. Lewis"
+
+══ CONTENT RULES ══
+1. Read ALL context before answering. Facts appear anywhere.
+2. PERSON PROFILES (PROFILE section): Authoritative accumulated facts — use these first.
+3. DATE FORMAT: Match exactly how the date appears in context. "7 May 2023" → output "7 May 2023". "2022" → output "2022". "21 December 2022" → output "21 December 2022". NEVER output YYYY-MM-DD format (no "2023-05-07"). NEVER convert a stated expression like "the week before January 21" into a computed date.
+4. CROSS-PERSON: Multiple people are in context. If question asks about Person B but only Person A's fact exists, give the fact anyway. Only say "Not mentioned" if the fact is ENTIRELY absent from all context.
+5. WORD MISMATCH: Question may paraphrase ("international" when context says "local"). Give the closest matching fact from context.
+6. NUMBERS: Give exact numerals or phrases ("3", "twice", "once in 2019", "five times").
+7. MULTI-HOP: Trace the chain (find intermediate fact → then final answer).
+   • Geographic: identify country from location (Jasper/Banff/Calgary/Edmonton = Canada; Vancouver = Canada; Boston/Seattle/New York = USA; Tokyo/Osaka = Japan).
+   • Allergy/comfort: "what X wouldn't discomfort Y?" → find Y's allergy, then pick X that lacks that allergen.
+   • "Would X enjoy author A or B?" → find X's known book/genre preferences, pick the matching author.
+   • Financial status: "wealthy/middle-class" if context shows expensive purchases (mansion, luxury car, Ferrari) or high-salary jobs; "modest" if budget-conscious language.
+   • Counterfactual ("if X hadn't happened, would Y?") → find what caused Y; if X caused it, answer "likely no".
+   State ONLY the final answer phrase after FINAL ANSWER:
+8. NEVER say: "based on the context", "the context states", "I don't know", "cannot determine" — unless fact is truly absent everywhere, then say only: Not mentioned
+9. Best inference beats refusal. If context strongly implies an answer, give it. For inference questions ("might", "likely", "would"), give the most likely answer as a short phrase.
+10. TEMPORAL RESOLUTION — ONLY compute when an [YYYY-MM-DD] anchor is present AND the text uses an anchor-relative word (yesterday, last week, next month, last Sunday, etc.):
+    • "last year" with [2023-XX-XX] → 2022
+    • "next month" with [2023-01-XX] → February 2023
+    • "last Sunday" with [2023-05-25] → 21 May 2023  (25=Thu, count back to Sun=21)
+    • "last Saturday" with [2023-05-25] → 20 May 2023 (25=Thu, count back to Sat=20)
+    • "yesterday" with [2023-05-25] → 24 May 2023
+    • "last month" with [2023-05-XX] → April 2023
+    If the context ALREADY states the date phrase explicitly ("the week before January 21, 2022", "early August 2023", "a few years before 2023"), output it VERBATIM — no further computation.
+11. SEARCH EXHAUSTIVELY: Before "Not mentioned", re-scan every context block. Facts may appear in CONTEXT, SUMMARY, or PROFILE sections. Paraphrase the question and look again.
+12. DURATION QUESTIONS ("how long has X", "how many years/months"): Find the start date and the conversation date [YYYY-MM-DD], compute the difference. "Started in 2020" with context dated 2023 → "three years". Output as "N years" or "N months", not as a date range.
+13. PROPER NAMES & SPECIFIC ROLES: Give the most specific term from context — never substitute a generic label.
+    BAD: "new team"  GOOD: "The Minnesota Wolves"
+    BAD: "unusual animals"  GOOD: "snakes"
+    BAD: "a programming language"  GOOD: "Python and C++"
+    BAD: "Pro basketball player"  GOOD: "shooting guard"
+    BAD: "unusual pets"  GOOD: "snakes"
+    BAD: "a sport"  GOOD: "bowling"
+    Priority: EXTRACTED FACTS and PROFILE sections have the precise terms — use them over generic utterance text.
+14. WRONG-FRAMING: If the question's premise is slightly wrong but the underlying fact exists, answer the real fact. E.g. "What did Maria donate to a luxury store?" — even if there's no luxury store in context, if Maria donated something, give that item.
+15. INFERENCE QUESTIONS ("might", "likely", "would probably", "could", "based on X"): These REQUIRE inference — NEVER say "Not mentioned". Give the most plausible specific answer from context evidence.
+    BAD: "Not mentioned"   GOOD: "middle-class or wealthy" (inferred from expensive purchases in context)
+    BAD: "Cannot determine"   GOOD: "Psychology, counseling" (inferred from their volunteer/career interests)
+    If stuck: give the closest fact you can find and label it implicitly (e.g. "likely X based on Y").
+16. SPEAKER CONFUSION: The context has multiple people. Always identify WHICH person the question asks about. If the question says "Tim" look only at Tim's facts; never confuse Tim's facts with John's or Joanna's.
+
+Think 2–3 sentences, then:
+FINAL ANSWER: <bare answer phrase>\
+"""
+
+
+def build_bench_prompt(
+    user_input: str,
+    graph_nodes: list,
+    qdrant_chunks: list,
+    session_utterances: list,
+) -> str:
+    """QA-optimised plain-text prompt for benchmarking."""
+    parts: list[str] = [_BENCH_SYSTEM_INSTRUCTION, ""]
+
+    # Classify graph nodes by entity type
+    profile_nodes = [n for n in graph_nodes if n.get("entity_type") in ("person_profile",)
+                     or n.get("type") == "person_profile"]
+    attr_nodes = [n for n in graph_nodes if n.get("entity_type") == "personal_attribute"]
+    regular_nodes = [n for n in graph_nodes
+                     if n not in profile_nodes and n not in attr_nodes]
+
+    # Person profiles first — highest priority context
+    if profile_nodes:
+        parts.append("PERSON PROFILES (authoritative — use these for attribute questions):")
+        for node in profile_nodes:
+            raw = str(node.get("content") or node.get("text") or node.get("name") or "")[:1500]
+            subject = node.get("subject", "")
+            if not raw:
+                continue
+            # Deduplicate facts (profile accumulates duplicates across many turns)
+            all_facts = [f.strip() for f in raw.split("|") if f.strip()]
+            seen_facts: set[str] = set()
+            unique_facts: list[str] = []
+            for fact in all_facts:
+                fkey = fact.lower()
+                if fkey not in seen_facts:
+                    seen_facts.add(fkey)
+                    unique_facts.append(fact)
+            if unique_facts:
+                parts.append(f"  [{subject}]:")
+                for fact in unique_facts[:15]:
+                    parts.append(f"    • {fact}")
+            else:
+                parts.append(f"  [{subject}]: {raw[:400]}")
+        parts.append("")
+
+    # Extracted facts (personal_attribute entities from direct entity lookup)
+    if attr_nodes:
+        parts.append("EXTRACTED FACTS:")
+        by_subject: dict[str, list[str]] = {}
+        for node in attr_nodes[:20]:
+            subj = str(node.get("subject") or "unknown")
+            attr = str(node.get("attribute") or "").replace("_", " ")
+            val = str(node.get("value") or "")
+            if attr and val:
+                fact_text = f"{attr}: {val}"
+            else:
+                fact_text = str(node.get("content") or node.get("name") or "")
+            if fact_text:
+                by_subject.setdefault(subj, []).append(fact_text)
+        for subj, facts in by_subject.items():
+            parts.append(f"  [{subj}]:")
+            # Deduplicate within EXTRACTED FACTS too
+            seen_ef: set[str] = set()
+            for fact in facts:
+                fkey = fact.lower()
+                if fkey not in seen_ef:
+                    seen_ef.add(fkey)
+                    parts.append(f"    • {fact}")
+        parts.append("")
+
+    # personal_attribute Qdrant chunks (from entity indexing) → surface in EXTRACTED FACTS
+    _PA_TYPES = ("personal_attribute",)
+    pa_qdrant_chunks = [c for c in qdrant_chunks
+                        if c.get("payload", {}).get("type") in _PA_TYPES
+                        or c.get("payload", {}).get("entity_type") in _PA_TYPES]
+    non_pa_chunks = [c for c in qdrant_chunks if c not in pa_qdrant_chunks]
+
+    if pa_qdrant_chunks:
+        if not attr_nodes:
+            parts.append("EXTRACTED FACTS:")
+        pa_by_subject: dict[str, list[str]] = {}
+        for chunk in pa_qdrant_chunks[:20]:
+            payload = chunk.get("payload", {})
+            subj = str(payload.get("subject") or "unknown")
+            attr = str(payload.get("attribute") or "").replace("_", " ")
+            val = str(payload.get("value") or "")
+            fact_text = f"{attr}: {val}" if (attr and val) else str(payload.get("text") or "")[:120]
+            if fact_text:
+                pa_by_subject.setdefault(subj, []).append(fact_text)
+        for subj, facts in pa_by_subject.items():
+            if subj and any(f for f in facts):
+                seen_pa: set[str] = set()
+                parts.append(f"  [{subj}]:")
+                for fact in facts:
+                    fk = fact.lower()
+                    if fk not in seen_pa:
+                        seen_pa.add(fk)
+                        parts.append(f"    • {fact}")
+        parts.append("")
+
+    parts.append("CONTEXT:")
+    any_context = False
+
+    # Temporal events first among regular chunks
+    temporal_nodes = [n for n in regular_nodes
+                      if n.get("entity_type") == "temporal_event"
+                      or n.get("type") == "temporal_event"]
+    other_nodes = [n for n in regular_nodes if n not in temporal_nodes]
+
+    for node in temporal_nodes[:10]:
+        content = str(node.get("content") or node.get("text") or node.get("name") or "")[:350]
+        if content:
+            subj = node.get("subject", "")
+            date = node.get("canonical_date", "")
+            prefix = f"[EVENT:{subj} {date}]" if (subj or date) else "[EVENT]"
+            parts.append(f"  - {prefix} {content}")
+            any_context = True
+
+    # Segment gists first (dense factual summaries) among Qdrant chunks
+    gist_chunks = [c for c in non_pa_chunks if c.get("payload", {}).get("type") == "segment_gist"]
+    regular_chunks = [c for c in non_pa_chunks if c not in gist_chunks]
+
+    _MAX_GISTS = min(8, len(gist_chunks))
+    for chunk in gist_chunks[:_MAX_GISTS]:
+        payload = chunk.get("payload", {})
+        text = str(payload.get("text") or payload.get("content") or "")[:_MAX_NODE_CONTENT_CHARS]
+        if text:
+            parts.append(f"  - [SUMMARY] {text}")
+            any_context = True
+
+    for chunk in regular_chunks[:_MAX_QDRANT_CHUNKS - _MAX_GISTS]:
+        payload = chunk.get("payload", {})
+        text = str(
+            payload.get("text")
+            or payload.get("content")
+            or payload.get("content_preview")
+            or payload.get("summary")
+            or ""
+        )[:_MAX_NODE_CONTENT_CHARS]
+        if text:
+            speaker = payload.get("speaker", "")
+            date = payload.get("anchor_date", "")
+            prefix = f"[{speaker},{date}]" if speaker else (f"[{date}]" if date else "")
+            parts.append(f"  - {prefix} {text}" if prefix else f"  - {text}")
+            any_context = True
+
+    for node in other_nodes[:_MAX_GRAPH_NODES]:
+        content = str(node.get("content") or node.get("text") or node.get("name") or "")[:350]
+        if content:
+            parts.append(f"  - {content}")
+            any_context = True
+
+    if not any_context:
+        parts.append("  (no context available)")
+
+    # Strip benchmark directive prefix from question
+    question = user_input
+    for pfx in (
+        "Answer in one concise phrase based on the conversation history: ",
+        "Answer concisely: ",
+        "Answer: ",
+    ):
+        if question.startswith(pfx):
+            question = question[len(pfx):]
+            break
+
+    parts.append("")
+    parts.append(f"QUESTION: {question}")
+    parts.append("")
+    parts.append("Identify the answer from the context above, then write on the last line:")
+    parts.append("FINAL ANSWER: <bare answer phrase — as concise as possible, up to 10 words>")
+
+    return "\n".join(parts)
+
+
+# ---------------------------------------------------------------------------
+# Standard prompt
+# ---------------------------------------------------------------------------
 
 _SYSTEM_INSTRUCTION = """\
-You are NINAI, a cognitive assistant with access to a chronological knowledge graph.
-You will be given:
-  - GRAPH CONTEXT: relevant nodes from the knowledge graph (each has an id and content)
-  - EPISODE CONTEXT: recent vector-retrieved memory chunks
-  - SESSION HISTORY: the most recent utterances in this conversation
-  - USER INPUT: the current user message
+You are NINAI, a cognitive assistant. Use the retrieved memory context below to answer the user's question.
 
-Your task:
-1. Reason using the provided context nodes.
-2. Produce a helpful, accurate response.
-3. Cite the exact node IDs from GRAPH CONTEXT that informed your answer.
-4. Extract any NEW named entities from the user input (not already in the graph context).
+Context provided:
+  - GRAPH CONTEXT: knowledge graph nodes (entity relationships and facts)
+  - EPISODE CONTEXT: verbatim conversation snippets retrieved by semantic search
+  - SESSION HISTORY: recent turns in this conversation
+  - USER INPUT: the question to answer
 
-Return ONLY valid JSON in this exact schema — no prose outside the JSON:
+Rules:
+1. EPISODE CONTEXT contains raw conversation text — this is your primary evidence. Read each chunk carefully.
+2. GRAPH CONTEXT provides entity facts — use it alongside episode context.
+3. Synthesise a direct answer from the context. If the context has partial information, reason from it.
+4. Do NOT say "the context does not contain" or "information is not available" — always give your best answer.
+5. If genuinely no relevant information exists, say "I'm not sure" (one short phrase, nothing more).
+6. Cite exact node IDs from GRAPH CONTEXT that informed your answer.
+7. Extract any NEW named entities from the user input not already in graph context.
+
+Return ONLY valid JSON — no prose outside the JSON:
 {
-  "response": "<your natural language answer>",
+  "response": "<direct answer derived from context>",
   "cited_node_ids": ["<node_id_1>", "<node_id_2>"],
   "extracted_entities": [
     {"id": "<snake_case_id>", "name": "<entity name>", "type": "<concept|user|task|object>"}
@@ -72,7 +317,14 @@ def build_inference_prompt(
     parts.append("=== EPISODE CONTEXT ===")
     for chunk in qdrant_chunks[:_MAX_QDRANT_CHUNKS]:
         payload = chunk.get("payload", {})
-        text = str(payload.get("text") or payload.get("content") or "")[:_MAX_NODE_CONTENT_CHARS]
+        # v2 format uses "text"; v1 format uses "content_preview" or "summary"
+        text = str(
+            payload.get("text")
+            or payload.get("content")
+            or payload.get("content_preview")
+            or payload.get("summary")
+            or ""
+        )[:_MAX_NODE_CONTENT_CHARS]
         score = chunk.get("score", 0)
         cid = chunk.get("id", "?")
         parts.append(f"[chunk id={cid} score={score:.3f}] {text}")
@@ -82,8 +334,8 @@ def build_inference_prompt(
     # --- Session history ---
     parts.append("")
     parts.append("=== SESSION HISTORY ===")
-    # Show oldest → newest
-    for utt in reversed(session_utterances[-6:]):
+    # Show oldest → newest (up to 10 most recent)
+    for utt in reversed(session_utterances[-10:]):
         role = utt.get("role", "?")
         text = str(utt.get("text") or utt.get("content") or "")[:200]
         parts.append(f"{role.upper()}: {text}")

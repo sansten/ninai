@@ -31,35 +31,30 @@ logger = logging.getLogger(__name__)
 v2_router = APIRouter(prefix="/v2", tags=["v2-engine"])
 
 
-def _resolve_tenant(request_tenant: str | None, current_user: dict) -> str:
+def _resolve_tenant(request_tenant: str | None, current_user) -> str:
     """Resolve tenant_id from request or fall back to the user's org."""
     if request_tenant:
         return request_tenant
-    # current_user is a dict injected by the v1 auth dependency
-    return str(
-        current_user.get("org_id")
-        or current_user.get("tenant_id")
-        or current_user.get("sub", "unknown")
-    )
+    # current_user is a User model or dict depending on the auth dependency
+    if hasattr(current_user, "organization_id"):
+        return str(current_user.organization_id or "unknown")
+    if isinstance(current_user, dict):
+        return str(
+            current_user.get("org_id")
+            or current_user.get("organization_id")
+            or current_user.get("sub", "unknown")
+        )
+    return "unknown"
 
 
 # ---------------------------------------------------------------------------
-# Auth dependency — re-use v1 get_current_user so token format is identical
+# Auth dependency — re-use v1 get_tenant_context (same JWT, lighter weight)
 # ---------------------------------------------------------------------------
-def _get_auth():
-    try:
-        from app.api.v1.dependencies.auth import get_current_user
-        return Depends(get_current_user)
-    except ImportError:
-        # Test / standalone mode — no auth
-        return None
-
-
 try:
-    from app.api.v1.dependencies.auth import get_current_user as _auth_dep
+    from app.api.v1.endpoints.auth import get_current_user as _auth_dep
     _AUTH = Depends(_auth_dep)
 except ImportError:
-    _AUTH = None  # type: ignore
+    _AUTH = None  # type: ignore[assignment]
 
 
 # ---------------------------------------------------------------------------
@@ -69,7 +64,7 @@ except ImportError:
 @v2_router.post("/interact", response_model=V2InteractResponse)
 async def v2_interact(
     req: V2InteractRequest,
-    current_user: dict = _AUTH,  # type: ignore[assignment]
+    current_user=_AUTH,  # type: ignore[assignment]
 ) -> V2InteractResponse:
     """
     Run the full three-phase v2 cognitive loop for one user turn.
@@ -85,7 +80,10 @@ async def v2_interact(
         tenant_id=tenant_id,
         session_id=req.session_id,
         user_input=req.user_input,
+        disable_write=req.disable_write,
+        ingest_only=req.ingest_only,
         prev_utterance_id=req.prev_utterance_id,
+        model_hint=req.model_hint,
     )
 
     return V2InteractResponse(
@@ -111,7 +109,7 @@ async def v2_interact(
 @v2_router.post("/graph/inspect", response_model=V2GraphInspectResponse)
 async def v2_graph_inspect(
     req: V2GraphInspectRequest,
-    current_user: dict = _AUTH,  # type: ignore[assignment]
+    current_user=_AUTH,  # type: ignore[assignment]
 ) -> V2GraphInspectResponse:
     """Return the FalkorDB subgraph around the given entity seed ids."""
     tenant_id = _resolve_tenant(req.tenant_id, current_user or {})

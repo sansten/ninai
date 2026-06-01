@@ -10,6 +10,19 @@ from app.models.memory import MemoryMetadata
 from app.services.agent_runner import AgentRunner
 
 
+@pytest.fixture(autouse=True)
+def _stub_state_space(monkeypatch):
+    class _FakeStateSpaceService:
+        def __init__(self, session_arg, *, org_id):
+            self.session = session_arg
+            self.org_id = org_id
+
+        async def apply_memory_write_state(self, *, memory, fact_rows, resolved_entities=None):
+            return {"updated_scopes": 0, "stream_events": 0}
+
+    monkeypatch.setattr("app.services.agent_runner.StateSpaceService", _FakeStateSpaceService)
+
+
 def _source_memory(**kwargs) -> MemoryMetadata:
     m = MagicMock(spec=MemoryMetadata)
     m.id = kwargs.get("id", "src-mem-001")
@@ -255,3 +268,94 @@ async def test_missing_subject_or_value_skipped(monkeypatch):
 
     assert result["derived_facts"] == 0
     session.add.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_structured_fact_writes_generic_derived_memory(monkeypatch):
+    """LLM-extracted structured facts should materialize as generic [Fact] memories."""
+    source = _source_memory()
+    session = _no_dup_session(source)
+
+    embed_calls: list[dict] = []
+    monkeypatch.setattr(
+        "app.tasks.embed_task.enqueue_embed_and_index",
+        lambda **kw: embed_calls.append(kw),
+    )
+
+    runner = AgentRunner()
+    outputs = {
+        "resolved_entities": [],
+        "structured_facts": [
+            {
+                "subject": "Release train",
+                "predicate": "depends_on",
+                "object": "DB migrations",
+                "confidence": 0.93,
+            }
+        ],
+    }
+
+    result = await runner._apply_entity_resolution(
+        session=session,
+        memory_id="src-mem-001",
+        outputs=outputs,
+    )
+
+    assert result["derived_facts"] == 1
+    session.add.assert_called_once()
+    added = session.add.call_args[0][0]
+    assert "[Fact] Release train depends_on: DB migrations" in added.content_preview
+    assert "structured_fact" in added.tags
+    assert "depends_on" in added.tags
+    assert embed_calls
+
+
+@pytest.mark.asyncio
+async def test_entity_resolution_updates_state_space_when_facts_exist(monkeypatch):
+    source = _source_memory()
+    session = _no_dup_session(source)
+
+    state_calls: list[dict] = []
+
+    class _FakeStateSpaceService:
+        def __init__(self, session_arg, *, org_id):
+            self.session = session_arg
+            self.org_id = org_id
+
+        async def apply_memory_write_state(self, *, memory, fact_rows, resolved_entities=None):
+            state_calls.append(
+                {
+                    "memory_id": memory.id,
+                    "org_id": self.org_id,
+                    "fact_rows": list(fact_rows),
+                    "resolved_entities": list(resolved_entities or []),
+                }
+            )
+            return {"updated_scopes": 2, "stream_events": 2}
+
+    monkeypatch.setattr("app.services.agent_runner.StateSpaceService", _FakeStateSpaceService)
+    monkeypatch.setattr("app.tasks.embed_task.enqueue_embed_and_index", lambda **kw: None)
+
+    runner = AgentRunner()
+    outputs = {
+        "resolved_entities": [{"canonical": "Release train", "subject": "Release train"}],
+        "structured_facts": [
+            {
+                "subject": "Release train",
+                "predicate": "depends_on",
+                "object": "DB migrations",
+                "confidence": 0.93,
+            }
+        ],
+    }
+
+    result = await runner._apply_entity_resolution(
+        session=session,
+        memory_id="src-mem-001",
+        outputs=outputs,
+    )
+
+    assert result["state_scopes_updated"] == 2
+    assert result["state_stream_events"] == 2
+    assert state_calls
+    assert state_calls[0]["fact_rows"][0]["predicate"] == "depends_on"

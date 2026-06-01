@@ -163,6 +163,29 @@ class Settings(BaseSettings):
     # -------------------------------------------------------------------------
     REDIS_HOST: str | None = None
     REDIS_PORT: int | None = None
+
+    @field_validator("REDIS_PORT", "QDRANT_PORT", mode="before")
+    @classmethod
+    def _parse_k8s_port(cls, v: object) -> int | None:
+        """Kubernetes injects PORT env vars as 'tcp://host:port' strings.
+
+        Parse the integer port out of that format so Pydantic doesn't fail
+        when running inside a GKE pod with service-link injection enabled.
+        """
+        if v is None:
+            return None
+        if isinstance(v, int):
+            return v
+        s = str(v).strip()
+        if s.startswith("tcp://"):
+            try:
+                return int(s.rsplit(":", 1)[-1])
+            except (ValueError, IndexError):
+                return None
+        try:
+            return int(s)
+        except ValueError:
+            return None
     REDIS_PASSWORD: str | None = None
     REDIS_DB: int | None = None
     REDIS_URL_OVERRIDE: str | None = Field(
@@ -210,13 +233,6 @@ class Settings(BaseSettings):
     # Dedicated Redis endpoint for FalkorDB graph queries.
     # Falls back to REDIS_URL when not provided.
     GRAPH_REDIS_URL: str | None = None
-
-    # -------------------------------------------------------------------------
-    # Engine Version Gate
-    # -------------------------------------------------------------------------
-    # "v1" — legacy multi-agent architecture (all 80 phases, existing routes)
-    # "v2" — Graph-RAG + DNC architecture (FalkorDB KG + Qdrant episodic + Ollama)
-    NINAI_ENGINE_VERSION: str = "v1"
 
     # When True, graph edges are created immediately after each memory write
     # via graph_realtime_sync_task fired at the end of graph_linking_task.
@@ -309,6 +325,14 @@ class Settings(BaseSettings):
     # If unset, OLLAMA_BASE_URL is used as the primary endpoint.
     OLLAMA_BASE_URL_CPU: str | None = None
     OLLAMA_BASE_URL_GPU: str | None = None
+    # Dedicated embedding endpoint (e.g. CPU host serving nomic-embed-text).
+    # Falls back to OLLAMA_BASE_URL_CPU / OLLAMA_BASE_URL when unset.
+    OLLAMA_EMBEDDING_BASE_URL: str | None = None
+    # Dedicated entity-extraction endpoint + model. EXTRACT_MODEL should be a
+    # small NON-thinking model (e.g. qwen2.5:7b) — thinking models are far too
+    # slow for per-turn structured extraction during ingest.
+    EXTRACT_BASE_URL: str | None = None
+    EXTRACT_MODEL: str | None = None
     # Enable automatic spillover to GPU endpoint on overload/failure.
     OLLAMA_OVERFLOW_ENABLED: bool = False
     # If >0, route requests to GPU first when in-flight requests on CPU endpoint
@@ -317,8 +341,18 @@ class Settings(BaseSettings):
     # Default local model (override via env OLLAMA_MODEL)
     OLLAMA_MODEL: str = "qwen2.5:7b"
     # Optional per-purpose model overrides (fall back to OLLAMA_MODEL when unset).
-    OLLAMA_MODEL_FAST: str | None = None
-    OLLAMA_MODEL_REASONING: str | None = None
+    # OLLAMA_MODEL_FAST: small thinking model for fast retrieval + extraction tasks.
+    # qwen3:4b (Qwen Small Thinker) on T4 — thinking-capable, handles most single-fact lookups.
+    OLLAMA_MODEL_FAST: str | None = "qwen3:4b"
+    # OLLAMA_BASE_URL_FAST: vLLM endpoint for the fast/SLM pod (T4).
+    # Defaults to OLLAMA_BASE_URL when unset (single-pod fallback).
+    OLLAMA_BASE_URL_FAST: str | None = None
+    # OLLAMA_MODEL_REASONING: deep-reasoning model for multi-hop, counterfactual, synthesis.
+    # deepseek-r1:14b on A100 40GB (~9GB VRAM at Q4) — thinking model, proven on LoCoMo.
+    OLLAMA_MODEL_REASONING: str | None = "deepseek-r1:14b"
+    # OLLAMA_BASE_URL_REASONING: vLLM endpoint for the reasoning/LLM pod (A100).
+    # Defaults to OLLAMA_BASE_URL when unset (single-pod fallback).
+    OLLAMA_BASE_URL_REASONING: str | None = None
     OLLAMA_MODEL_PLANNING: str | None = None
     OLLAMA_MODEL_DISTILLATION: str | None = None
     OLLAMA_MODEL_BOUNDARY: str | None = None
@@ -389,7 +423,7 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str | None = None
     ANTHROPIC_API_KEY: str | None = None
     EMBEDDING_MODEL: str = "text-embedding-3-small"
-    EMBEDDING_DIMENSIONS: int = 768  # nomic-embed-text dimension (matches Qdrant collection)
+    EMBEDDING_DIMENSIONS: int = 1536
     EMBEDDING_PROVIDER: str = "auto"
     OLLAMA_EMBEDDING_MODEL: str = "nomic-embed-text"
 
@@ -416,11 +450,6 @@ class Settings(BaseSettings):
     # -------------------------------------------------------------------------
     # Search Ranking
     # -------------------------------------------------------------------------
-    # Master toggle for heuristic retrieval behavior (query rewrites, graph expansion,
-    # heuristic rerank multipliers, temporal decay, and feedback reranking).
-    # Set to False for strict non-heuristic retrieval scoring.
-    SEARCH_HEURISTICS_ENABLED: bool = False
-
     # If enabled, downranks older memories using a half-life decay.
     SEARCH_TEMPORAL_DECAY_ENABLED: bool = True
     # Half-life in days for ranking decay (smaller = more aggressive).
@@ -472,19 +501,6 @@ class Settings(BaseSettings):
     # If vector retrieval is temporarily unavailable, allow hybrid lexical fallback
     # instead of failing the request.
     SEARCH_ALLOW_LEXICAL_FALLBACK_ON_VECTOR_ERROR: bool = True
-    # Keep read-time query embedding on a short leash so /memories/search
-    # fails open to lexical-capable retrieval instead of stalling on a cold
-    # or unavailable embedding backend.
-    SEARCH_QUERY_EMBED_TIMEOUT_SECONDS: float = 5.0
-    # Bound the main retrieval leg so failed search requests degrade quickly
-    # into deterministic fallbacks instead of holding open notebook probes.
-    SEARCH_EXECUTION_TIMEOUT_SECONDS: float = 8.0
-    # Prefer a fast deterministic lexical pass before semantic retrieval on
-    # interactive reads so the system can answer even when embedding/model
-    # backends are overloaded.
-    SEARCH_DETERMINISTIC_FIRST_ENABLED: bool = True
-    SEARCH_DETERMINISTIC_FIRST_TIMEOUT_SECONDS: float = 1.5
-    SEARCH_DETERMINISTIC_FIRST_MIN_RESULTS: int = 3
 
     # -------------------------------------------------------------------------
     # Logseq Integration

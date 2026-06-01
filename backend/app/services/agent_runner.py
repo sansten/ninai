@@ -39,6 +39,7 @@ from app.services.audit_service import AuditService
 from app.services.feedback_learning_config_service import FeedbackLearningConfigService
 from app.services.graph_edge_service import GraphEdgeService
 from app.services.logseq_export_persistence_service import LogseqExportPersistenceService
+from app.services.state_space_service import StateSpaceService
 from app.services.short_term_memory import ShortTermMemoryService
 from app.services.topic_service import TopicService
 from app.services.pattern_service import PatternService
@@ -1102,21 +1103,70 @@ class AgentRunner:
         if entities:
             mem.entities = entities
 
-        # Write derived [Fact] memories for personal attributes so semantic search
-        # can retrieve structured facts directly without vocabulary gap.
+        # Write derived [Fact] memories for both LLM-extracted structured facts and
+        # backward-compatible personal attributes so retrieval can surface concise,
+        # reusable fact statements across domains.
         personal_attrs = [
             e for e in resolved
             if isinstance(e, dict) and e.get("entity_type") == "personal_attribute"
         ]
+        structured_facts = [
+            fact for fact in (outputs.get("structured_facts") or [])
+            if isinstance(fact, dict)
+        ]
         derived_count = 0
+
+        fact_rows: list[dict[str, str]] = []
+        seen_fact_keys: set[tuple[str, str, str]] = set()
+
+        def _append_fact(subject: str, predicate: str, obj: str, *, fact_type: str) -> None:
+            subject_s = str(subject or "").strip()
+            predicate_s = str(predicate or "").strip().lower().replace(" ", "_")
+            object_s = str(obj or "").strip()
+            if not (subject_s and predicate_s and object_s):
+                return
+            key = (subject_s.lower(), predicate_s, object_s.lower())
+            if key in seen_fact_keys:
+                return
+            seen_fact_keys.add(key)
+            fact_rows.append(
+                {
+                    "subject": subject_s,
+                    "predicate": predicate_s,
+                    "object": object_s,
+                    "fact_type": fact_type,
+                }
+            )
+
         for attr in personal_attrs:
-            subject = attr.get("subject", "")
-            attribute = attr.get("attribute", "")
-            value = attr.get("value", "")
-            if not (subject and attribute and value):
-                continue
-            fact_content = f"[Fact] {subject} {attribute}: {value}"
+            _append_fact(
+                attr.get("subject", ""),
+                attr.get("attribute", ""),
+                attr.get("value", ""),
+                fact_type="personal_attribute",
+            )
+
+        for fact in structured_facts:
+            _append_fact(
+                fact.get("subject", ""),
+                fact.get("predicate", ""),
+                fact.get("object", ""),
+                fact_type="structured_fact",
+            )
+
+        for fact_row in fact_rows:
+            subject = fact_row["subject"]
+            predicate = fact_row["predicate"]
+            obj = fact_row["object"]
+            fact_type = fact_row["fact_type"]
+            fact_content = f"[Fact] {subject} {predicate}: {obj}"
             content_hash = hashlib.sha256(fact_content.encode()).hexdigest()
+            tag_list = ["derived_fact", predicate]
+            if fact_type == "personal_attribute":
+                tag_list.append("personal_attribute")
+            elif fact_type == "structured_fact":
+                tag_list.append("structured_fact")
+
             try:
                 dup = await session.execute(
                     select(MemoryMetadata).where(
@@ -1131,6 +1181,7 @@ class AgentRunner:
                     continue
             except Exception:
                 continue
+
             try:
                 from app.tasks.embed_task import enqueue_embed_and_index
                 derived_id = str(uuid.uuid4())
@@ -1146,14 +1197,15 @@ class AgentRunner:
                     required_clearance=mem.required_clearance,
                     content_preview=fact_content[:2000],
                     content_hash=content_hash,
-                    tags=["derived_fact", "personal_attribute", attribute],
+                    tags=tag_list,
                     entities={},
                     extra_metadata={
                         "derived_from": memory_id,
                         "derived_by": "EntityResolutionAgent",
-                        "attribute": attribute,
+                        "predicate": predicate,
                         "subject": subject,
-                        "value": value,
+                        "object": obj,
+                        "fact_type": fact_type,
                     },
                     source_type="derived",
                     source_id=memory_id,
@@ -1173,7 +1225,27 @@ class AgentRunner:
             except Exception:
                 pass
 
-        return {"updated": True, "entity_count": len(entities), "derived_facts": derived_count}
+        state_result: dict[str, object] = {}
+        if fact_rows:
+            try:
+                state_result = await StateSpaceService(
+                    session,
+                    org_id=str(mem.organization_id),
+                ).apply_memory_write_state(
+                    memory=mem,
+                    fact_rows=fact_rows,
+                    resolved_entities=resolved,
+                )
+            except Exception:
+                state_result = {}
+
+        return {
+            "updated": True,
+            "entity_count": len(entities),
+            "derived_facts": derived_count,
+            "state_scopes_updated": int(state_result.get("updated_scopes") or 0),
+            "state_stream_events": int(state_result.get("stream_events") or 0),
+        }
 
     async def _apply_semantic_normalization(
         self,

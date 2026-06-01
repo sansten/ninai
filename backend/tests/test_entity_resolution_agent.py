@@ -681,6 +681,39 @@ class TestExtractPersonalAttributes:
         assert "mental health" in attrs["career_interest"]["value"]
 
 
+class TestEntityResolutionStructuredFacts:
+    @pytest.mark.asyncio
+    async def test_validate_outputs_accepts_structured_facts(self):
+        agent = EntityResolutionAgent()
+        result = AgentResult(
+            agent_name=agent.name,
+            agent_version=agent.version,
+            memory_id="mem-1",
+            status="success",
+            confidence=0.9,
+            outputs={
+                "resolved_entities": [],
+                "unresolved_entities": [],
+                "cross_silo_links": [],
+                "structured_facts": [
+                    {
+                        "subject": "release train",
+                        "predicate": "depends_on",
+                        "object": "db migrations",
+                        "confidence": 0.9,
+                    }
+                ],
+                "rationale": "llm",
+            },
+            warnings=[],
+            errors=[],
+            started_at=_fake_now(),
+            finished_at=_fake_now(),
+            trace_id="trace-1",
+        )
+        agent.validate_outputs(result)
+
+
 # ---------------------------------------------------------------------------
 # Registry
 # ---------------------------------------------------------------------------

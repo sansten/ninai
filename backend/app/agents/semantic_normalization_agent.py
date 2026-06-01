@@ -188,11 +188,14 @@ class SemanticNormalizationAgent(BaseAgent):
                 timeout_seconds=float(getattr(settings, "OLLAMA_TIMEOUT_SECONDS", 5.0)),
                 max_concurrency=int(getattr(settings, "OLLAMA_MAX_CONCURRENCY", 2)),
             )
-            resp = await client.complete_json(
-                prompt=prompt,
-                schema_hint={},
-                tool_event_sink=context.get("tool_event_sink"),
-            )
+            try:
+                resp = await client.complete_json(
+                    prompt=prompt,
+                    schema_hint={},
+                    tool_event_sink=context.get("tool_event_sink"),
+                )
+            except Exception:
+                resp = None
             valid_intents = {
                 "document_decision", "report_issue", "share_learning",
                 "request_action", "record_status", "capture_context", "general",

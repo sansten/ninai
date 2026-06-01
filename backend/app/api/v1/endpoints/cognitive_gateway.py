@@ -118,6 +118,76 @@ def _memory_to_gateway_candidate(memory: Any) -> dict[str, Any]:
     return MemoryResponse.model_validate(memory).model_dump(mode="python")
 
 
+def _looks_structured_prompt_override(prompt_override: Any) -> bool:
+    text = str(prompt_override or "")
+    if not text.strip():
+        return False
+    lowered = text.lower()
+    line_count = text.count("\n") + 1
+    if len(text) > 3500 or line_count > 60:
+        return True
+    return (
+        "conversation:" in lowered
+        and "question:" in lowered
+        and "answer:" in lowered
+    )
+
+
+def _lightweight_evidence_package(question: str, memories: list[dict[str, Any]]) -> dict[str, Any]:
+    facts: list[dict[str, Any]] = []
+    seen_facts: set[tuple[str, str, str]] = set()
+    memory_scores: list[float] = []
+
+    for memory in memories:
+        try:
+            memory_scores.append(float(memory.get("score") or 0.0))
+        except (TypeError, ValueError):
+            memory_scores.append(0.0)
+
+        extra = dict(memory.get("extra_metadata") or {})
+        fact_support = dict(extra.get("fact_support") or {})
+        support_candidates = []
+        if fact_support:
+            support_candidates.append(fact_support)
+        support_candidates.extend(list(extra.get("fact_supporting_facts") or []))
+
+        for item in support_candidates:
+            subject = str((item or {}).get("subject") or "").strip()
+            predicate = str((item or {}).get("predicate") or "").strip()
+            obj = str((item or {}).get("object") or "").strip()
+            if not (subject and predicate and obj):
+                continue
+            key = (subject.lower(), predicate.lower(), obj.lower())
+            if key in seen_facts:
+                continue
+            seen_facts.add(key)
+            facts.append(
+                {
+                    "subject": subject,
+                    "predicate": predicate,
+                    "object": obj,
+                    "status": str((item or {}).get("status") or "active"),
+                    "confidence": float((item or {}).get("confidence") or 0.8),
+                }
+            )
+
+    avg_memory_score = sum(memory_scores) / len(memory_scores) if memory_scores else 0.0
+    return {
+        "query": question,
+        "memory_hits": list(memories or []),
+        "facts": facts,
+        "contradictions": [],
+        "query_intelligence": {"extracted_entities": []},
+        "evidence_quality": {
+            "memory_count": len(memories or []),
+            "fact_count": len(facts),
+            "avg_memory_score": round(avg_memory_score, 4),
+            "avg_semantic_quality": 0.0,
+            "avg_feedback_signal": 0.0,
+        },
+    }
+
+
 def _apply_query_intelligence_filters(
     memories: list[dict[str, Any]],
     intelligence: dict[str, Any],
@@ -651,8 +721,8 @@ async def gateway_answer(
     memories = list(payload.get("memories") or [])
     prompt_override = payload.get("prompt_override") or None
     context_id = payload.get("context_id") or None
-
-    await set_tenant_context(db, tenant.user_id, tenant.org_id, tenant.roles_string, tenant.clearance_level)
+    needs_db_context = not (prompt_override and memories)
+    grounded_from_supplied_memories = bool(memories) and _looks_structured_prompt_override(prompt_override)
 
     _timeout_raw = payload.get("timeout_seconds") or payload.get("timeout")
     _timeout_val: float | None = None
@@ -671,8 +741,14 @@ async def gateway_answer(
             _keep_alive_val = None
 
     try:
+        if needs_db_context:
+            await set_tenant_context(db, tenant.user_id, tenant.org_id, tenant.roles_string, tenant.clearance_level)
+
         evidence_package = dict(payload.get("evidence_package") or {})
         planned = None
+
+        if grounded_from_supplied_memories and not evidence_package:
+            evidence_package = _lightweight_evidence_package(question, memories)
 
         if not prompt_override and not memories:
             planner = CognitiveReadPlanner(
@@ -696,7 +772,7 @@ async def gateway_answer(
             )
             memories = list(planned.memories or [])
             evidence_package = dict(planned.evidence_package or {})
-        if not prompt_override:
+        if grounded_from_supplied_memories or not prompt_override:
             if not evidence_package:
                 evidence_service = CognitiveEvidenceService(db, org_id=tenant.org_id)
                 evidence_package = await evidence_service.build_package(
@@ -720,6 +796,8 @@ async def gateway_answer(
                 "used_llm": grounded.used_llm,
                 "answer_source": grounded.answer_source,
                 "llm_error": grounded.llm_error,
+                "llm_failure_mode": getattr(grounded, "llm_failure_mode", None),
+                "llm_endpoint": getattr(grounded, "llm_endpoint", None),
                 "grounded": grounded.grounded,
                 "confidence": grounded.confidence,
                 "support": grounded.support,
@@ -751,6 +829,8 @@ async def gateway_answer(
         "used_llm": result.used_llm,
         "answer_source": result.answer_source,
         "llm_error": result.llm_error,
+        "llm_failure_mode": getattr(result, "llm_failure_mode", None),
+        "llm_endpoint": getattr(result, "llm_endpoint", None),
         "context_id": context_id,
     }
 

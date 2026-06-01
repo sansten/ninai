@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
@@ -218,6 +219,119 @@ async def test_search_memories_uses_embedding_service(client, auth_headers, test
     assert data["total"] == 1
     assert len(data["results"]) == 1
     assert data.get("ranking_meta")
+
+
+@pytest.mark.asyncio
+async def test_search_memories_falls_back_when_query_embedding_times_out(
+    client, auth_headers, test_org_id, test_user_id, monkeypatch
+):
+    async def _raise_timeout(_query: str):
+        raise asyncio.TimeoutError()
+
+    monkeypatch.setattr(memories_endpoints.EmbeddingService, "embed", _raise_timeout)
+    monkeypatch.setattr(memories_endpoints.settings, "EMBEDDING_DIMENSIONS", 3)
+
+    captured = {"embedding": None}
+
+    class StubMemoryService:
+        async def search_memories(self, query_embedding, request, request_id=None):
+            captured["embedding"] = query_embedding
+            return [
+                SimpleNamespace(
+                    **_memory_response_dict(
+                        memory_id="m-timeout",
+                        org_id=test_org_id,
+                        owner_id=test_user_id,
+                        content_preview="preview",
+                    )
+                )
+            ]
+
+        def get_search_ranking_meta(self, request):
+            return {"hnms_mode_effective": "balanced"}
+
+        def get_last_search_diagnostics(self):
+            return {}
+
+    app.dependency_overrides[get_memory_service] = lambda: StubMemoryService()
+
+    resp = await client.get(
+        "/api/v1/memories/search",
+        headers=auth_headers,
+        params={"query": "find this", "limit": 5},
+    )
+
+    assert resp.status_code == 200, resp.text
+    assert captured["embedding"] == [0.0, 0.0, 0.0]
+    data = resp.json()
+    assert data["ranking_meta"]["embedding_fallback_reason"] == "TimeoutError"
+    assert data["ranking_meta"]["query_embed_timeout_seconds"] == 5.0
+
+
+@pytest.mark.asyncio
+async def test_search_memories_recovers_with_fresh_session_when_primary_session_breaks(
+    client, auth_headers, test_org_id, test_user_id, monkeypatch
+):
+    monkeypatch.setattr(memories_endpoints.EmbeddingService, "embed", AsyncMock(return_value=[0.4, 0.5, 0.6]))
+
+    class PrimaryFailService:
+        async def search_memories(self, query_embedding, request, request_id=None):
+            raise RuntimeError("connection is closed")
+
+        def get_search_ranking_meta(self, request):
+            return {"hnms_mode_effective": "balanced"}
+
+        def get_last_search_diagnostics(self):
+            return {}
+
+    class FreshSessionService:
+        def __init__(self, session=None, user_id=None, org_id=None, clearance_level=0):
+            self.permission_checker = AsyncMock()
+
+        async def search_memories(self, query_embedding, request, request_id=None):
+            return [
+                SimpleNamespace(
+                    **_memory_response_dict(
+                        memory_id="m-fresh",
+                        org_id=test_org_id,
+                        owner_id=test_user_id,
+                        content_preview="fresh-session-preview",
+                    )
+                )
+            ]
+
+    class _FreshSessionContext:
+        def __init__(self, session):
+            self._session = session
+
+        async def __aenter__(self):
+            return self._session
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+    fresh_db = AsyncMock()
+    monkeypatch.setattr(memories_endpoints, "MemoryService", FreshSessionService)
+    monkeypatch.setattr(memories_endpoints, "set_tenant_context", AsyncMock())
+    monkeypatch.setattr(
+        memories_endpoints,
+        "async_session_factory",
+        lambda: _FreshSessionContext(fresh_db),
+    )
+
+    app.dependency_overrides[get_memory_service] = lambda: PrimaryFailService()
+
+    resp = await client.get(
+        "/api/v1/memories/search",
+        headers=auth_headers,
+        params={"query": "find this", "limit": 5},
+    )
+
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    assert data["total"] == 1
+    assert data["results"][0]["id"] == "m-fresh"
+    assert data["ranking_meta"]["search_fallback_reason"] == "db_connection_closed:fresh_session_retry"
 
 
 @pytest.mark.asyncio

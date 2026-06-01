@@ -715,13 +715,22 @@ class TestGatewayExplain:
 class TestGatewayAnswer:
     @pytest.mark.asyncio
     async def test_gateway_answer_reports_gateway_source(self, monkeypatch):
+        captured: dict[str, object] = {}
+        client_kwargs: dict[str, object] = {}
+
         class _FakeClient:
             last_error = ""
+            last_endpoint_used = "http://ollama-primary:11434"
 
             async def complete_text(self, **kwargs):
+                captured.update(kwargs)
                 return "Stockholm"
 
-        monkeypatch.setattr(gateway_module, "create_ollama_client", lambda **kwargs: _FakeClient())
+        monkeypatch.setattr(
+            gateway_module,
+            "create_ollama_client",
+            lambda **kwargs: client_kwargs.update(kwargs) or _FakeClient(),
+        )
         gw = _full_gateway()
         result = await gw.answer(question="Where?", memories=[{"content": "They moved to Stockholm."}])
         assert isinstance(result, GatewayAnswerResult)
@@ -729,11 +738,16 @@ class TestGatewayAnswer:
         assert result.used_llm is True
         assert result.answer_source == "gateway"
         assert result.llm_error is None
+        assert result.llm_failure_mode is None
+        assert result.llm_endpoint == "http://ollama-primary:11434"
+        assert captured["num_ctx"] == 2048
+        assert client_kwargs["max_concurrency"] == 2
 
     @pytest.mark.asyncio
-    async def test_gateway_answer_reports_heuristic_fallback_reason(self, monkeypatch):
+    async def test_gateway_answer_reports_empty_gateway_result_when_llm_returns_nothing(self, monkeypatch):
         class _FakeClient:
             last_error = "HTTPError(404, 'model not found')"
+            last_endpoint_used = "http://ollama-primary:11434"
 
             async def complete_text(self, **kwargs):
                 return ""
@@ -745,10 +759,41 @@ class TestGatewayAnswer:
             memories=[{"content": "They moved to Stockholm last year."}],
         )
         assert result.used_llm is False
-        assert result.model == "heuristic"
-        assert result.answer_source == "heuristic"
+        assert result.model == gateway_module.settings.get_ollama_model("agents")
+        assert result.answer_source == "gateway_error"
         assert result.llm_error == "HTTPError(404, 'model not found')"
-        assert result.answer
+        assert result.llm_failure_mode == "model_not_available"
+        assert result.llm_endpoint == "http://ollama-primary:11434"
+        assert result.answer == ""
+
+    @pytest.mark.asyncio
+    async def test_gateway_answer_compacts_oversized_prompt_override(self, monkeypatch):
+        captured: dict[str, object] = {}
+
+        class _FakeClient:
+            last_error = ""
+            last_endpoint_used = "http://ollama-primary:11434"
+
+            async def complete_text(self, **kwargs):
+                captured.update(kwargs)
+                return "Stockholm"
+
+        monkeypatch.setattr(gateway_module, "create_ollama_client", lambda **kwargs: _FakeClient())
+        gw = _full_gateway()
+        large_override = "Conversation:\n" + ("Turn 1: filler line.\n" * 120) + "\nQuestion: Where did they move?\nAnswer:"
+
+        result = await gw.answer(
+            question="Where did they move?",
+            memories=[{"content": "They moved to Stockholm last year."}],
+            prompt_override=large_override,
+        )
+
+        assert result.answer == "Stockholm"
+        prompt = str(captured["prompt"])
+        assert prompt.startswith("Answer the question using only the evidence below.")
+        assert "Conversation:" in prompt
+        assert "Stockholm" in str(captured["prompt"])
+        assert str(captured["prompt"]) != large_override
 
     @pytest.mark.asyncio
     async def test_gateway_answer_logs_llm_fallback_exception(self, monkeypatch, caplog):
@@ -766,6 +811,9 @@ class TestGatewayAnswer:
             )
 
         assert result.used_llm is False
-        assert result.model == "heuristic"
+        assert result.model == gateway_module.settings.get_ollama_model("agents")
+        assert result.answer_source == "gateway_error"
+        assert result.answer == ""
+        assert result.llm_failure_mode == "llm_error"
         assert "ollama answer fallback" in caplog.text
         assert "RuntimeError" in caplog.text

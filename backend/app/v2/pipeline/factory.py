@@ -8,11 +8,12 @@ Called once at startup and cached for the process lifetime.
 from __future__ import annotations
 
 import logging
+import os
 from functools import lru_cache
 
 from app.core.config import settings
 from app.v2.graph.client import V2GraphClient
-from app.v2.llm.ollama_engine import OllamaReasoningEngine
+from app.v2.llm.inference_engine import InferenceEngine
 from app.v2.memory.dnc_router import DNCMemoryRouter
 from app.v2.pipeline.cognitive_loop import V2CognitiveLoop
 
@@ -36,11 +37,67 @@ def _build_v2_loop() -> V2CognitiveLoop:
     )
     graph_client = V2GraphClient(redis_url=graph_redis_url)
 
-    engine = OllamaReasoningEngine(
-        base_url=getattr(settings, "OLLAMA_BASE_URL", "http://localhost:11434"),
-        model=getattr(settings, "OLLAMA_MODEL", "qwen2.5:7b"),
+    # Use a separate URL for embeddings when configured (e.g. CPU Ollama hosts
+    # nomic-embed-text while GPU Ollama handles inference-only models).
+    embed_base_url = (
+        getattr(settings, "OLLAMA_EMBEDDING_BASE_URL", None)
+        or getattr(settings, "OLLAMA_BASE_URL_CPU", None)
+        or getattr(settings, "OLLAMA_BASE_URL", "http://localhost:11434")
+    )
+    _default_base_url = getattr(settings, "OLLAMA_BASE_URL", "http://localhost:11434")
+    _default_model    = getattr(settings, "OLLAMA_MODEL", "qwen2.5:7b")
+    _timeout          = getattr(settings, "OLLAMA_TIMEOUT_SECONDS", 45.0)
+    _embed_api        = getattr(settings, "EMBED_API_FORMAT", "ollama")
+    extract_base_url  = getattr(settings, "EXTRACT_BASE_URL", None)
+    extract_model     = getattr(settings, "EXTRACT_MODEL", None)
+
+    # Primary engine (used for embeddings, entity extraction, and default inference)
+    engine = InferenceEngine(
+        base_url=_default_base_url,
+        model=_default_model,
         embed_model=getattr(settings, "OLLAMA_EMBEDDING_MODEL", "nomic-embed-text"),
-        timeout=getattr(settings, "OLLAMA_TIMEOUT_SECONDS", 45.0),
+        embed_base_url=embed_base_url,
+        extract_base_url=extract_base_url,
+        extract_model=extract_model,
+        timeout=_timeout,
+        embed_api=_embed_api,
+    )
+
+    # Per-tier engines — point at the correct vLLM pod URL for each model tier.
+    # When OLLAMA_BASE_URL_FAST / OLLAMA_BASE_URL_REASONING are not set they
+    # fall back to the primary engine (single-pod mode).
+    slm_model = settings.get_ollama_model("fast")
+    llm_model = settings.get_ollama_model("reasoning")
+
+    _fast_url      = getattr(settings, "OLLAMA_BASE_URL_FAST", None) or _default_base_url
+    _reasoning_url = getattr(settings, "OLLAMA_BASE_URL_REASONING", None) or _default_base_url
+
+    slm_engine: InferenceEngine | None = None
+    llm_engine: InferenceEngine | None = None
+
+    if _fast_url != _default_base_url or slm_model != _default_model:
+        slm_engine = InferenceEngine(
+            base_url=_fast_url,
+            model=slm_model,
+            embed_model=getattr(settings, "OLLAMA_EMBEDDING_MODEL", "nomic-embed-text"),
+            embed_base_url=embed_base_url,
+            timeout=_timeout,
+            embed_api=_embed_api,
+        )
+
+    if _reasoning_url != _default_base_url or llm_model != _default_model:
+        llm_engine = InferenceEngine(
+            base_url=_reasoning_url,
+            model=llm_model,
+            embed_model=getattr(settings, "OLLAMA_EMBEDDING_MODEL", "nomic-embed-text"),
+            embed_base_url=embed_base_url,
+            timeout=_timeout,
+            embed_api=_embed_api,
+        )
+
+    logger.info(
+        "Model tiers — SLM: %s @ %s | LLM: %s @ %s",
+        slm_model, _fast_url, llm_model, _reasoning_url,
     )
 
     # Qdrant client — optional (graceful degrade when not configured)
@@ -51,12 +108,17 @@ def _build_v2_loop() -> V2CognitiveLoop:
         qdrant_service=qdrant_client,
         embedding_fn=engine.embed,
         entity_extractor=engine.extract_entities,
-        top_k_qdrant=10,
-        top_m_graph=25,
-        graph_hops=2,
+        top_k_qdrant=int(os.environ.get("QDRANT_TOP_K", "30")),
+        top_m_graph=int(os.environ.get("GRAPH_TOP_M", "30")),
+        graph_hops=int(os.environ.get("GRAPH_HOPS", "3")),
     )
 
-    loop = V2CognitiveLoop(dnc_router=router, reasoning_engine=engine)
+    loop = V2CognitiveLoop(
+        dnc_router=router,
+        reasoning_engine=engine,
+        slm_engine=slm_engine,
+        llm_engine=llm_engine,
+    )
     logger.info(
         "V2 cognitive loop initialised (graph_available=%s, qdrant=%s)",
         graph_client.is_available(),
@@ -72,7 +134,11 @@ def _try_get_qdrant() -> object | None:
         host = getattr(settings, "QDRANT_HOST", None)
         port = getattr(settings, "QDRANT_PORT", None)
         url = getattr(settings, "QDRANT_URL", None)
-        api_key = getattr(settings, "QDRANT_API_KEY", None)
+        raw_key = getattr(settings, "QDRANT_API_KEY", None)
+        # Reject keys that are whitespace-only (e.g. a stale \r\n secret value)
+        api_key = raw_key.strip() if isinstance(raw_key, str) else raw_key
+        if not api_key:
+            api_key = None
 
         if url:
             return AsyncQdrantClient(url=url, api_key=api_key)

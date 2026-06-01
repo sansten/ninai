@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 import app.services.memory_service as memory_service_module
-from app.services.cognitive_gateway_service import _detect_speaker_mismatch
+from app.services.cognitive_gateway_service import _detect_speaker_mismatch, _prepare_read_candidates
 from app.schemas.memory import MemorySearchRequest
 from app.services.memory_service import MemoryService
 
@@ -347,3 +347,33 @@ def test_detect_speaker_mismatch_mixed_speakers_not_all_mismatch():
     ]
     # One matches → not a full mismatch
     assert _detect_speaker_mismatch("What is Caroline's status?", mems) is False
+
+
+def test_detect_speaker_mismatch_false_when_other_speaker_memory_is_about_subject():
+    mems = [
+        {"content_preview": "[Melanie] Caroline realized that self-care is important after the charity race."},
+        {"content_preview": "[Melanie] Caroline said she needed more me-time."},
+    ]
+    assert _detect_speaker_mismatch("What did Caroline realize after her charity race?", mems) is False
+
+
+def test_prepare_read_candidates_prefers_subject_focused_memory_when_scores_tie():
+    ranked = _prepare_read_candidates(
+        [
+            {
+                "id": "m1",
+                "score": 0.91,
+                "content_preview": "[Caroline] I'm looking into summer ideas.",
+            },
+            {
+                "id": "m2",
+                "score": 0.91,
+                "content_preview": "[Melanie] I'm researching adoption agencies this summer.",
+            },
+        ],
+        "What are Melanie's plans for the summer with respect to adoption?",
+        requester=None,
+        limit=5,
+    )
+
+    assert [item["id"] for item in ranked[:2]] == ["m2", "m1"]
