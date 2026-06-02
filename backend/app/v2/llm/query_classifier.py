@@ -57,32 +57,64 @@ _SYNTHESIS_RE = re.compile(
 )
 
 
+# Inferential / opinion / open-ended verbs — need the stronger model.
+# "what did X realize/decide/learn", "what are X's plans/thoughts/views/reaction"
+_INFERENTIAL_RE = re.compile(
+    r'\b(realiz|decide[ds]?|learn(?:ed|t)?|think[s]?|thought|feel[s]?|felt|'
+    r'believe[ds]?|prefer(?:s|red)?|want[s]?|wanted|plan(?:s|ned|ning)?|'
+    r'consider(?:s|ed)?|expect[s]?|hope[ds]?|wish(?:es|ed)?|intend[s]?|'
+    r'reaction|opinion|view[s]?|reason[s]?|motivat|inspire[ds]?|enjoy)\b',
+    re.IGNORECASE,
+)
+
+# List / enumeration / comparison — broad retrieval + synthesis, not one lookup.
+_LIST_COMPARE_RE = re.compile(
+    r'\bwhat\s+(?:\w+\s+){0,2}(activities|events|things|ways|hobbies|interests|'
+    r'plans|goals|books|movies|places|topics|kinds?|types?|reasons?)\b'
+    r'|\bin\s+what\s+ways\b'
+    r'|\b(compare|comparison|difference|differ|more\s+than|less\s+than|better|worse|'
+    r'rather\s+than|versus|vs)\b',
+    re.IGNORECASE,
+)
+
+# Short, DIRECT single-fact lookups the 7b handles reliably — the only "fast" cases.
+_SIMPLE_FACT_RE = re.compile(
+    r'^\s*(what\s+(is|was|are|were)\s|who\s+(is|was|are|were)\s|'
+    r'when\s+(did|was|is|were)\s|where\s+(did|was|is|were)\s|'
+    r'how\s+(many|much|old|long\s+ago)\b|which\b)',
+    re.IGNORECASE,
+)
+
+
 def classify_query_tier(text: str) -> str:
     """Return 'fast' or 'reasoning' for the given query text.
 
-    'fast'      → SLM path: single-fact lookup, temporal counting, presence checks.
-    'reasoning' → LLM path: counterfactual, multi-hop chain, synthesis, explanation.
+    Conservative bias: only SHORT, DIRECT single-fact lookups go to the fast SLM
+    (qwen2.5:7b). Anything inferential, open-ended, comparative, list-style,
+    counterfactual, or long goes to the stronger reasoning model (deepseek-r1:14b).
+    This corrects the earlier 35.0 regression where too many open_domain /
+    inferential questions hit the weak 7b and underperformed / refused.
     """
     if not text or not text.strip():
         return 'fast'
 
     n_words = len(text.split())
 
-    # Counterfactual / conditional structure always needs reasoning
-    if _COUNTERFACTUAL_RE.search(text):
+    # Anything requiring inference / synthesis / comparison / counterfactual → reasoning
+    if (_COUNTERFACTUAL_RE.search(text)
+            or _LIKELIHOOD_RE.search(text)
+            or _SYNTHESIS_RE.search(text)
+            or _INFERENTIAL_RE.search(text)
+            or _LIST_COMPARE_RE.search(text)):
         return 'reasoning'
 
-    # Likelihood inference needs reasoning
-    if _LIKELIHOOD_RE.search(text):
+    # Longer questions tend to be multi-hop / compositional → reasoning
+    if n_words > 14:
         return 'reasoning'
 
-    # Synthesis / explanation needs reasoning
-    if _SYNTHESIS_RE.search(text):
-        return 'reasoning'
+    # Fast tier ONLY for short, direct single-fact lookups.
+    if _SIMPLE_FACT_RE.search(text):
+        return 'fast'
 
-    # Very long questions almost always require multi-hop reasoning
-    if n_words > 20:
-        return 'reasoning'
-
-    # Default: simple factual lookup — SLM is sufficient
-    return 'fast'
+    # Default to the stronger model when unsure (accuracy > speed).
+    return 'reasoning'
