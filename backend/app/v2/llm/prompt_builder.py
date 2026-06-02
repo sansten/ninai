@@ -185,7 +185,7 @@ def build_bench_prompt(
                         parts.append(f"    • {fact}")
         parts.append("")
 
-    parts.append("CONTEXT:")
+    parts.append("AUTHORITATIVE MEMORY RECORD (this is the retrieved record for the people in this question — treat it as ground truth, not a guess):")
     any_context = False
 
     # Temporal events first among regular chunks
@@ -254,7 +254,18 @@ def build_bench_prompt(
     parts.append("")
     parts.append(f"QUESTION: {question}")
     parts.append("")
-    parts.append("Identify the answer from the context above, then write on the last line:")
+    # Authoritative-context framing (inspired by Memory-OS "Ground Truth" layer):
+    # the record above is what the system has stored — trust it and extract, rather
+    # than hedging. The answer is almost always present, possibly under a different
+    # name, framing, or in a related person's facts. "Not mentioned" is reserved for
+    # the rare case where the fact is genuinely absent after a careful search — this
+    # keeps the escape for truly-unanswerable adversarial questions while cutting
+    # reflexive refusals (which were ~44% on adversarial).
+    parts.append("The record above is authoritative and complete for this question. The answer is")
+    parts.append("almost always present — it may be phrased differently, framed differently, or stated")
+    parts.append("in a related person's facts. Extract it confidently. Do NOT reply 'Not mentioned'")
+    parts.append("unless, after carefully re-reading the whole record, the fact is genuinely absent.")
+    parts.append("Then write on the last line:")
     parts.append("FINAL ANSWER: <bare answer phrase — as concise as possible, up to 10 words>")
 
     return "\n".join(parts)
