@@ -12,9 +12,14 @@ Typical overhead: ~0.2 ms for 10 Qdrant + 30 graph candidates.
 """
 from __future__ import annotations
 
+import asyncio
+import logging
 import math
+import os
 import re
 import time
+
+logger = logging.getLogger(__name__)
 from typing import Any
 
 _STOPWORDS = frozenset({
@@ -104,3 +109,76 @@ def rerank_context(
     reranked_graph = [n for _, n in scored_graph[:top_graph]]
 
     return reranked_qdrant, reranked_graph
+
+
+# ---------------------------------------------------------------------------
+# Cross-encoder reranker — high-precision relevance ranking of retrieved chunks.
+#
+# Replaces the lossy LLM pre-filter (which truncated chunks to ~250 chars, only
+# considered the first 20 candidates, and asked an LLM to emit index numbers).
+# A passage cross-encoder scores the FULL query<->chunk pair, so the answer chunk
+# outranks distractors instead of getting dropped. Model-agnostic / dataset-neutral
+# (ms-marco MiniLM is a general web-passage reranker, no LoCoMo tuning). Small and
+# CPU-friendly. Lazy-loaded once; gracefully returns None so callers fall back.
+# ---------------------------------------------------------------------------
+
+_CE_MODEL_NAME = os.environ.get("CE_RERANK_MODEL", "cross-encoder/ms-marco-MiniLM-L-6-v2")
+_CE_MAX_CHARS = 2000            # full-ish chunk text (vs the old 250); CE truncates to its max tokens
+_HIGH_SIG_TYPES = ("segment_gist", "personal_attribute", "temporal_event")
+_ce_model = None
+_ce_failed = False
+
+
+def _get_cross_encoder():
+    global _ce_model, _ce_failed
+    if _ce_model is None and not _ce_failed:
+        try:
+            from sentence_transformers import CrossEncoder
+            _ce_model = CrossEncoder(_CE_MODEL_NAME)
+            logger.info("Cross-encoder reranker loaded: %s", _CE_MODEL_NAME)
+        except Exception as exc:
+            logger.warning("Cross-encoder load failed (%s); reranker disabled", exc)
+            _ce_failed = True
+    return _ce_model
+
+
+def _chunk_text(ch: dict[str, Any]) -> str:
+    p = ch.get("payload", {}) or {}
+    return str(p.get("text") or p.get("content") or p.get("summary") or "")
+
+
+def _is_high_signal(ch: dict[str, Any]) -> bool:
+    p = ch.get("payload", {}) or {}
+    return p.get("type") in _HIGH_SIG_TYPES or p.get("entity_type") in _HIGH_SIG_TYPES
+
+
+def _ce_rerank_sync(query: str, chunks: list[dict[str, Any]], top_k: int) -> list[dict[str, Any]] | None:
+    model = _get_cross_encoder()
+    if model is None or len(chunks) <= top_k:
+        return None
+    pairs = [(query, _chunk_text(ch)[:_CE_MAX_CHARS]) for ch in chunks]
+    scores = model.predict(pairs)
+    ranked = [ch for _, ch in sorted(zip(scores, chunks), key=lambda t: float(t[0]), reverse=True)]
+    top = ranked[:top_k]
+    # Always retain high-signal chunks (gists, entity/temporal facts) even if they
+    # ranked below the cutoff — same safety net the LLM pre-filter had.
+    top_ids = {id(c) for c in top}
+    extra = [c for c in chunks if id(c) not in top_ids and _is_high_signal(c)]
+    return top + extra
+
+
+async def cross_encoder_rerank(
+    query: str, chunks: list[dict[str, Any]], top_k: int = 12
+) -> list[dict[str, Any]] | None:
+    """Rerank retrieved chunks by cross-encoder relevance to the query.
+
+    Returns the top_k most relevant chunks (plus retained high-signal chunks), or
+    None if the model is unavailable / there's nothing to trim — so callers fall
+    back to the existing LLM pre-filter. The blocking predict runs in a thread so
+    it never stalls the event loop.
+    """
+    try:
+        return await asyncio.to_thread(_ce_rerank_sync, query, chunks, top_k)
+    except Exception as exc:
+        logger.warning("Cross-encoder rerank failed: %s", exc)
+        return None
