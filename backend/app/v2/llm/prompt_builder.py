@@ -16,11 +16,28 @@ Output schema the model must return:
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 _MAX_GRAPH_NODES = 8
 _MAX_QDRANT_CHUNKS = 8
 _MAX_NODE_CONTENT_CHARS = 200
+_QUESTION_NAME_RE = re.compile(r"\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?\b")
+_QUESTION_TERM_RE = re.compile(r"[A-Za-z][A-Za-z'_-]{2,}")
+_STOP_NAME_WORDS = {
+    "What", "When", "Where", "Who", "Why", "How", "Which", "Would", "Did", "Does",
+    "Do", "Could", "Should", "Is", "Are", "Was", "Were", "The", "A", "An",
+    "January", "February", "March", "April", "May", "June", "July", "August",
+    "September", "October", "November", "December",
+}
+_QUESTION_STOP_WORDS = {
+    "a", "an", "and", "are", "as", "at", "based", "be", "by", "can", "concise",
+    "conversation", "did", "do", "does", "for", "from", "had", "has", "have", "how",
+    "if", "in", "is", "it", "likely", "may", "might", "of", "on", "one", "or",
+    "phrase", "probably", "respect", "should", "that", "the", "their", "them", "then",
+    "these", "they", "this", "those", "to", "was", "were", "what", "when", "where",
+    "which", "who", "why", "with", "would",
+}
 
 # ---------------------------------------------------------------------------
 # Bench-mode prompt — plain-text output, maximally direct extraction
@@ -47,7 +64,9 @@ You are a memory-QA system. Find the answer in context and output it as a SHORT 
 1. Read ALL context before answering. Facts appear anywhere.
 2. PERSON PROFILES (PROFILE section): Authoritative accumulated facts — use these first.
 3. DATE FORMAT: Match exactly how the date appears in context. "7 May 2023" → output "7 May 2023". "2022" → output "2022". "21 December 2022" → output "21 December 2022". NEVER output YYYY-MM-DD format (no "2023-05-07"). NEVER convert a stated expression like "the week before January 21" into a computed date.
-4. CROSS-PERSON: Multiple people are in context. If question asks about Person B but only Person A's fact exists, give the fact anyway. Only say "Not mentioned" if the fact is ENTIRELY absent from all context.
+4. CROSS-PERSON: Multiple people are in context. If the question asks about Person B, answer from Person B's facts first.
+   Only use another person's facts when the question explicitly asks for that person's opinion, relationship, or a shared event.
+   NEVER substitute Person A's hobby/object/event for Person B's.
 5. WORD MISMATCH: Question may paraphrase ("international" when context says "local"). Give the closest matching fact from context.
 6. NUMBERS: Give exact numerals or phrases ("3", "twice", "once in 2019", "five times").
 7. MULTI-HOP: Trace the chain (find intermediate fact → then final answer).
@@ -67,6 +86,8 @@ You are a memory-QA system. Find the answer in context and output it as a SHORT 
     • "yesterday" with [2023-05-25] → 24 May 2023
     • "last month" with [2023-05-XX] → April 2023
     If the context ALREADY states the date phrase explicitly ("the week before January 21, 2022", "early August 2023", "a few years before 2023"), output it VERBATIM — no further computation.
+    NEVER shorten a stored temporal phrase. BAD: "last weekend"  GOOD: "the week before 6 July 2023"
+    NEVER leave the answer as a bare deictic phrase like "yesterday", "last Saturday", or "next Fri" if the surrounding record lets you make it more specific.
 11. SEARCH EXHAUSTIVELY: Before "Not mentioned", re-scan every context block. Facts may appear in CONTEXT, SUMMARY, or PROFILE sections. Paraphrase the question and look again.
 12. DURATION QUESTIONS ("how long has X", "how many years/months"): Find the start date and the conversation date [YYYY-MM-DD], compute the difference. "Started in 2020" with context dated 2023 → "three years". Output as "N years" or "N months", not as a date range.
 13. PROPER NAMES & SPECIFIC ROLES: Give the most specific term from context — never substitute a generic label.
@@ -89,6 +110,65 @@ FINAL ANSWER: <bare answer phrase>\
 """
 
 
+def _extract_target_names(question: str) -> list[str]:
+    names: list[str] = []
+    seen: set[str] = set()
+    for match in _QUESTION_NAME_RE.findall(question or ""):
+        if match in _STOP_NAME_WORDS:
+            continue
+        if match not in seen:
+            seen.add(match)
+            names.append(match)
+    return names
+
+
+def _target_score(target_names: list[str], *texts: str) -> int:
+    if not target_names:
+        return 0
+    haystacks = [str(t or "").lower() for t in texts if str(t or "").strip()]
+    score = 0
+    for target in target_names:
+        patt = re.compile(rf"\b{re.escape(target.lower())}\b")
+        for idx, hay in enumerate(haystacks):
+            if patt.search(hay):
+                score += 10 if idx == 0 else 4
+    return score
+
+
+def _extract_question_terms(question: str, target_names: list[str]) -> list[str]:
+    blocked = {part.lower() for name in target_names for part in name.split()}
+    terms: list[str] = []
+    seen: set[str] = set()
+    for raw in _QUESTION_TERM_RE.findall(question or ""):
+        term = raw.lower().strip("_-'")
+        if term.endswith("'s"):
+            term = term[:-2]
+        if len(term) < 3 or term in _QUESTION_STOP_WORDS or term in blocked:
+            continue
+        if term not in seen:
+            seen.add(term)
+            terms.append(term)
+    return terms
+
+
+def _question_term_score(question_terms: list[str], *texts: str) -> int:
+    if not question_terms:
+        return 0
+    haystacks = [str(t or "").lower() for t in texts if str(t or "").strip()]
+    score = 0
+    for term in question_terms:
+        patt = re.compile(rf"\b{re.escape(term)}\b")
+        specificity = max(1, min(len(term), 10) // 2)
+        for idx, hay in enumerate(haystacks):
+            if patt.search(hay):
+                score += (6 if idx == 0 else 3) + specificity
+    return score
+
+
+def _relevance_score(target_names: list[str], question_terms: list[str], *texts: str) -> int:
+    return _target_score(target_names, *texts) + _question_term_score(question_terms, *texts)
+
+
 def build_bench_prompt(
     user_input: str,
     graph_nodes: list,
@@ -97,6 +177,17 @@ def build_bench_prompt(
 ) -> str:
     """QA-optimised plain-text prompt for benchmarking."""
     parts: list[str] = [_BENCH_SYSTEM_INSTRUCTION, ""]
+    question = user_input
+    for pfx in (
+        "Answer in one concise phrase based on the conversation history: ",
+        "Answer concisely: ",
+        "Answer: ",
+    ):
+        if question.startswith(pfx):
+            question = question[len(pfx):]
+            break
+    target_names = _extract_target_names(question)
+    question_terms = _extract_question_terms(question, target_names)
 
     # Classify graph nodes by entity type
     profile_nodes = [n for n in graph_nodes if n.get("entity_type") in ("person_profile",)
@@ -104,6 +195,27 @@ def build_bench_prompt(
     attr_nodes = [n for n in graph_nodes if n.get("entity_type") == "personal_attribute"]
     regular_nodes = [n for n in graph_nodes
                      if n not in profile_nodes and n not in attr_nodes]
+    profile_nodes.sort(
+        key=lambda n: _relevance_score(
+            target_names,
+            question_terms,
+            n.get("subject", ""),
+            n.get("content", ""),
+            n.get("name", ""),
+        ),
+        reverse=True,
+    )
+    attr_nodes.sort(
+        key=lambda n: _relevance_score(
+            target_names,
+            question_terms,
+            n.get("subject", ""),
+            n.get("attribute", ""),
+            n.get("value", ""),
+            n.get("content", ""),
+        ),
+        reverse=True,
+    )
 
     # Person profiles first — highest priority context
     if profile_nodes:
@@ -193,6 +305,28 @@ def build_bench_prompt(
                       if n.get("entity_type") == "temporal_event"
                       or n.get("type") == "temporal_event"]
     other_nodes = [n for n in regular_nodes if n not in temporal_nodes]
+    temporal_nodes.sort(
+        key=lambda n: _relevance_score(
+            target_names,
+            question_terms,
+            n.get("subject", ""),
+            n.get("content", ""),
+            n.get("text", ""),
+            n.get("name", ""),
+        ),
+        reverse=True,
+    )
+    other_nodes.sort(
+        key=lambda n: _relevance_score(
+            target_names,
+            question_terms,
+            n.get("subject", ""),
+            n.get("content", ""),
+            n.get("text", ""),
+            n.get("name", ""),
+        ),
+        reverse=True,
+    )
 
     for node in temporal_nodes[:10]:
         content = str(node.get("content") or node.get("text") or node.get("name") or "")[:350]
@@ -206,6 +340,28 @@ def build_bench_prompt(
     # Segment gists first (dense factual summaries) among Qdrant chunks
     gist_chunks = [c for c in non_pa_chunks if c.get("payload", {}).get("type") == "segment_gist"]
     regular_chunks = [c for c in non_pa_chunks if c not in gist_chunks]
+    gist_chunks.sort(
+        key=lambda c: _relevance_score(
+            target_names,
+            question_terms,
+            c.get("payload", {}).get("speaker", ""),
+            c.get("payload", {}).get("subject", ""),
+            c.get("payload", {}).get("text", ""),
+            c.get("payload", {}).get("content", ""),
+        ),
+        reverse=True,
+    )
+    regular_chunks.sort(
+        key=lambda c: _relevance_score(
+            target_names,
+            question_terms,
+            c.get("payload", {}).get("speaker", ""),
+            c.get("payload", {}).get("subject", ""),
+            c.get("payload", {}).get("text", ""),
+            c.get("payload", {}).get("content", ""),
+        ),
+        reverse=True,
+    )
 
     _MAX_GISTS = min(8, len(gist_chunks))
     for chunk in gist_chunks[:_MAX_GISTS]:
@@ -240,19 +396,10 @@ def build_bench_prompt(
     if not any_context:
         parts.append("  (no context available)")
 
-    # Strip benchmark directive prefix from question
-    question = user_input
-    for pfx in (
-        "Answer in one concise phrase based on the conversation history: ",
-        "Answer concisely: ",
-        "Answer: ",
-    ):
-        if question.startswith(pfx):
-            question = question[len(pfx):]
-            break
-
     parts.append("")
     parts.append(f"QUESTION: {question}")
+    if target_names:
+        parts.append(f"TARGET PEOPLE: {', '.join(target_names)}")
     parts.append("")
     # Authoritative-context framing (inspired by Memory-OS "Ground Truth" layer):
     # the record above is what the system has stored — trust it and extract, rather
@@ -265,6 +412,15 @@ def build_bench_prompt(
     parts.append("almost always present — it may be phrased differently, framed differently, or stated")
     parts.append("in a related person's facts. Extract it confidently. Do NOT reply 'Not mentioned'")
     parts.append("unless, after carefully re-reading the whole record, the fact is genuinely absent.")
+    if target_names:
+        parts.append("Answer with facts about TARGET PEOPLE first. Do not swap in a nearby fact from")
+        parts.append("someone else unless the question explicitly asks for that person's opinion or a shared event.")
+    if question_terms:
+        parts.append("When several facts mention the same person, prefer the fact block whose wording most")
+        parts.append("closely overlaps the question keywords.")
+    if question.lower().startswith("when "):
+        parts.append("For temporal questions, output the most specific stored date phrase you can justify.")
+        parts.append("Do not leave the answer as 'yesterday', 'last Saturday', 'next Fri', or similar shorthand.")
     parts.append("Then write on the last line:")
     parts.append("FINAL ANSWER: <bare answer phrase — as concise as possible, up to 10 words>")
 

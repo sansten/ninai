@@ -2,14 +2,14 @@
 V2 Inference Engine
 
 Stateless async wrapper around any OpenAI-compatible inference backend:
-vLLM, LMDeploy, Ollama (/v1/*), or any OpenAI-API-compatible server.
+vLLM, LMDeploy, local runtime (/v1/*), or any OpenAI-API-compatible server.
 
 Produces:
   1. A natural-language response
   2. Graph node IDs cited in the reasoning (explainability)
   3. Extracted entities for graph write-back
 
-Embeddings use either Ollama's native /api/embeddings endpoint or the
+Embeddings use either a native /api/embeddings endpoint or the
 OpenAI-compatible /v1/embeddings endpoint, configured via embed_api.
 A separate embed_base_url can point to a CPU-only host (e.g. for
 nomic-embed-text) while inference runs on GPU.
@@ -30,7 +30,7 @@ from app.v2.memory.entity_extraction import extract_v2_entities
 logger = logging.getLogger(__name__)
 
 _DEFAULT_TIMEOUT = 45.0
-_EMBED_PATH_OLLAMA = "/api/embeddings"
+_EMBED_PATH_NATIVE = "/api/embeddings"
 _EMBED_PATH_OPENAI = "/v1/embeddings"
 _CHAT_PATH = "/v1/chat/completions"
 
@@ -153,6 +153,25 @@ def _parse_final_answer(text: str) -> str:
     return candidate
 
 
+def _best_effort_plain_answer(*texts: str) -> str:
+    """Try multiple raw text variants and return the first non-empty answer."""
+    candidates: list[str] = []
+    seen: set[str] = set()
+    for text in texts:
+        raw = str(text or "").strip()
+        if not raw or raw in seen:
+            continue
+        seen.add(raw)
+        candidates.append(raw)
+
+    for raw in candidates:
+        answer = _parse_final_answer(raw)
+        if answer:
+            return answer
+
+    return ""
+
+
 @dataclass
 class InferenceResult:
     response: str = ""
@@ -166,7 +185,7 @@ class InferenceEngine:
     """
     Thin async wrapper around any OpenAI-compatible inference endpoint.
 
-    Works with vLLM, LMDeploy, Ollama, or any /v1/chat/completions server.
+    Works with vLLM, LMDeploy, local runtimes, or any /v1/chat/completions server.
     Each instance is configured with a base_url pointing to one backend pod —
     instantiate multiple engines to route different query tiers to different pods.
 
@@ -183,7 +202,7 @@ class InferenceEngine:
         extract_base_url: str | None = None,
         extract_model: str | None = None,
         timeout: float = _DEFAULT_TIMEOUT,
-        embed_api: str = "ollama",
+        embed_api: str = "native",
     ) -> None:
         self._base = base_url.rstrip("/")
         self._embed_base = (embed_base_url or base_url).rstrip("/")
@@ -192,7 +211,7 @@ class InferenceEngine:
         self._model = model
         self._embed_model = embed_model
         self._timeout = timeout
-        # "ollama" → /api/embeddings with {"prompt": ...}
+        # "native" → /api/embeddings with {"prompt": ...}
         # "openai" → /v1/embeddings with {"input": ...}  (LMDeploy / vLLM)
         self._embed_api = embed_api.lower()
 
@@ -203,14 +222,15 @@ class InferenceEngine:
     async def embed(self, text: str) -> list[float]:
         try:
             async with httpx.AsyncClient(timeout=self._timeout) as client:
-                if self._embed_api == "openai":
+                api_mode = "native" if self._embed_api == "native" else self._embed_api
+                if api_mode == "openai":
                     payload = {"model": self._embed_model, "input": text}
                     resp = await client.post(f"{self._embed_base}{_EMBED_PATH_OPENAI}", json=payload)
                     resp.raise_for_status()
                     return resp.json()["data"][0]["embedding"]
                 else:
                     payload = {"model": self._embed_model, "prompt": text}
-                    resp = await client.post(f"{self._embed_base}{_EMBED_PATH_OLLAMA}", json=payload)
+                    resp = await client.post(f"{self._embed_base}{_EMBED_PATH_NATIVE}", json=payload)
                     resp.raise_for_status()
                     return resp.json().get("embedding", [])
         except Exception as exc:
@@ -325,30 +345,72 @@ class InferenceEngine:
             _max_tokens = 700
 
         try:
-            payload = {
-                "model": _active_model,
-                "messages": [
-                    {"role": "system", "content": _system},
-                    {"role": "user", "content": user_content},
-                ],
-                "temperature": 0.0,
-                "max_tokens": _max_tokens,
-                "stop": ["\n\nQUESTION:", "\nCONTEXT:", "\n\nCONTEXT:"],
-                "stream": False,
-            }
-            async with httpx.AsyncClient(timeout=self._timeout) as client:
-                resp = await client.post(f"{self._base}{_CHAT_PATH}", json=payload)
-                resp.raise_for_status()
-                data = resp.json()
+            async def _chat_once(
+                system_prompt: str,
+                user_prompt: str,
+                max_tokens: int,
+                stop: list[str] | None,
+            ) -> tuple[str, str]:
+                payload = {
+                    "model": _active_model,
+                    "messages": [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt},
+                    ],
+                    "temperature": 0.0,
+                    "max_tokens": max_tokens,
+                    "stream": False,
+                }
+                if stop:
+                    payload["stop"] = stop
+                async with httpx.AsyncClient(timeout=self._timeout) as client:
+                    resp = await client.post(f"{self._base}{_CHAT_PATH}", json=payload)
+                    resp.raise_for_status()
+                    data = resp.json()
                 msg = data["choices"][0]["message"]
-                raw_text = (msg.get("content") or "").strip()
-                # Fallback: thinking models may place output in a reasoning channel
-                # when content is empty (e.g. truncated mid-think). Mine it for an answer.
-                if not raw_text:
-                    reasoning = (msg.get("reasoning_content") or msg.get("reasoning") or "").strip()
-                    if reasoning:
-                        raw_text = reasoning
-                result.response = _parse_final_answer(raw_text)
+                content = str(msg.get("content") or "").strip()
+                reasoning = str(msg.get("reasoning_content") or msg.get("reasoning") or "").strip()
+                return content, reasoning
+
+            content, reasoning = await _chat_once(
+                _system,
+                user_content,
+                _max_tokens,
+                ["\n\nQUESTION:", "\nCONTEXT:", "\n\nCONTEXT:"],
+            )
+            result.response = _best_effort_plain_answer(
+                content,
+                reasoning,
+                f"{content}\n{reasoning}" if (content and reasoning) else "",
+                f"{reasoning}\n{content}" if (content and reasoning) else "",
+            )
+
+            # Empty parsed answers are catastrophic in bench mode: retrieval may be
+            # healthy, the HTTP call may succeed, and yet the run silently scores ~0.
+            # Retry once with a stricter "answer only" instruction and no stop hints.
+            if not result.response:
+                retry_system = (
+                    "Return only the bare answer phrase from the provided context. "
+                    "No thinking, no explanation, no markdown, no labels."
+                )
+                retry_user = (
+                    "Answer with only the final phrase.\n\n"
+                    + prompt
+                )
+                retry_content, retry_reasoning = await _chat_once(
+                    retry_system,
+                    retry_user,
+                    min(_max_tokens, 256),
+                    None,
+                )
+                result.response = _best_effort_plain_answer(
+                    retry_content,
+                    retry_reasoning,
+                    f"{retry_content}\n{retry_reasoning}" if (retry_content and retry_reasoning) else "",
+                    f"{retry_reasoning}\n{retry_content}" if (retry_content and retry_reasoning) else "",
+                )
+                if not result.response:
+                    result.error = "empty parsed answer"
         except Exception as exc:
             logger.warning("Inference failed: %s", exc)
             result.error = str(exc)

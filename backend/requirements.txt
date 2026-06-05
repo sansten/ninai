@@ -49,6 +49,12 @@ hiredis==2.3.2
 # -----------------------------------------------------------------------------
 qdrant-client==1.12.1
 
+# Cross-encoder reranker (NINAI_CE_RERANK=1). Pulls torch (CPU) — adds ~2GB to the
+# image. Bake the model into the image at build time to avoid a runtime HF download:
+#   RUN python -c "from sentence_transformers import CrossEncoder; CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')"
+# NOTE (Codex): pin to a torch-cpu build to keep the image lean.
+sentence-transformers==3.0.1
+
 # -----------------------------------------------------------------------------
 # Background Tasks
 # -----------------------------------------------------------------------------

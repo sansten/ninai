@@ -32,6 +32,10 @@ from app.v2.memory.dnc_router import DNCMemoryRouter, ReadResult, WriteResult
 _BENCH_MODE = os.environ.get("NINAI_BENCH_MODE", "0").lower() in ("1", "true", "yes")
 _SECOND_CHANCE = os.environ.get("NINAI_SECOND_CHANCE", "1").lower() in ("1", "true", "yes")
 _LLM_RERANK = os.environ.get("NINAI_LLM_RERANK", "1").lower() in ("1", "true", "yes")
+# Cross-encoder reranker: high-precision relevance ranking of retrieved chunks.
+# When on, it replaces the lossy truncated-snippet LLM pre-filter (falls back to it
+# if the model can't load). Targets the "answer chunk retrieved but not selected" failure.
+_CE_RERANK = os.environ.get("NINAI_CE_RERANK", "0").lower() in ("1", "true", "yes")
 _GIST_INTERVAL = int(os.environ.get("GIST_INTERVAL", "25"))
 
 _REFUSAL_FRAGMENTS = (
@@ -138,9 +142,23 @@ class V2CognitiveLoop:
                 result.error = f"retrieval: {exc}"
 
         # ---------------------------------------------------------------
-        # Phase 1b: LLM context pre-filtering (bench mode, 3B model)
+        # Phase 1b: context reranking / pre-filtering (bench mode)
         # ---------------------------------------------------------------
-        if not ingest_only and _BENCH_MODE and _LLM_RERANK and read.qdrant_chunks:
+        # Preferred: cross-encoder reranker (full query<->chunk relevance over the
+        # whole pool). Falls through to the LLM pre-filter if disabled/unavailable.
+        _ce_applied = False
+        if (not ingest_only and _BENCH_MODE and _CE_RERANK
+                and read.qdrant_chunks and len(read.qdrant_chunks) > 8):
+            try:
+                from app.v2.llm.reranker import cross_encoder_rerank
+                _reranked = await cross_encoder_rerank(user_input, read.qdrant_chunks, top_k=12)
+                if _reranked:
+                    read.qdrant_chunks = _reranked
+                    _ce_applied = True
+            except Exception as exc:
+                logger.warning("Cross-encoder rerank failed: %s", exc)
+
+        if not ingest_only and _BENCH_MODE and _LLM_RERANK and not _ce_applied and read.qdrant_chunks:
             try:
                 chunk_texts = []
                 for ch in read.qdrant_chunks:
@@ -176,6 +194,7 @@ class V2CognitiveLoop:
         # ---------------------------------------------------------------
         # Select inference engine: explicit model_hint overrides auto-classification.
         # With two pods (SLM on T4, LLM on A100), this routes to the correct URL.
+        selected_tier = "reasoning"
         if model_hint:
             # Explicit override — caller knows which tier they want
             _hint_low = model_hint.lower()
@@ -183,10 +202,13 @@ class V2CognitiveLoop:
                 self._slm_engine._model if hasattr(self._slm_engine, '_model') else '',
             )):
                 active_engine = self._slm_engine
+                selected_tier = "fast"
             else:
                 active_engine = self._llm_engine
+                selected_tier = "reasoning"
         else:
             tier = classify_query_tier(user_input)
+            selected_tier = tier
             active_engine = self._llm_engine if tier == 'reasoning' else self._slm_engine
 
         # ingest_only=True skips LLM inference — caller only wants write-back.
@@ -283,7 +305,10 @@ class V2CognitiveLoop:
                     qdrant_chunks=read.qdrant_chunks,
                     session_utterances=[],
                 )
-                infer2 = await active_engine.infer_plain(prompt2)
+                # If the first answer refused and we started on fast tier,
+                # escalate retry to reasoning tier for higher recall.
+                retry_engine = self._llm_engine if selected_tier == "fast" else active_engine
+                infer2 = await retry_engine.infer_plain(prompt2)
                 if infer2.response and not _is_refusal(infer2.response):
                     result.response = infer2.response
                     result.cited_node_ids = infer2.cited_node_ids
