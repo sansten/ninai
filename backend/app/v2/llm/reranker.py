@@ -122,7 +122,10 @@ def rerank_context(
 # CPU-friendly. Lazy-loaded once; gracefully returns None so callers fall back.
 # ---------------------------------------------------------------------------
 
-_CE_MODEL_NAME = os.environ.get("CE_RERANK_MODEL", "cross-encoder/ms-marco-MiniLM-L-6-v2")
+# BGE reranker (conversational/retrieval-fit) rather than ms-marco (web-search-fit):
+# bge-reranker-base is the CPU-practical default; set CE_RERANK_MODEL=BAAI/bge-reranker-v2-m3
+# for a stronger (heavier) reranker. Scores are relevance logits — we only sort by them.
+_CE_MODEL_NAME = os.environ.get("CE_RERANK_MODEL", "BAAI/bge-reranker-base")
 _CE_MAX_CHARS = 2000            # full-ish chunk text (vs the old 250); CE truncates to its max tokens
 _HIGH_SIG_TYPES = ("segment_gist", "personal_attribute", "temporal_event")
 _ce_model = None
