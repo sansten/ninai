@@ -1,17 +1,17 @@
 """
 V2 DNC-Inspired Memory Router (Component C)
 
-Acts as the bridging layer between the Reasoning Engine (Ollama) and the
+Acts as the bridging layer between the Reasoning Engine (LLM backend) and the
 Chronological Knowledge Graph (FalkorDB).
 
 Read Weighting:
-  1. Embed query with Ollama (nomic-embed-text)
+    1. Embed query with local embedding backend (nomic-embed-text)
   2. Dense search in Qdrant → top-K chunk ids (episodic memory)
   3. FalkorDB subgraph traversal seeded from those ids → contextual nodes
   4. Rank by (weight * recency_score), return top-M nodes as prompt context
 
 Write Weighting:
-  1. Extract entities from new interaction via Ollama (structured JSON)
+    1. Extract entities from new interaction via LLM (structured JSON)
   2. MERGE each entity into FalkorDB (create-or-reinforce)
   3. Create Utterance node for the interaction
   4. Link utterance → entities via RESPONDED_TO edges
@@ -25,6 +25,7 @@ Purge:
 from __future__ import annotations
 
 import logging
+import os
 import re
 import time
 import uuid
@@ -33,6 +34,14 @@ from typing import Any
 
 from app.v2.llm.reranker import rerank_context
 from app.v2.memory.entity_extraction import parse_temporal_context
+
+# Production write-throughput: defer the expensive LLM entity extraction (and the
+# entity/profile/high-signal graph+Qdrant upserts that depend on it) OFF the write
+# hot path into a background Celery task. The hot write then only does the cheap
+# utterance node + episodic vector upsert, returning fast; the entity graph is
+# back-filled within seconds. OFF by default (inline extraction) so the benchmark
+# and any latency-tolerant caller are unchanged. See app/tasks/v2_enrich_task.py.
+_ASYNC_EXTRACT = os.environ.get("NINAI_ASYNC_EXTRACT", "0").lower() in ("1", "true", "yes")
 
 _Q_SKIP = frozenset({
     "what", "when", "where", "who", "why", "how", "which", "did", "does",
@@ -407,111 +416,23 @@ class DNCMemoryRouter:
         if not self._graph.is_available():
             return result
 
-        # 1. Extract entities from utterance
-        entities: list[dict[str, Any]] = []
+        # Temporal context (used by the utterance node and the episodic vector below).
         temporal_ctx = parse_temporal_context(utterance_text)
         anchor_date = temporal_ctx.get("anchor_date")
         speaker = temporal_ctx.get("speaker")
-        if self._extract_entities:
-            try:
-                entities = await self._extract_entities(utterance_text) or []
-            except Exception as exc:
-                logger.warning("Entity extraction failed: %s", exc)
 
-        # 2. Upsert entity nodes into graph
+        # 1-2c. Extract entities + upsert entity/profile/high-signal nodes.
+        # Inline by default; deferred to a background Celery task when
+        # NINAI_ASYNC_EXTRACT=1 (production write-throughput — the entity graph is
+        # back-filled within seconds by enrich_entities_async()).
+        entities: list[dict[str, Any]] = []
         entity_ids: list[str] = []
-        for ent in entities:
-            eid = ent.get("id") or str(uuid.uuid4())
-            name = ent.get("name", "unknown")
-            etype = ent.get("type", "concept")
-            try:
-                await self._graph.upsert_entity(
-                    tenant_id,
-                    eid,
-                    name,
-                    etype,
-                    attributes={
-                        "content": ent.get("content"),
-                        "subject": ent.get("subject"),
-                        "attribute": ent.get("attribute"),
-                        "value": ent.get("value"),
-                        "canonical_date": ent.get("canonical_date"),
-                    },
-                )
-                entity_ids.append(eid)
-                result.graph_writes += 1
-            except Exception as exc:
-                logger.warning("Entity upsert failed: %s", exc)
-
+        if not _ASYNC_EXTRACT:
+            entities, entity_ids = await self._extract_and_index_entities(
+                tenant_id, session_id, utterance_text, anchor_date, speaker
+            )
+            result.graph_writes += len(entity_ids)
         result.entity_ids = entity_ids
-
-        # 2b. Accumulate personal_attribute entities into per-person profile nodes
-        #     so facts survive beyond individual Utterance traversal depth.
-        attr_by_subject: dict[str, list[str]] = {}
-        high_signal_entities: list[dict[str, Any]] = []
-        for ent in entities:
-            etype = ent.get("type", "")
-            if etype == "personal_attribute":
-                subj = str(ent.get("subject") or "")
-                attr = str(ent.get("attribute") or "")
-                val = str(ent.get("value") or ent.get("name") or "")
-                if subj and (attr or val):
-                    fact = f"{attr}: {val}" if attr and val else (attr or val)
-                    attr_by_subject.setdefault(subj, []).append(fact)
-                    high_signal_entities.append(ent)
-            elif etype == "temporal_event":
-                high_signal_entities.append(ent)
-
-        for person_name, facts in attr_by_subject.items():
-            try:
-                await self._graph.upsert_person_profile(tenant_id, person_name, facts)
-            except Exception as exc:
-                logger.warning("Profile upsert failed for %s: %s", person_name, exc)
-
-        # 2c. Index high-signal entities separately in Qdrant for precision recall.
-        #     Each personal_attribute and temporal_event gets its own short embedding
-        #     so direct attribute questions ("What is X's hobby?") retrieve them precisely.
-        if high_signal_entities and self._qdrant and self._embed:
-            for ent in high_signal_entities[:20]:
-                content = str(ent.get("content") or ent.get("name") or "")[:300]
-                if not content:
-                    continue
-                # Use natural-language form for embedding to improve cosine similarity
-                # with natural-language questions ("What is John's hobby?").
-                etype = ent.get("type", "")
-                if etype == "personal_attribute":
-                    subj = str(ent.get("subject") or "")
-                    attr = str(ent.get("attribute") or "").replace("_", " ")
-                    val = str(ent.get("value") or "")
-                    if subj and attr and val:
-                        content = f"{subj}'s {attr} is {val}"
-                try:
-                    ent_embedding = await self._embed(content)
-                    if ent_embedding:
-                        ent_point_id = str(uuid.uuid4())
-                        await self._qdrant_upsert(
-                            tenant_id=tenant_id,
-                            point_id=ent_point_id,
-                            embedding=ent_embedding,
-                            payload={
-                                "text": content,
-                                "type": ent.get("type", "entity"),
-                                "entity_type": ent.get("type", "entity"),
-                                "subject": str(ent.get("subject") or ""),
-                                "attribute": str(ent.get("attribute") or ""),
-                                "value": str(ent.get("value") or ""),
-                                "canonical_date": str(ent.get("canonical_date") or ""),
-                                "entity_id": str(ent.get("id") or ""),
-                                "session_id": session_id,
-                                "tenant_id": tenant_id,
-                                "organization_id": tenant_id,
-                                "anchor_date": anchor_date or "",
-                                "speaker": speaker or "",
-                                "created_at": int(time.time()),
-                            },
-                        )
-                except Exception as exc:
-                    logger.warning("Entity Qdrant index failed: %s", exc)
 
         # 3. Create Utterance node
         utt_id = str(uuid.uuid4())
@@ -579,7 +500,165 @@ class DNCMemoryRouter:
             except Exception as exc:
                 logger.warning("Qdrant upsert failed: %s", exc)
 
+        # 7. When extraction was deferred, kick off the background task that extracts
+        #    entities and back-fills the entity graph + this episodic point.
+        if _ASYNC_EXTRACT and self._extract_entities:
+            try:
+                from app.tasks.v2_enrich_task import enqueue_v2_enrich
+                enqueue_v2_enrich(
+                    tenant_id=tenant_id,
+                    session_id=session_id,
+                    utt_id=utt_id,
+                    point_id=result.qdrant_point_id,
+                    utterance_text=utterance_text,
+                )
+            except Exception as exc:
+                logger.warning("Async enrich enqueue failed (non-fatal): %s", exc)
+
         return result
+
+    async def _extract_and_index_entities(
+        self,
+        tenant_id: str,
+        session_id: str,
+        utterance_text: str,
+        anchor_date: str | None,
+        speaker: str | None,
+    ) -> tuple[list[dict[str, Any]], list[str]]:
+        """Extract entities and upsert entity / person-profile / high-signal nodes
+        (steps 1-2c of the write path). Shared by the inline write and the async
+        enrichment task. Returns (entities, entity_ids)."""
+        entities: list[dict[str, Any]] = []
+        if self._extract_entities:
+            try:
+                entities = await self._extract_entities(utterance_text) or []
+            except Exception as exc:
+                logger.warning("Entity extraction failed: %s", exc)
+
+        entity_ids: list[str] = []
+        for ent in entities:
+            eid = ent.get("id") or str(uuid.uuid4())
+            name = ent.get("name", "unknown")
+            etype = ent.get("type", "concept")
+            try:
+                await self._graph.upsert_entity(
+                    tenant_id,
+                    eid,
+                    name,
+                    etype,
+                    attributes={
+                        "content": ent.get("content"),
+                        "subject": ent.get("subject"),
+                        "attribute": ent.get("attribute"),
+                        "value": ent.get("value"),
+                        "canonical_date": ent.get("canonical_date"),
+                    },
+                )
+                entity_ids.append(eid)
+            except Exception as exc:
+                logger.warning("Entity upsert failed: %s", exc)
+
+        # Accumulate personal_attribute entities into per-person profile nodes so
+        # facts survive beyond individual Utterance traversal depth.
+        attr_by_subject: dict[str, list[str]] = {}
+        high_signal_entities: list[dict[str, Any]] = []
+        for ent in entities:
+            etype = ent.get("type", "")
+            if etype == "personal_attribute":
+                subj = str(ent.get("subject") or "")
+                attr = str(ent.get("attribute") or "")
+                val = str(ent.get("value") or ent.get("name") or "")
+                if subj and (attr or val):
+                    fact = f"{attr}: {val}" if attr and val else (attr or val)
+                    attr_by_subject.setdefault(subj, []).append(fact)
+                    high_signal_entities.append(ent)
+            elif etype == "temporal_event":
+                high_signal_entities.append(ent)
+
+        for person_name, facts in attr_by_subject.items():
+            try:
+                await self._graph.upsert_person_profile(tenant_id, person_name, facts)
+            except Exception as exc:
+                logger.warning("Profile upsert failed for %s: %s", person_name, exc)
+
+        # Index high-signal entities separately in Qdrant for precision recall.
+        if high_signal_entities and self._qdrant and self._embed:
+            for ent in high_signal_entities[:20]:
+                content = str(ent.get("content") or ent.get("name") or "")[:300]
+                if not content:
+                    continue
+                etype = ent.get("type", "")
+                if etype == "personal_attribute":
+                    subj = str(ent.get("subject") or "")
+                    attr = str(ent.get("attribute") or "").replace("_", " ")
+                    val = str(ent.get("value") or "")
+                    if subj and attr and val:
+                        content = f"{subj}'s {attr} is {val}"
+                try:
+                    ent_embedding = await self._embed(content)
+                    if ent_embedding:
+                        ent_point_id = str(uuid.uuid4())
+                        await self._qdrant_upsert(
+                            tenant_id=tenant_id,
+                            point_id=ent_point_id,
+                            embedding=ent_embedding,
+                            payload={
+                                "text": content,
+                                "type": ent.get("type", "entity"),
+                                "entity_type": ent.get("type", "entity"),
+                                "subject": str(ent.get("subject") or ""),
+                                "attribute": str(ent.get("attribute") or ""),
+                                "value": str(ent.get("value") or ""),
+                                "canonical_date": str(ent.get("canonical_date") or ""),
+                                "entity_id": str(ent.get("id") or ""),
+                                "session_id": session_id,
+                                "tenant_id": tenant_id,
+                                "organization_id": tenant_id,
+                                "anchor_date": anchor_date or "",
+                                "speaker": speaker or "",
+                                "created_at": int(time.time()),
+                            },
+                        )
+                except Exception as exc:
+                    logger.warning("Entity Qdrant index failed: %s", exc)
+
+        return entities, entity_ids
+
+    async def enrich_entities_async(
+        self,
+        tenant_id: str,
+        session_id: str,
+        utt_id: str,
+        point_id: str | None,
+        utterance_text: str,
+    ) -> None:
+        """Background enrichment for NINAI_ASYNC_EXTRACT: run the deferred entity
+        extraction + upserts, link them to the already-created utterance, and
+        back-fill entity ids/names onto the episodic Qdrant point so retrieval
+        payloads match the inline path."""
+        if not self._graph.is_available():
+            return
+        temporal_ctx = parse_temporal_context(utterance_text)
+        anchor_date = temporal_ctx.get("anchor_date")
+        speaker = temporal_ctx.get("speaker")
+        entities, entity_ids = await self._extract_and_index_entities(
+            tenant_id, session_id, utterance_text, anchor_date, speaker
+        )
+        if entity_ids:
+            try:
+                await self._graph.link_utterance_to_entities(tenant_id, utt_id, entity_ids)
+            except Exception as exc:
+                logger.warning("Async utterance->entity linking failed: %s", exc)
+        if point_id and self._qdrant:
+            try:
+                entity_names = [str(ent.get("name") or "") for ent in entities if ent.get("name")]
+                await self._qdrant.set_payload(
+                    collection_name="memories",
+                    payload={"entity_ids": entity_ids, "entity_names": entity_names},
+                    points=[point_id],
+                )
+            except Exception as exc:
+                logger.warning("Async point payload backfill failed: %s", exc)
 
     async def write_gist(
         self,

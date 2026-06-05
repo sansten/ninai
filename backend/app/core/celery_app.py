@@ -80,6 +80,7 @@ celery_app = Celery(
         "app.tasks.retention_enforcement",
         "app.tasks.cognitive_heartbeat",
         "app.tasks.proactive_push_beat",
+        "app.tasks.v2_enrich_task",
         *_enterprise_includes,
     ],
 )
