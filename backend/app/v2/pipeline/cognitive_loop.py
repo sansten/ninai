@@ -382,7 +382,15 @@ class V2CognitiveLoop:
         # the question-relevant lines, keeping a few top original chunks as a safety net in
         # case the extraction drops the needle. Denoises context the way the gold-evidence
         # probe showed lifts the small model ~+11 ROUGE.
-        if (not ingest_only and not _raw_ctx_active and _DISTILL and read.qdrant_chunks):
+        # Temporal questions need the raw [YYYY-MM-DD] anchors to resolve relative dates;
+        # the verbatim extraction tends to drop those anchors (measured: temporal -4.6 with
+        # distillation). Skip distillation for date/time queries and keep the full context.
+        _is_temporal_q = bool(re.search(
+            r"\b(when|what year|what date|what day|how long|how many (?:years|months|days|weeks))\b",
+            user_input.lower(),
+        ))
+        if (not ingest_only and not _raw_ctx_active and _DISTILL and read.qdrant_chunks
+                and not _is_temporal_q):
             try:
                 _texts = []
                 for ch in read.qdrant_chunks:
