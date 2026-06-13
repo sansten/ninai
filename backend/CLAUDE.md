@@ -3,7 +3,7 @@
 ## Stack
 - FastAPI + SQLAlchemy async (PostgreSQL, multi-tenant RLS)
 - Redis (cache/broker), Qdrant (vector), Celery (tasks)
-- Local LLM: Ollama (qwen2.5:0.5b default), `AGENT_STRATEGY=llm|heuristic`
+- Local LLM: vLLM (qwen2.5:0.5b default), `AGENT_STRATEGY=llm|heuristic`
 - Python 3.12+, pytest-asyncio
 
 ## Run Tests

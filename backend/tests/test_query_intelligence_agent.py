@@ -580,15 +580,15 @@ class TestQueryIntelligenceAgentLLM:
             "confidence": 0.88,
             "rationale": "llm path",
         }
-        with patch("app.agents.query_intelligence_agent.create_ollama_client") as mock_cl:
+        with patch("app.agents.query_intelligence_agent.create_llm_client") as mock_cl:
             mock_cl.return_value.complete_json = AsyncMock(return_value=llm_resp)
             with patch("app.agents.query_intelligence_agent.settings") as mock_s:
                 mock_s.AGENT_STRATEGY = "llm"
                 mock_s.QUERY_INTELLIGENCE_STRATEGY = None
-                mock_s.OLLAMA_BASE_URL = "http://localhost:11434"
-                mock_s.OLLAMA_MODEL = "llama3.1:8b"
-                mock_s.OLLAMA_TIMEOUT_SECONDS = 5.0
-                mock_s.OLLAMA_MAX_CONCURRENCY = 2
+                mock_s.VLLM_BASE_URL = "http://localhost:11434"
+                mock_s.VLLM_MODEL = "llama3.1:8b"
+                mock_s.VLLM_TIMEOUT_SECONDS = 5.0
+                mock_s.VLLM_MAX_CONCURRENCY = 2
                 result = await agent.run("mem-llm", self._llm_ctx())
         assert result.outputs["query_intent"] == "locate"
         assert result.outputs["extracted_entities"] == ["Report2024"]
@@ -602,52 +602,52 @@ class TestQueryIntelligenceAgentLLM:
             "dynamic_filters": {},
             "suggested_agents": [],
         }
-        with patch("app.agents.query_intelligence_agent.create_ollama_client") as mock_cl:
+        with patch("app.agents.query_intelligence_agent.create_llm_client") as mock_cl:
             mock_cl.return_value.complete_json = AsyncMock(return_value=bad_resp)
             with patch("app.agents.query_intelligence_agent.settings") as mock_s:
                 mock_s.AGENT_STRATEGY = "llm"
                 mock_s.QUERY_INTELLIGENCE_STRATEGY = None
-                mock_s.OLLAMA_BASE_URL = "http://localhost:11434"
-                mock_s.OLLAMA_MODEL = "llama3.1:8b"
-                mock_s.OLLAMA_TIMEOUT_SECONDS = 5.0
-                mock_s.OLLAMA_MAX_CONCURRENCY = 2
+                mock_s.VLLM_BASE_URL = "http://localhost:11434"
+                mock_s.VLLM_MODEL = "llama3.1:8b"
+                mock_s.VLLM_TIMEOUT_SECONDS = 5.0
+                mock_s.VLLM_MAX_CONCURRENCY = 2
                 result = await agent.run("mem-llm", self._llm_ctx())
         assert result.outputs["rationale"] == "heuristic"
 
     @pytest.mark.asyncio
     async def test_llm_exception_falls_back(self):
         agent = QueryIntelligenceAgent()
-        with patch("app.agents.query_intelligence_agent.create_ollama_client") as mock_cl:
+        with patch("app.agents.query_intelligence_agent.create_llm_client") as mock_cl:
             mock_cl.return_value.complete_json = AsyncMock(side_effect=RuntimeError("timeout"))
             with patch("app.agents.query_intelligence_agent.settings") as mock_s:
                 mock_s.AGENT_STRATEGY = "llm"
                 mock_s.QUERY_INTELLIGENCE_STRATEGY = None
-                mock_s.OLLAMA_BASE_URL = "http://localhost:11434"
-                mock_s.OLLAMA_MODEL = "llama3.1:8b"
-                mock_s.OLLAMA_TIMEOUT_SECONDS = 5.0
-                mock_s.OLLAMA_MAX_CONCURRENCY = 2
+                mock_s.VLLM_BASE_URL = "http://localhost:11434"
+                mock_s.VLLM_MODEL = "llama3.1:8b"
+                mock_s.VLLM_TIMEOUT_SECONDS = 5.0
+                mock_s.VLLM_MAX_CONCURRENCY = 2
                 with pytest.raises(Exception):
                     await agent.run("mem-llm", self._llm_ctx())
 
     @pytest.mark.asyncio
     async def test_llm_none_response_falls_back(self):
         agent = QueryIntelligenceAgent()
-        with patch("app.agents.query_intelligence_agent.create_ollama_client") as mock_cl:
+        with patch("app.agents.query_intelligence_agent.create_llm_client") as mock_cl:
             mock_cl.return_value.complete_json = AsyncMock(return_value=None)
             with patch("app.agents.query_intelligence_agent.settings") as mock_s:
                 mock_s.AGENT_STRATEGY = "llm"
                 mock_s.QUERY_INTELLIGENCE_STRATEGY = None
-                mock_s.OLLAMA_BASE_URL = "http://localhost:11434"
-                mock_s.OLLAMA_MODEL = "llama3.1:8b"
-                mock_s.OLLAMA_TIMEOUT_SECONDS = 5.0
-                mock_s.OLLAMA_MAX_CONCURRENCY = 2
+                mock_s.VLLM_BASE_URL = "http://localhost:11434"
+                mock_s.VLLM_MODEL = "llama3.1:8b"
+                mock_s.VLLM_TIMEOUT_SECONDS = 5.0
+                mock_s.VLLM_MAX_CONCURRENCY = 2
                 result = await agent.run("mem-llm", self._llm_ctx())
         assert result.outputs["rationale"] == "heuristic"
 
     @pytest.mark.asyncio
     async def test_heuristic_strategy_skips_llm(self):
         agent = QueryIntelligenceAgent()
-        with patch("app.agents.query_intelligence_agent.create_ollama_client") as mock_cl:
+        with patch("app.agents.query_intelligence_agent.create_llm_client") as mock_cl:
             with patch("app.agents.query_intelligence_agent.settings") as mock_s:
                 mock_s.AGENT_STRATEGY = "heuristic"
                 mock_s.QUERY_INTELLIGENCE_STRATEGY = "heuristic"
@@ -664,30 +664,30 @@ class TestQueryIntelligenceAgentLLM:
             # missing dynamic_filters
             "suggested_agents": [],
         }
-        with patch("app.agents.query_intelligence_agent.create_ollama_client") as mock_cl:
+        with patch("app.agents.query_intelligence_agent.create_llm_client") as mock_cl:
             mock_cl.return_value.complete_json = AsyncMock(return_value=bad_resp)
             with patch("app.agents.query_intelligence_agent.settings") as mock_s:
                 mock_s.AGENT_STRATEGY = "llm"
                 mock_s.QUERY_INTELLIGENCE_STRATEGY = None
-                mock_s.OLLAMA_BASE_URL = "http://localhost:11434"
-                mock_s.OLLAMA_MODEL = "llama3.1:8b"
-                mock_s.OLLAMA_TIMEOUT_SECONDS = 5.0
-                mock_s.OLLAMA_MAX_CONCURRENCY = 2
+                mock_s.VLLM_BASE_URL = "http://localhost:11434"
+                mock_s.VLLM_MODEL = "llama3.1:8b"
+                mock_s.VLLM_TIMEOUT_SECONDS = 5.0
+                mock_s.VLLM_MAX_CONCURRENCY = 2
                 result = await agent.run("mem-llm", self._llm_ctx())
         assert result.outputs["rationale"] == "heuristic"
 
     @pytest.mark.asyncio
     async def test_result_status_always_success(self):
         agent = QueryIntelligenceAgent()
-        with patch("app.agents.query_intelligence_agent.create_ollama_client") as mock_cl:
+        with patch("app.agents.query_intelligence_agent.create_llm_client") as mock_cl:
             mock_cl.return_value.complete_json = AsyncMock(return_value=None)
             with patch("app.agents.query_intelligence_agent.settings") as mock_s:
                 mock_s.AGENT_STRATEGY = "llm"
                 mock_s.QUERY_INTELLIGENCE_STRATEGY = None
-                mock_s.OLLAMA_BASE_URL = "http://localhost:11434"
-                mock_s.OLLAMA_MODEL = "llama3.1:8b"
-                mock_s.OLLAMA_TIMEOUT_SECONDS = 5.0
-                mock_s.OLLAMA_MAX_CONCURRENCY = 2
+                mock_s.VLLM_BASE_URL = "http://localhost:11434"
+                mock_s.VLLM_MODEL = "llama3.1:8b"
+                mock_s.VLLM_TIMEOUT_SECONDS = 5.0
+                mock_s.VLLM_MAX_CONCURRENCY = 2
                 result = await agent.run("mem-llm", self._llm_ctx())
         assert result.status == "success"
 

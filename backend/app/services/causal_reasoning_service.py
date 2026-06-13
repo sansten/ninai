@@ -25,7 +25,7 @@ from uuid import uuid4
 from sqlalchemy import and_, select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.agents.llm.ollama_breaker import create_ollama_client
+from app.agents.llm.llm_breaker import create_llm_client
 from app.core.config import settings
 from app.models.causal_edge import CausalEdge, CounterfactualScenario
 from app.models.memory_fact import MemoryFact, MemoryFactStatus
@@ -281,7 +281,7 @@ class CausalReasoningService:
         """Ask LLM to identify causal relationships in the episode.
 
         Builds a compact prompt from the episode's memory content_previews,
-        calls Ollama for a JSON list of causal pairs, validates that both
+        calls vLLM for a JSON list of causal pairs, validates that both
         cause_id and effect_id belong to the episode, then persists edges.
         Returns an empty list on any LLM failure so the caller is not blocked.
         """
@@ -316,11 +316,11 @@ class CausalReasoningService:
             "Both ids must appear in the list above."
         )
 
-        client = create_ollama_client(
-            base_url=str(getattr(settings, "OLLAMA_BASE_URL", "http://localhost:11434")),
-            model=str(settings.get_ollama_model("reasoning")),
-            timeout_seconds=float(getattr(settings, "OLLAMA_TIMEOUT_SECONDS", 5.0)),
-            max_concurrency=int(getattr(settings, "OLLAMA_MAX_CONCURRENCY", 2)),
+        client = create_llm_client(
+            base_url=str(getattr(settings, "VLLM_BASE_URL", "http://localhost:11434")),
+            model=str(settings.get_llm_model("reasoning")),
+            timeout_seconds=float(getattr(settings, "VLLM_TIMEOUT_SECONDS", 5.0)),
+            max_concurrency=int(getattr(settings, "VLLM_MAX_CONCURRENCY", 2)),
             purpose="reasoning",
         )
 

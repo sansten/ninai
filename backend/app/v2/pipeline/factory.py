@@ -37,17 +37,17 @@ def _build_v2_loop() -> V2CognitiveLoop:
     )
     graph_client = V2GraphClient(redis_url=graph_redis_url)
 
-    # Use a separate URL for embeddings when configured (e.g. CPU Ollama hosts
-    # nomic-embed-text while GPU Ollama handles inference-only models).
+    # Use a separate URL for embeddings when configured (e.g. CPU host serves
+    # nomic-embed-text while GPU hosts handle inference-only models).
     embed_base_url = (
-        getattr(settings, "OLLAMA_EMBEDDING_BASE_URL", None)
-        or getattr(settings, "OLLAMA_BASE_URL_CPU", None)
-        or getattr(settings, "OLLAMA_BASE_URL", "http://localhost:11434")
+        getattr(settings, "VLLM_EMBEDDING_BASE_URL", None)
+        or getattr(settings, "VLLM_BASE_URL_CPU", None)
+        or getattr(settings, "VLLM_BASE_URL", "http://localhost:11434")
     )
-    _default_base_url = getattr(settings, "OLLAMA_BASE_URL", "http://localhost:11434")
-    _default_model    = getattr(settings, "OLLAMA_MODEL", "qwen2.5:7b")
-    _timeout          = getattr(settings, "OLLAMA_TIMEOUT_SECONDS", 45.0)
-    _embed_api        = getattr(settings, "EMBED_API_FORMAT", "ollama")
+    _default_base_url = getattr(settings, "VLLM_BASE_URL", "http://localhost:11434")
+    _default_model    = getattr(settings, "VLLM_MODEL", "qwen2.5:7b")
+    _timeout          = getattr(settings, "VLLM_TIMEOUT_SECONDS", 45.0)
+    _embed_api        = getattr(settings, "EMBED_API_FORMAT", "native")
     extract_base_url  = getattr(settings, "EXTRACT_BASE_URL", None)
     extract_model     = getattr(settings, "EXTRACT_MODEL", None)
 
@@ -55,7 +55,7 @@ def _build_v2_loop() -> V2CognitiveLoop:
     engine = InferenceEngine(
         base_url=_default_base_url,
         model=_default_model,
-        embed_model=getattr(settings, "OLLAMA_EMBEDDING_MODEL", "nomic-embed-text"),
+        embed_model=getattr(settings, "LOCAL_EMBEDDING_MODEL", "nomic-embed-text"),
         embed_base_url=embed_base_url,
         extract_base_url=extract_base_url,
         extract_model=extract_model,
@@ -64,13 +64,13 @@ def _build_v2_loop() -> V2CognitiveLoop:
     )
 
     # Per-tier engines — point at the correct vLLM pod URL for each model tier.
-    # When OLLAMA_BASE_URL_FAST / OLLAMA_BASE_URL_REASONING are not set they
+    # When VLLM_BASE_URL_FAST / VLLM_BASE_URL_REASONING are not set they
     # fall back to the primary engine (single-pod mode).
-    slm_model = settings.get_ollama_model("fast")
-    llm_model = settings.get_ollama_model("reasoning")
+    slm_model = settings.get_llm_model("fast")
+    llm_model = settings.get_llm_model("reasoning")
 
-    _fast_url      = getattr(settings, "OLLAMA_BASE_URL_FAST", None) or _default_base_url
-    _reasoning_url = getattr(settings, "OLLAMA_BASE_URL_REASONING", None) or _default_base_url
+    _fast_url      = getattr(settings, "VLLM_BASE_URL_FAST", None) or _default_base_url
+    _reasoning_url = getattr(settings, "VLLM_BASE_URL_REASONING", None) or _default_base_url
 
     slm_engine: InferenceEngine | None = None
     llm_engine: InferenceEngine | None = None
@@ -79,7 +79,7 @@ def _build_v2_loop() -> V2CognitiveLoop:
         slm_engine = InferenceEngine(
             base_url=_fast_url,
             model=slm_model,
-            embed_model=getattr(settings, "OLLAMA_EMBEDDING_MODEL", "nomic-embed-text"),
+            embed_model=getattr(settings, "LOCAL_EMBEDDING_MODEL", "nomic-embed-text"),
             embed_base_url=embed_base_url,
             timeout=_timeout,
             embed_api=_embed_api,
@@ -89,7 +89,7 @@ def _build_v2_loop() -> V2CognitiveLoop:
         llm_engine = InferenceEngine(
             base_url=_reasoning_url,
             model=llm_model,
-            embed_model=getattr(settings, "OLLAMA_EMBEDDING_MODEL", "nomic-embed-text"),
+            embed_model=getattr(settings, "LOCAL_EMBEDDING_MODEL", "nomic-embed-text"),
             embed_base_url=embed_base_url,
             timeout=_timeout,
             embed_api=_embed_api,

@@ -315,54 +315,55 @@ class Settings(BaseSettings):
     # -------------------------------------------------------------------------
     # LLM (Optional)
     # -------------------------------------------------------------------------
-    # Local-first LLM (Ollama). Defaults are safe for local dev; containers should
-    # override base URL to reach the `ollama` service (e.g., http://ollama:11434).
-    OLLAMA_BASE_URL: str = Field(
-        default="http://localhost:11434",
-        validation_alias=AliasChoices("OLLAMA_BASE_URL", "OLLAMA_URL"),
+    # Local-first OpenAI-compatible inference backend. Defaults are safe for
+    # local dev; containers should override base URL to reach the in-cluster
+    # inference service.
+    VLLM_BASE_URL: str = Field(
+        default="http://localhost:8000",
+        validation_alias=AliasChoices("VLLM_BASE_URL", "LLM_BASE_URL"),
     )
     # Optional split-route endpoints for CPU-default + GPU-overflow behavior.
-    # If unset, OLLAMA_BASE_URL is used as the primary endpoint.
-    OLLAMA_BASE_URL_CPU: str | None = None
-    OLLAMA_BASE_URL_GPU: str | None = None
+    # If unset, VLLM_BASE_URL is used as the primary endpoint.
+    VLLM_BASE_URL_CPU: str | None = None
+    VLLM_BASE_URL_GPU: str | None = None
     # Dedicated embedding endpoint (e.g. CPU host serving nomic-embed-text).
-    # Falls back to OLLAMA_BASE_URL_CPU / OLLAMA_BASE_URL when unset.
-    OLLAMA_EMBEDDING_BASE_URL: str | None = None
+    # Falls back to VLLM_BASE_URL_CPU / VLLM_BASE_URL when unset.
+    VLLM_EMBEDDING_BASE_URL: str | None = None
     # Dedicated entity-extraction endpoint + model. EXTRACT_MODEL should be a
     # small NON-thinking model (e.g. qwen2.5:7b) — thinking models are far too
     # slow for per-turn structured extraction during ingest.
     EXTRACT_BASE_URL: str | None = None
     EXTRACT_MODEL: str | None = None
     # Enable automatic spillover to GPU endpoint on overload/failure.
-    OLLAMA_OVERFLOW_ENABLED: bool = False
+    VLLM_OVERFLOW_ENABLED: bool = False
     # If >0, route requests to GPU first when in-flight requests on CPU endpoint
     # reach this threshold (per worker process).
-    OLLAMA_OVERFLOW_PRIMARY_MAX_INFLIGHT: int = 0
-    # Default local model (override via env OLLAMA_MODEL)
-    OLLAMA_MODEL: str = "qwen2.5:7b"
-    # Optional per-purpose model overrides (fall back to OLLAMA_MODEL when unset).
-    # OLLAMA_MODEL_FAST: small thinking model for fast retrieval + extraction tasks.
-    # qwen3:4b (Qwen Small Thinker) on T4 — thinking-capable, handles most single-fact lookups.
-    OLLAMA_MODEL_FAST: str | None = "qwen3:4b"
-    # OLLAMA_BASE_URL_FAST: vLLM endpoint for the fast/SLM pod (T4).
-    # Defaults to OLLAMA_BASE_URL when unset (single-pod fallback).
-    OLLAMA_BASE_URL_FAST: str | None = None
-    # OLLAMA_MODEL_REASONING: deep-reasoning model for multi-hop, counterfactual, synthesis.
+    VLLM_OVERFLOW_PRIMARY_MAX_INFLIGHT: int = 0
+    # Default local model (override via env VLLM_MODEL)
+    VLLM_MODEL: str = "qwen2.5:7b"
+    # Optional per-purpose model overrides (fall back to VLLM_MODEL when unset).
+    # VLLM_MODEL_FAST: non-thinking model for fast retrieval + extraction tasks.
+    # qwen2.5:7b has been more stable for LoCoMo benchmark prompting than qwen3:4b.
+    VLLM_MODEL_FAST: str | None = "qwen2.5:7b"
+    # VLLM_BASE_URL_FAST: vLLM endpoint for the fast/SLM pod (T4).
+    # Defaults to VLLM_BASE_URL when unset (single-pod fallback).
+    VLLM_BASE_URL_FAST: str | None = None
+    # VLLM_MODEL_REASONING: deep-reasoning model for multi-hop, counterfactual, synthesis.
     # deepseek-r1:14b on A100 40GB (~9GB VRAM at Q4) — thinking model, proven on LoCoMo.
-    OLLAMA_MODEL_REASONING: str | None = "deepseek-r1:14b"
-    # OLLAMA_BASE_URL_REASONING: vLLM endpoint for the reasoning/LLM pod (A100).
-    # Defaults to OLLAMA_BASE_URL when unset (single-pod fallback).
-    OLLAMA_BASE_URL_REASONING: str | None = None
-    OLLAMA_MODEL_PLANNING: str | None = None
-    OLLAMA_MODEL_DISTILLATION: str | None = None
-    OLLAMA_MODEL_BOUNDARY: str | None = None
-    OLLAMA_MODEL_UNCERTAINTY: str | None = None
-    OLLAMA_MODEL_AGENTS: str | None = None
-    # Timeout per Ollama request; 30s accommodates 7b+ models without stalling.
-    OLLAMA_TIMEOUT_SECONDS: float = 30.0
+    VLLM_MODEL_REASONING: str | None = "deepseek-r1:14b"
+    # VLLM_BASE_URL_REASONING: vLLM endpoint for the reasoning/LLM pod (A100).
+    # Defaults to VLLM_BASE_URL when unset (single-pod fallback).
+    VLLM_BASE_URL_REASONING: str | None = None
+    VLLM_MODEL_PLANNING: str | None = None
+    VLLM_MODEL_DISTILLATION: str | None = None
+    VLLM_MODEL_BOUNDARY: str | None = None
+    VLLM_MODEL_UNCERTAINTY: str | None = None
+    VLLM_MODEL_AGENTS: str | None = None
+    # Timeout per inference request; 30s accommodates 7b+ models without stalling.
+    VLLM_TIMEOUT_SECONDS: float = 30.0
 
-    # Limit concurrent Ollama requests per worker process.
-    OLLAMA_MAX_CONCURRENCY: int = 4
+    # Limit concurrent local-backend requests per worker process.
+    VLLM_MAX_CONCURRENCY: int = 4
 
     # Global agent strategy (advanced):
     # - heuristic: disable LLM calls
@@ -398,14 +399,14 @@ class Settings(BaseSettings):
             return strategy
         return "llm"
 
-    # Enable LLM-based causal edge discovery (off by default to avoid slow Ollama calls).
+    # Enable LLM-based causal edge discovery (off by default to avoid slow model calls).
     ENABLE_LLM_CAUSAL_DISCOVERY: bool = False
 
     # ---------------------------------------------------------------------
     # Sandbox / reproducible demos
     # ---------------------------------------------------------------------
     # If enabled, LLM helper endpoints can return deterministic stub outputs
-    # so notebooks and SDK examples run without Ollama.
+    # so notebooks and SDK examples run without backend model dependencies.
     SANDBOX_LLM_ENABLED: bool = False
 
     # If true, /llm/* helper endpoints require org admin. For local demos you
@@ -425,7 +426,16 @@ class Settings(BaseSettings):
     EMBEDDING_MODEL: str = "text-embedding-3-small"
     EMBEDDING_DIMENSIONS: int = 1536
     EMBEDDING_PROVIDER: str = "auto"
-    OLLAMA_EMBEDDING_MODEL: str = "nomic-embed-text"
+    # Embedding wire format for the local engine: "native" (Ollama /api/embeddings,
+    # {"prompt": ...}) or "openai" (vLLM/LMDeploy /v1/embeddings, {"input": ...}).
+    EMBED_API_FORMAT: str = "native"
+    LOCAL_EMBEDDING_MODEL: str = Field(
+        default="nomic-embed-text",
+        validation_alias=AliasChoices(
+            "LOCAL_EMBEDDING_MODEL",
+            "VLLM_EMBEDDING_MODEL",
+        ),
+    )
 
     # -------------------------------------------------------------------------
     # Memory Attachments (Multimodal MVP)
@@ -533,31 +543,30 @@ class Settings(BaseSettings):
         """Check if running in production mode."""
         return self.APP_ENV == "production"
 
-    def get_ollama_model(self, purpose: str | None = None) -> str:
-        """Resolve the Ollama model for a specific purpose.
+    def get_llm_model(self, purpose: str | None = None) -> str:
+        """Resolve the configured model for a specific purpose.
 
-        If no purpose-specific override is configured, this returns OLLAMA_MODEL.
+        If no purpose-specific override is configured, this returns VLLM_MODEL.
         """
-        default_model = str(self.OLLAMA_MODEL or "").strip() or "qwen2.5:7b"
+        default_model = str(self.VLLM_MODEL or "").strip() or "qwen2.5:7b"
         if not purpose:
             return default_model
 
         purpose_key = str(purpose).strip().lower()
         overrides = {
-            "fast": self.OLLAMA_MODEL_FAST,
-            "reasoning": self.OLLAMA_MODEL_REASONING,
-            "planning": self.OLLAMA_MODEL_PLANNING,
-            "distillation": self.OLLAMA_MODEL_DISTILLATION,
-            "boundary": self.OLLAMA_MODEL_BOUNDARY,
-            "uncertainty": self.OLLAMA_MODEL_UNCERTAINTY,
-            "agents": self.OLLAMA_MODEL_AGENTS,
-            "enrichment": self.OLLAMA_MODEL_AGENTS,
+            "fast": self.VLLM_MODEL_FAST,
+            "reasoning": self.VLLM_MODEL_REASONING,
+            "planning": self.VLLM_MODEL_PLANNING,
+            "distillation": self.VLLM_MODEL_DISTILLATION,
+            "boundary": self.VLLM_MODEL_BOUNDARY,
+            "uncertainty": self.VLLM_MODEL_UNCERTAINTY,
+            "agents": self.VLLM_MODEL_AGENTS,
+            "enrichment": self.VLLM_MODEL_AGENTS,
         }
         selected = overrides.get(purpose_key)
         if selected and str(selected).strip():
             return str(selected).strip()
         return default_model
-
 
 @lru_cache
 def get_settings() -> Settings:

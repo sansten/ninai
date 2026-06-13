@@ -25,7 +25,7 @@ def upgrade() -> None:
         sa.Column("mode", sa.String(64), nullable=False),
         sa.Column("strategy", sa.String(64), nullable=False),
         sa.Column("dataset", sa.String(64), nullable=False),
-        sa.Column("ollama_model", sa.String(128), nullable=True),
+        sa.Column("vllm_model", sa.String(128), nullable=True),
         sa.Column("duration_seconds", sa.Float(), nullable=False),
         sa.Column("composite_score", sa.Float(), nullable=False),
         sa.Column("results", postgresql.JSONB(astext_type=sa.Text()), nullable=False),

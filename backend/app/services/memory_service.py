@@ -47,6 +47,80 @@ from app.schemas.memory import (
 
 logger = logging.getLogger(__name__)
 
+_QN_LEAD_RE = re.compile(r"^(what|where|who|when|which|how)\b", re.IGNORECASE)
+
+
+def _question_to_declarative_variants(query: str) -> list[str]:
+    """Return short declarative search variants for Wh-question queries.
+
+    Generic transform: converts question-form text into keyword-form phrases
+    so vector search finds declarative memory content (e.g. "I'm single")
+    rather than only matching question-form snippets.
+
+    Returned variants are concise (subject + predicate or subject + verb)
+    and intended for supplemental Qdrant searches scored with a slight discount.
+    """
+    q = (query or "").strip()
+    if not _QN_LEAD_RE.match(q):
+        return []
+
+    variants: list[str] = []
+
+    # "What is [X]'s [Y]?" or "What was [X]'s [Y]?" → "[X] [Y]"
+    m = re.match(
+        r"what\s+(?:is|are|was|were)\s+([\w'\- ]+?)(?:'s|s')?\s+([\w \-]+?)\s*\??$",
+        q,
+        re.I,
+    )
+    if m:
+        subj = m.group(1).strip()
+        pred = m.group(2).strip()
+        variants.append(f"{subj} {pred}")
+
+    # "Where did/does/has [X] [verb]...?" → "[X] [verb]"
+    m = re.match(r"where\s+(?:did|does|has|is|was)\s+([\w'\- ]+?)\s+([\w]+)", q, re.I)
+    if m:
+        subj = m.group(1).strip()
+        verb = m.group(2).strip()
+        variants.append(f"{subj} {verb}")
+
+    # "Who is/was [X]?" → "[X]"
+    m = re.match(r"who\s+(?:is|are|was|were)\s+([\w'\- ]+)", q, re.I)
+    if m:
+        variants.append(m.group(1).strip())
+
+    # "What [activities/events/things/...] does/did [X]...?" → "[X] [noun]"
+    m = re.match(
+        r"what\s+([\w]+)\s+(?:does|did|has|do)\s+([\w'\- ]+?)(?:\s+\w+)?\s*\??$",
+        q,
+        re.I,
+    )
+    if m:
+        noun = m.group(1).strip()
+        subj = m.group(2).strip()
+        variants.append(f"{subj} {noun}")
+
+    # Generic fallback: strip leading Wh-word + auxiliary verb
+    cleaned = re.sub(r"\?+$", "", q).strip()
+    cleaned = re.sub(
+        r"^(what|where|who|when|which|how)\s+(?:is|are|was|were|did|does|has|have|do)?\s*",
+        "",
+        cleaned,
+        flags=re.I,
+    ).strip()
+    if cleaned and cleaned.lower() not in {q.lower(), *(v.lower() for v in variants)}:
+        variants.append(cleaned)
+
+    # Deduplicate while preserving order
+    seen: set[str] = set()
+    out: list[str] = []
+    for v in variants:
+        key = v.lower()
+        if key and key not in seen:
+            seen.add(key)
+            out.append(v)
+    return out[:3]
+
 
 class MemoryService:
     """
@@ -85,7 +159,6 @@ class MemoryService:
         
         self.permission_checker = PermissionChecker(session)
         self.audit_service = AuditService(session)
-        self._last_search_diagnostics: dict[str, object] = {}
 
     @staticmethod
     def _normalize_utc_timestamp(value: Optional[datetime]) -> Optional[datetime]:
@@ -138,216 +211,6 @@ class MemoryService:
             count = 0
 
         return max(-1.0, min(1.0, score)), max(0, count)
-
-    @staticmethod
-    def _is_complex_query(query: str) -> bool:
-        """Heuristic complexity detector for adaptive retrieval overfetch."""
-        q = str(query or "").strip().lower()
-        if not q:
-            return False
-        tokens = re.findall(r"[a-z0-9_]+", q)
-        if len(tokens) >= 10:
-            return True
-        markers = {
-            "before",
-            "after",
-            "between",
-            "during",
-            "while",
-            "compared",
-            "difference",
-            "versus",
-            "vs",
-            "because",
-            "reason",
-            "caused",
-            "then",
-            "first",
-            "second",
-        }
-        return any(m in tokens for m in markers)
-
-    @staticmethod
-    def _query_rewrite_aliases() -> dict[str, str]:
-        """Small alias map used for retrieval-time query expansion."""
-        return {
-            "usa": "united states",
-            "us": "united states",
-            "u.s.": "united states",
-            "uk": "united kingdom",
-            "u.k.": "united kingdom",
-            "ai": "artificial intelligence",
-        }
-
-    def _build_query_variants(self, base_query: str, max_variants: int) -> list[str]:
-        """Build lightweight lexical variants to improve semantic recall."""
-        q = str(base_query or "").strip()
-        if not q or max_variants <= 0:
-            return []
-
-        variants: list[str] = []
-        q_norm = re.sub(r"\s+", " ", re.sub(r"[^a-zA-Z0-9_\-\s]", " ", q)).strip()
-        if q_norm and q_norm.lower() != q.lower():
-            variants.append(q_norm)
-
-        aliases = self._query_rewrite_aliases()
-        tokens = re.findall(r"[a-zA-Z0-9_.-]+", q.lower())
-        alias_terms = [aliases[t] for t in tokens if t in aliases]
-        if alias_terms:
-            variants.append((q + " " + " ".join(alias_terms)).strip())
-
-        key_terms = self._tokenize_query_terms(q)
-        if key_terms:
-            variants.append((q + " " + " ".join(key_terms[:4])).strip())
-
-        deduped: list[str] = []
-        seen: set[str] = {q.lower()}
-        for v in variants:
-            lv = v.lower().strip()
-            if not lv or lv in seen:
-                continue
-            seen.add(lv)
-            deduped.append(v)
-            if len(deduped) >= max_variants:
-                break
-        return deduped
-
-    @staticmethod
-    def _build_multihop_subqueries(base_query: str, max_subqueries: int = 3) -> list[str]:
-        """Split complex questions into focused sub-queries for multi-hop retrieval."""
-        q = str(base_query or "").strip()
-        if not q or max_subqueries <= 0:
-            return []
-
-        parts = re.split(r"\b(?:and then|then|before|after|because|while|whereas|and)\b", q, flags=re.IGNORECASE)
-        out: list[str] = []
-        seen: set[str] = {q.lower()}
-
-        for raw in parts:
-            p = re.sub(r"\s+", " ", str(raw or "")).strip(" ,.;:-")
-            if len(p) < 8:
-                continue
-            lp = p.lower()
-            if lp in seen:
-                continue
-            seen.add(lp)
-            out.append(p)
-            if len(out) >= max_subqueries:
-                break
-        return out
-
-    @staticmethod
-    def _query_persona_hints(query: str) -> set[str]:
-        """Extract likely person/entity hints from query text for perspective reranking."""
-        q = str(query or "")
-        hints: set[str] = set()
-        for m in re.findall(r"\b[A-Z][a-z]{2,}\b", q):
-            hints.add(m.lower())
-        return hints
-
-    @staticmethod
-    def _memory_session_key(memory: "MemoryMetadata") -> str:
-        """Best-effort session key extraction from memory metadata."""
-        meta = getattr(memory, "extra_metadata", {}) or {}
-        if isinstance(meta, dict):
-            for key in ("session_id", "session", "thread_id", "conversation_id", "conv_id", "run_tag"):
-                val = meta.get(key)
-                if val:
-                    return str(val)
-        return ""
-
-    @staticmethod
-    def _memory_speaker_key(memory: "MemoryMetadata") -> str:
-        """Best-effort speaker/actor extraction for perspective-aware reranking."""
-        meta = getattr(memory, "extra_metadata", {}) or {}
-        if isinstance(meta, dict):
-            for key in ("speaker", "actor", "author", "participant"):
-                val = meta.get(key)
-                if val:
-                    return str(val).lower()
-        for attr in ("write_actor_id", "write_role"):
-            val = getattr(memory, attr, None)
-            if val:
-                return str(val).lower()
-        # Fallback for conversation-style memories where speaker is prefixed in content.
-        preview = str(getattr(memory, "content_preview", "") or "")
-        m = re.match(r"^\s*\[(?P<speaker>[^\]]+)\]", preview)
-        if m:
-            return str(m.group("speaker") or "").strip().lower()
-        return ""
-
-    @staticmethod
-    def _query_overlap_score(query: str, memory: "MemoryMetadata") -> float:
-        """Compute lexical overlap between query terms and memory text/tags.
-
-        Returns a value in [0, 1] representing weighted query-term coverage.
-        """
-        stop = {
-            "the", "a", "an", "is", "was", "did", "do", "what", "when", "where", "who", "how",
-            "and", "or", "of", "in", "on", "to", "for", "at", "i", "my", "me", "we", "our",
-            "you", "your", "he", "she", "it", "they", "their", "that", "this", "these", "those",
-            "be", "been", "have", "has", "had", "will", "would", "could", "should", "may", "might",
-            "about", "with", "from", "are", "were", "any", "some", "which", "also",
-        }
-
-        q_terms = {
-            t for t in re.findall(r"[a-z0-9_]+", str(query or "").lower())
-            if t and t not in stop and len(t) > 2
-        }
-        if not q_terms:
-            return 0.0
-
-        title = str(getattr(memory, "title", "") or "")
-        content = str(getattr(memory, "content_preview", "") or "")
-        tags = getattr(memory, "tags", None) or []
-        haystack = " ".join([title, content, " ".join(str(t) for t in tags if t)])
-        h_terms = set(re.findall(r"[a-z0-9_]+", haystack.lower()))
-        if not h_terms:
-            return 0.0
-
-        overlap = q_terms & h_terms
-        if not overlap:
-            return 0.0
-
-        # Weight rarer/longer terms slightly higher to prefer specific factual matches.
-        numer = sum(1.0 + (0.15 if len(t) >= 8 else 0.0) for t in overlap)
-        denom = sum(1.0 + (0.15 if len(t) >= 8 else 0.0) for t in q_terms)
-        return max(0.0, min(1.0, numer / (denom or 1.0)))
-
-    @staticmethod
-    def _infer_dominant_session(memories: list["MemoryMetadata"], vector_scores: dict[str, float]) -> str:
-        """Infer dominant session among candidates weighted by vector score."""
-        score_by_session: dict[str, float] = {}
-        for memory in memories:
-            sid = MemoryService._memory_session_key(memory)
-            if not sid:
-                continue
-            sid = sid.lower()
-            score_by_session[sid] = score_by_session.get(sid, 0.0) + float(vector_scores.get(str(memory.id), 0.0))
-        if not score_by_session:
-            return ""
-        return max(score_by_session.items(), key=lambda item: item[1])[0]
-
-    @staticmethod
-    def _should_auto_hybrid(vector_scores: dict[str, float], request: MemorySearchRequest) -> bool:
-        """Decide whether lexical retrieval should auto-activate due to sparse semantic recall."""
-        if getattr(request, "hybrid", False):
-            return True
-        if not bool(getattr(settings, "SEARCH_AUTO_HYBRID_ENABLED", True)):
-            return False
-
-        min_hits = int(getattr(settings, "SEARCH_AUTO_HYBRID_MIN_VECTOR_HITS", 4) or 4)
-        max_peak = float(getattr(settings, "SEARCH_AUTO_HYBRID_MAX_TOP_SCORE", 0.55) or 0.55)
-        if len(vector_scores) < min_hits:
-            return True
-        top_score = max(vector_scores.values(), default=0.0)
-        if top_score <= max_peak:
-            return True
-        return False
-
-    def get_last_search_diagnostics(self) -> dict[str, object]:
-        """Return diagnostics produced by the most recent search call."""
-        return dict(self._last_search_diagnostics or {})
 
     async def _load_graph_neighbor_scores(self, seed_memory_ids: list[str], limit: int) -> dict[str, float]:
         """Collect neighboring memory ids from graph edges with similarity-based scores."""
@@ -651,7 +514,7 @@ class MemoryService:
                 text(
                     """
                     UPDATE memory_metadata
-                    SET search_vector = to_tsvector('english', :doc)
+                    SET search_vector = to_tsvector('simple', :doc)
                     WHERE id = :memory_id
                     """
                 ),
@@ -1033,10 +896,6 @@ class MemoryService:
         qdrant_results = []
         graph_scores: dict[str, float] = {}
         lexical_scores: dict[str, float] = {}
-        fallback_reason: str | None = None
-        query_variants_used = 0
-        multihop_subqueries_used = 0
-        vector_tag_filter_relaxed = False
 
         ranking_meta = self.get_search_ranking_meta(request)
         decay_enabled = bool(ranking_meta.get("temporal_decay_enabled"))
@@ -1044,95 +903,56 @@ class MemoryService:
 
         # Vector leg (Qdrant)
         scope_val = request.scope.value if hasattr(request.scope, "value") else request.scope
-        complex_query = self._is_complex_query(request.query)
-        overfetch_multiplier = 3 if complex_query else 2
-        vector_limit = request.limit * overfetch_multiplier
-
-        qdrant_error: Exception | None = None
 
         try:
-            vector_tags: Optional[List[str]] = normalized_tags or None
             qdrant_results = await QdrantService.search(
                 org_id=self.org_id,
                 query_vector=query_embedding,
-                limit=vector_limit,  # Over-fetch to account for RLS filtering
+                limit=request.limit * 2,  # Over-fetch to account for RLS filtering
                 score_threshold=request.score_threshold or 0.0,
                 scope_filter=scope_val,
                 team_id=request.team_id,
-                tags=vector_tags,
             )
 
-            # Core resilience: if strict tag payload filters produce zero vector hits,
-            # retry vector retrieval without tag filters and enforce tag constraints
-            # downstream in Postgres/RLS filtering.
-            if not qdrant_results and normalized_tags:
-                relaxed_results = await QdrantService.search(
-                    org_id=self.org_id,
-                    query_vector=query_embedding,
-                    limit=vector_limit,
-                    score_threshold=request.score_threshold or 0.0,
-                    scope_filter=scope_val,
-                    team_id=request.team_id,
-                    tags=None,
-                )
-                if relaxed_results:
-                    qdrant_results = relaxed_results
-                    vector_tag_filter_relaxed = True
-                    fallback_reason = "vector_tag_filter_relaxed_retry"
-                    vector_tags = None
-
-            # Query expansion (core, graph-independent): retry semantic search with
-            # lightweight lexical rewrites and blend into candidate pool.
-            if bool(getattr(settings, "SEARCH_QUERY_EXPANSION_ENABLED", True)):
-                max_q_variants = int(getattr(settings, "SEARCH_QUERY_EXPANSION_MAX_VARIANTS", 3) or 3)
-                variants = self._build_query_variants(request.query, max_q_variants)
-                for idx, variant in enumerate(variants):
-                    try:
-                        variant_embedding = await EmbeddingService.embed(variant)
-                        variant_results = await QdrantService.search(
-                            org_id=self.org_id,
-                            query_vector=variant_embedding,
-                            limit=vector_limit,
-                            score_threshold=max((request.score_threshold or 0.0) - 0.05, 0.0),
-                            scope_filter=scope_val,
-                            team_id=request.team_id,
-                            tags=vector_tags,
-                        )
-                    except Exception:
-                        continue
-
-                    blend = max(0.8, 0.95 - (0.05 * idx))
-                    for result in variant_results:
-                        r_copy = dict(result)
-                        r_copy["score"] = float(result.get("score") or 0.0) * blend
-                        qdrant_results.append(r_copy)
-                query_variants_used = len(variants)
-
-            # Multi-hop subquery leg: decompose complex questions and fetch evidence
-            # for each hop so downstream fusion can retain bridge facts.
-            if complex_query and bool(getattr(settings, "SEARCH_MULTI_HOP_SUBQUERY_ENABLED", True)):
-                max_subqueries = int(getattr(settings, "SEARCH_MULTI_HOP_MAX_SUBQUERIES", 3) or 3)
-                subqueries = self._build_multihop_subqueries(request.query, max_subqueries)
-                for idx, sq in enumerate(subqueries):
-                    try:
-                        sq_embedding = await EmbeddingService.embed(sq)
-                        sq_results = await QdrantService.search(
-                            org_id=self.org_id,
-                            query_vector=sq_embedding,
-                            limit=max(request.limit * 2, 10),
-                            score_threshold=max((request.score_threshold or 0.0) - 0.1, 0.0),
-                            scope_filter=scope_val,
-                            team_id=request.team_id,
-                            tags=vector_tags,
-                        )
-                    except Exception:
-                        continue
-                    blend = max(0.7, 0.92 - (0.08 * idx))
-                    for result in sq_results:
-                        r_copy = dict(result)
-                        r_copy["score"] = float(result.get("score") or 0.0) * blend
-                        qdrant_results.append(r_copy)
-                multihop_subqueries_used = len(subqueries)
+            # Question-to-declarative variant expansion (always-on for Wh-questions).
+            # Converts "What is X's Y?" → "X Y" etc., embeds the declarative form,
+            # and merges results so declarative memory content ranks competitively
+            # against question-form queries.
+            _q_variants = _question_to_declarative_variants(request.query)
+            for _q_variant in _q_variants[:2]:
+                try:
+                    _v_emb = await EmbeddingService.embed(_q_variant)
+                    _v_results = await QdrantService.search(
+                        org_id=self.org_id,
+                        query_vector=_v_emb,
+                        limit=request.limit * 2,
+                        score_threshold=request.score_threshold or 0.0,
+                        scope_filter=scope_val,
+                        team_id=request.team_id,
+                    )
+                    _existing_ids = {
+                        str(r.get("payload", {}).get("memory_id") or "")
+                        for r in qdrant_results
+                        if r.get("payload", {}).get("memory_id")
+                    }
+                    for _vr in _v_results:
+                        _mid = str(_vr.get("payload", {}).get("memory_id") or "")
+                        if not _mid:
+                            continue
+                        _disc = float(_vr.get("score", 0.0)) * 0.9
+                        if _mid in _existing_ids:
+                            for _existing in qdrant_results:
+                                if str(_existing.get("payload", {}).get("memory_id") or "") == _mid:
+                                    if _disc > float(_existing.get("score", 0.0)):
+                                        _existing["score"] = _disc
+                                    break
+                        else:
+                            _copy = dict(_vr)
+                            _copy["score"] = _disc
+                            qdrant_results.append(_copy)
+                            _existing_ids.add(_mid)
+                except Exception:
+                    pass  # best-effort; never block the primary search
 
             # Graph-guided multi-query expansion:
             # - Seed from first-pass vector hits
@@ -1163,11 +983,10 @@ class MemoryService:
                             variant_results = await QdrantService.search(
                                 org_id=self.org_id,
                                 query_vector=variant_embedding,
-                                limit=vector_limit,
+                                limit=request.limit * 2,
                                 score_threshold=max((request.score_threshold or 0.0) - 0.05, 0.0),
                                 scope_filter=scope_val,
                                 team_id=request.team_id,
-                                tags=vector_tags,
                             )
                         except Exception:
                             continue
@@ -1193,21 +1012,10 @@ class MemoryService:
                 request.query,
                 exc,
             )
-            qdrant_error = exc
+            raise RuntimeError("Vector search unavailable") from exc
 
         # Lexical leg (Postgres FTS) - opt-in via request.hybrid
-        vector_scores: dict[str, float] = {}
-        for result in qdrant_results:
-            payload = result.get("payload") or {}
-            memory_id = payload.get("memory_id")
-            if not memory_id:
-                continue
-            memory_id = str(memory_id)
-            score = float(result.get("score") or 0.0)
-            vector_scores[memory_id] = max(vector_scores.get(memory_id, 0.0), score)
-
-        lexical_enabled = self._should_auto_hybrid(vector_scores, request)
-        if lexical_enabled:
+        if getattr(request, "hybrid", False):
             # Full-text search using pre-computed search_vector column with GIN index.
             # Uses BM25-style ranking via ts_rank_cd with normalization.
             # 
@@ -1223,9 +1031,9 @@ class MemoryService:
             # We use normalization=1 (BM25-like length normalization)
             normalization = 1
             
-            # Build query using english stemming/stop-words so natural
-            # language questions don't over-constrain FTS matches.
-            tsq = func.plainto_tsquery("english", request.query)
+            # Build query using plainto_tsquery for user-friendly parsing
+            # Alternatively: websearch_to_tsquery for more advanced queries
+            tsq = func.plainto_tsquery("simple", request.query)
             
             # Rank using ts_rank_cd (Cover Density ranking).
             # Use the 3-arg signature (vector, query, normalization) for broad
@@ -1264,49 +1072,19 @@ class MemoryService:
                 memory_id = str(row[0])
                 lexical_scores[memory_id] = float(row[1] or 0.0)
 
-            if not getattr(request, "hybrid", False):
-                fallback_reason = "auto_hybrid_low_vector_confidence"
-
-        if qdrant_error is not None:
-            allow_lexical_fallback = bool(
-                getattr(settings, "SEARCH_ALLOW_LEXICAL_FALLBACK_ON_VECTOR_ERROR", True)
-            )
-            if vector_scores or lexical_scores:
-                fallback_reason = fallback_reason or "vector_partial_error_degraded"
-            elif not (allow_lexical_fallback and lexical_scores):
-                raise RuntimeError("Vector search unavailable") from qdrant_error
-            else:
-                fallback_reason = "vector_error_lexical_fallback"
-
         # Candidate IDs from both legs
+        vector_scores: dict[str, float] = {}
+        for result in qdrant_results:
+            payload = result.get("payload") or {}
+            memory_id = payload.get("memory_id")
+            if not memory_id:
+                continue
+            memory_id = str(memory_id)
+            score = float(result.get("score") or 0.0)
+            vector_scores[memory_id] = max(vector_scores.get(memory_id, 0.0), score)
+
         candidate_ids = list({*vector_scores.keys(), *lexical_scores.keys(), *graph_scores.keys()})
-        graph_requested = bool(getattr(request, "use_graph", False))
         if not candidate_ids:
-            if graph_requested:
-                fallback_request = request.model_copy(update={"use_graph": False})
-                retried_results = await self.search_memories(
-                    query_embedding=query_embedding,
-                    request=fallback_request,
-                    request_id=request_id,
-                )
-                if retried_results:
-                    retried_diag = dict(self.get_last_search_diagnostics() or {})
-                    retried_diag["fallback_reason"] = "graph_empty_retry_without_graph"
-                    retried_diag["graph_retry_without_graph"] = True
-                    self._last_search_diagnostics = retried_diag
-                    return retried_results[: request.limit]
-            self._last_search_diagnostics = {
-                "vector_hits": 0,
-                "lexical_hits": 0,
-                "graph_hits": 0,
-                "candidate_ids": 0,
-                "authorized_hits": 0,
-                "fallback_reason": fallback_reason,
-                "query_variants_used": query_variants_used,
-                "multihop_subqueries_used": multihop_subqueries_used,
-                "confidence_buckets": {"high": 0, "medium": 0, "low": 0},
-                "graph_retry_without_graph": False,
-            }
             return []
 
         # Fetch from Postgres (RLS will filter unauthorized)
@@ -1402,9 +1180,6 @@ class MemoryService:
         )
         authorized_memories: list[MemoryMetadata] = []
         normalized_similarities: dict[str, float] = {}
-        dominant_session = self._infer_dominant_session(memories, vector_scores)
-        query_hints = self._query_persona_hints(request.query)
-        confidence_buckets = {"high": 0, "medium": 0, "low": 0}
         for memory in memories:
             if memory.id in authorized_ids:
                 vec = vector_scores.get(memory.id, 0.0)
@@ -1421,33 +1196,6 @@ class MemoryService:
                     memory.score = (vec_weight * vec_norm) + (lex_weight * lex_norm) + (graph_weight * graph_norm)
                 else:
                     memory.score = (vec_weight * vec_norm) + (graph_weight * graph_norm)
-
-                # Perspective/session-aware reranking.
-                # Boost evidence from the dominant session and likely speaker hints.
-                session_key = self._memory_session_key(memory).lower()
-                speaker_key = self._memory_speaker_key(memory)
-                perspective_boost = 1.0
-                if dominant_session:
-                    perspective_boost *= 1.08 if session_key == dominant_session else 0.97
-                if query_hints:
-                    if any(h in speaker_key for h in query_hints):
-                        perspective_boost *= 1.12
-                    else:
-                        perspective_boost *= 0.96
-                memory.score = float(memory.score or 0.0) * perspective_boost
-
-                # Lexical grounding boost: prioritize memories that actually cover
-                # the question terms, especially under degraded vector recall.
-                overlap = self._query_overlap_score(request.query, memory)
-                if overlap >= 0.6:
-                    overlap_mult = 1.22
-                elif overlap >= 0.35:
-                    overlap_mult = 1.10
-                elif overlap == 0.0:
-                    overlap_mult = 0.78
-                else:
-                    overlap_mult = 0.92
-                memory.score = float(memory.score or 0.0) * overlap_mult
 
                 # Optional: temporal decay weighting (HNMS-inspired).
                 # Uses last_accessed_at if present, else updated_at, else created_at.
@@ -1500,14 +1248,6 @@ class MemoryService:
                                 memory.score = float(memory.score or 0.0) * pos_mult
                             elif v < 0:
                                 memory.score = float(memory.score or 0.0) * neg_mult
-
-                final_score = float(memory.score or 0.0)
-                if final_score >= 0.75:
-                    confidence_buckets["high"] += 1
-                elif final_score >= 0.45:
-                    confidence_buckets["medium"] += 1
-                elif final_score > 0:
-                    confidence_buckets["low"] += 1
 
                 # Attach best-effort provenance for citations.
                 # For now, the "source" is the memory itself (future: attachments/docs).
@@ -1620,40 +1360,8 @@ class MemoryService:
                 # If activation scoring fails, fall back to the legacy combined score.
                 pass
 
-        # If graph-guided retrieval produced no authorized results, retry once
-        # with graph expansion disabled to preserve baseline semantic/hybrid recall.
-        graph_requested = bool(getattr(request, "use_graph", False))
-        if graph_requested and not authorized_memories:
-            fallback_request = request.model_copy(update={"use_graph": False})
-            retried_results = await self.search_memories(
-                query_embedding=query_embedding,
-                request=fallback_request,
-                request_id=request_id,
-            )
-            if retried_results:
-                retried_diag = dict(self.get_last_search_diagnostics() or {})
-                retried_diag["fallback_reason"] = "graph_empty_retry_without_graph"
-                retried_diag["graph_retry_without_graph"] = True
-                self._last_search_diagnostics = retried_diag
-                return retried_results[: request.limit]
-
         # Sort by score and limit
         authorized_memories.sort(key=lambda m: float(m.score or 0.0), reverse=True)
-        self._last_search_diagnostics = {
-            "vector_hits": len(vector_scores),
-            "lexical_hits": len(lexical_scores),
-            "graph_hits": len(graph_scores),
-            "candidate_ids": len(candidate_ids),
-            "authorized_hits": len(authorized_memories),
-            "fallback_reason": fallback_reason,
-            "vector_tag_filter_relaxed": vector_tag_filter_relaxed,
-            "query_variants_used": query_variants_used,
-            "multihop_subqueries_used": multihop_subqueries_used,
-            "dominant_session": dominant_session or None,
-            "confidence_buckets": confidence_buckets,
-            "lexical_mode": "forced" if getattr(request, "hybrid", False) else ("auto" if lexical_enabled else "off"),
-            "graph_retry_without_graph": False,
-        }
         return authorized_memories[: request.limit]
 
     def get_search_ranking_meta(self, request: MemorySearchRequest) -> dict[str, object]:
@@ -1714,16 +1422,6 @@ class MemoryService:
             "graph_expansion_enabled": bool(getattr(settings, "SEARCH_GRAPH_EXPANSION_ENABLED", True)),
             "graph_expansion_requested": bool(getattr(request, "use_graph", False)),
             "multi_query_max_variants": int(getattr(settings, "SEARCH_MULTI_QUERY_MAX_VARIANTS", 4) or 4),
-            "query_expansion_enabled": bool(getattr(settings, "SEARCH_QUERY_EXPANSION_ENABLED", True)),
-            "query_expansion_max_variants": int(getattr(settings, "SEARCH_QUERY_EXPANSION_MAX_VARIANTS", 3) or 3),
-            "auto_hybrid_enabled": bool(getattr(settings, "SEARCH_AUTO_HYBRID_ENABLED", True)),
-            "auto_hybrid_min_vector_hits": int(getattr(settings, "SEARCH_AUTO_HYBRID_MIN_VECTOR_HITS", 4) or 4),
-            "auto_hybrid_max_top_score": float(getattr(settings, "SEARCH_AUTO_HYBRID_MAX_TOP_SCORE", 0.55) or 0.55),
-            "multi_hop_subquery_enabled": bool(getattr(settings, "SEARCH_MULTI_HOP_SUBQUERY_ENABLED", True)),
-            "multi_hop_max_subqueries": int(getattr(settings, "SEARCH_MULTI_HOP_MAX_SUBQUERIES", 3) or 3),
-            "vector_error_lexical_fallback_enabled": bool(
-                getattr(settings, "SEARCH_ALLOW_LEXICAL_FALLBACK_ON_VECTOR_ERROR", True)
-            ),
         }
     
     # =========================================================================

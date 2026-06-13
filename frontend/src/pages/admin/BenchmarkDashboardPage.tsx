@@ -61,7 +61,7 @@ function buildTimeSeries(runs: BenchmarkRun[]) {
       time: formatDate(run.run_at),
       composite: run.composite_score,
       strategy: run.strategy,
-      model: run.ollama_model ?? 'heuristic',
+      model: run.vllm_model ?? 'heuristic',
     };
     for (const cfg of BENCH_CONFIGS) {
       const row = run.results.find((r) => r.benchmark === cfg.key);
@@ -225,7 +225,7 @@ export default function BenchmarkDashboardPage() {
               {latest && (
                 <span className="ml-2 font-normal normal-case text-gray-400">
                   {new Date(latest.run_at).toLocaleString()} ·{' '}
-                  {latest.strategy}{latest.ollama_model ? ` / ${latest.ollama_model}` : ''} ·{' '}
+                  {latest.strategy}{latest.vllm_model ? ` / ${latest.vllm_model}` : ''} ·{' '}
                   {latest.dataset} dataset
                 </span>
               )}
@@ -344,7 +344,7 @@ export default function BenchmarkDashboardPage() {
                             {run.strategy}
                           </span>
                         </td>
-                        <td className="px-4 py-2 text-gray-500">{run.ollama_model ?? '—'}</td>
+                        <td className="px-4 py-2 text-gray-500">{run.vllm_model ?? '—'}</td>
                         <td className="px-4 py-2 text-gray-500">{run.dataset}</td>
                         <td className="px-4 py-2 text-gray-500">{run.duration_seconds.toFixed(1)}s</td>
                         <td className="px-4 py-2 font-semibold text-blue-600">{run.composite_score.toFixed(4)}</td>

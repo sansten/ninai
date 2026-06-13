@@ -276,7 +276,7 @@ class SLASchedulerService:
 
         # Record to resource profiler
         try:
-            cost_per_1k = 0.0001  # Ollama local model cost estimate
+            cost_per_1k = 0.0001  # vLLM local model cost estimate
             estimated_cost_usd = (actual_tokens / 1000.0) * cost_per_1k
             queued_ms = 0.0
             if task.created_at and task.started_at:

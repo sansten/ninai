@@ -26,6 +26,7 @@ Per-tenant capability gating:
 
 from __future__ import annotations
 
+import asyncio
 import dataclasses
 import json
 import logging
@@ -36,7 +37,7 @@ from typing import Any, Callable
 
 from app.agents.anomaly_detection_agent import run_heuristic as _anomaly_detect
 from app.agents.debate_ensemble_agent import DebateEnsembleAgent
-from app.agents.llm.ollama_breaker import create_ollama_client
+from app.agents.llm.llm_breaker import create_llm_client
 from app.agents.memory_tier_manager_agent import MemoryTierManagerAgent
 from app.agents.query_intelligence_agent import run_heuristic as _query_intelligence_detect
 from app.core.config import settings
@@ -247,17 +248,17 @@ def _classify_llm_failure(error_text: str | None) -> str | None:
 def _effective_llm_num_ctx(requested_num_ctx: int, *, task: str) -> int:
     requested = max(256, int(requested_num_ctx or 0) or 2048)
     if task == "judge":
-        configured = int(getattr(settings, "OLLAMA_MAX_NUM_CTX_JUDGE", 1024) or 1024)
+        configured = int(getattr(settings, "VLLM_MAX_NUM_CTX_JUDGE", 1024) or 1024)
         default_cap = 1024
     else:
-        configured = int(getattr(settings, "OLLAMA_MAX_NUM_CTX_ANSWER", 2048) or 2048)
+        configured = int(getattr(settings, "VLLM_MAX_NUM_CTX_ANSWER", 2048) or 2048)
         default_cap = 2048
     cap = max(512, min(configured, default_cap))
     return max(512, min(requested, cap))
 
 
 def _effective_llm_max_concurrency(*, task: str) -> int:
-    configured = max(1, int(getattr(settings, "OLLAMA_MAX_CONCURRENCY", 2) or 2))
+    configured = max(1, int(getattr(settings, "VLLM_MAX_CONCURRENCY", 2) or 2))
     if task == "judge":
         return max(1, min(configured, 2))
     return max(1, min(configured, 2))
@@ -293,7 +294,7 @@ def _build_compact_answer_prompt(question: str, memories: list[dict]) -> tuple[s
 
     context_lines: list[str] = []
     total_chars = 0
-    max_chars = max(900, int(getattr(settings, "OLLAMA_MAX_PROMPT_CHARS_ANSWER", 1600) or 1600))
+    max_chars = max(900, int(getattr(settings, "VLLM_MAX_PROMPT_CHARS_ANSWER", 1600) or 1600))
     reserved_chars = sum(len(line) + 1 for line in fact_lines)
     conversation_budget = max(700, max_chars - reserved_chars - 280)
     for memory in memories[:24]:
@@ -1589,13 +1590,13 @@ class CognitiveGatewayService:
     ) -> GatewayAnswerResult:
         """Generate an answer to a question using retrieved memory context.
 
-        Calls the server-side Ollama instance so LLM inference stays in-cluster.
-        Does not fall back to heuristic extraction when Ollama is unavailable.
+        Calls the server-side vLLM instance so LLM inference stays in-cluster.
+        Does not fall back to heuristic extraction when vLLM is unavailable.
 
-        If prompt_override is provided it is sent to Ollama directly, bypassing
+        If prompt_override is provided it is sent to vLLM directly, bypassing
         the default context-assembly and prompt template.
 
-        timeout_seconds: override the default OLLAMA_TIMEOUT_SECONDS config.
+        timeout_seconds: override the default VLLM_TIMEOUT_SECONDS config.
           Benchmark callers pass 200s+ to avoid 30s hard-timeout failures on
           large models (qwen2.5:32b on CPU takes 60-120s including model load).
         keep_alive: seconds to keep the model loaded (-1 = forever). Pass -1
@@ -1633,10 +1634,10 @@ class CognitiveGatewayService:
                 f"Question: {question}\nAnswer:"
             )
 
-        _model = model or str(settings.get_ollama_model("agents"))
+        _model = model or str(settings.get_llm_model("agents"))
         # Use caller-provided timeout when available; the config default (30s) is too short
         # for large models that need 60-120s to load+infer on first call after idle.
-        _default_timeout = float(getattr(settings, "OLLAMA_TIMEOUT_SECONDS", 30.0))
+        _default_timeout = float(getattr(settings, "VLLM_TIMEOUT_SECONDS", 30.0))
         _timeout = float(timeout_seconds) if timeout_seconds is not None else _default_timeout
         # Clamp: minimum 30s, maximum 300s to avoid unbounded waits
         _timeout = max(30.0, min(300.0, _timeout))
@@ -1650,16 +1651,21 @@ class CognitiveGatewayService:
         llm_endpoint: str | None = None
 
         try:
-            client = create_ollama_client(
-                base_url=str(getattr(settings, "OLLAMA_BASE_URL", "http://localhost:11434")),
+            client = create_llm_client(
+                base_url=str(getattr(settings, "VLLM_BASE_URL", "http://localhost:11434")),
                 model=_model,
                 timeout_seconds=_timeout,
                 max_concurrency=_effective_llm_max_concurrency(task="answer"),
             )
-            # keep_alive is handled by the base OllamaClient (hardcoded to -1 = never evict).
+            # keep_alive is handled by the base client (hardcoded to -1 = never evict).
             # The caller's keep_alive hint is noted for logging but not forwarded as a kwarg.
             _ = keep_alive  # acknowledged; base client always uses keep_alive=-1
-            answer_text = await client.complete_text(prompt=prompt, num_ctx=effective_num_ctx)
+            # Guard against transport/client edge cases where the underlying
+            # call can stall longer than configured HTTP timeouts.
+            answer_text = await asyncio.wait_for(
+                client.complete_text(prompt=prompt, num_ctx=effective_num_ctx),
+                timeout=_timeout + 5.0,
+            )
             used_llm = bool(answer_text)
             model_used = str(getattr(client, "last_model_used", "") or _model)
             llm_endpoint = str(getattr(client, "last_endpoint_used", "") or "") or None
@@ -1675,7 +1681,7 @@ class CognitiveGatewayService:
             llm_failure_mode = _classify_llm_failure(llm_error)
             answer_source = "gateway_error"
             logger.warning(
-                "ollama answer fallback: model=%s timeout=%s exc=%s: %s",
+                "vllm answer fallback: model=%s timeout=%s exc=%s: %s",
                 _model,
                 _timeout,
                 type(exc).__name__,
@@ -1719,12 +1725,12 @@ class CognitiveGatewayService:
             "Reply with only \"yes\" or \"no\". No explanation.\nAnswer:"
         )
 
-        _model = model or str(settings.get_ollama_model("agents"))
+        _model = model or str(settings.get_llm_model("agents"))
         raw = ""
 
         try:
-            client = create_ollama_client(
-                base_url=str(getattr(settings, "OLLAMA_BASE_URL", "http://localhost:11434")),
+            client = create_llm_client(
+                base_url=str(getattr(settings, "VLLM_BASE_URL", "http://localhost:11434")),
                 model=_model,
                 timeout_seconds=60.0,
                 max_concurrency=_effective_llm_max_concurrency(task="judge"),

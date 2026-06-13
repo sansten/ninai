@@ -315,7 +315,7 @@ import pytest
 @pytest.mark.asyncio
 async def test_retrieve_with_gating(db_session, org_id):
     """Test entropy-gated retrieval (GAP-4)."""
-    retrieval_svc = RetrievalService(db_session, ollama_client)
+    retrieval_svc = RetrievalService(db_session, vllm_client)
     
     result = await retrieval_svc.retrieve_with_gating(
         query="Deploy to production",
@@ -407,7 +407,7 @@ Two-stage adaptive retrieval with entropy-gated expansion (GAP-3, GAP-4).
 
 ## Changes
 - `RetrievalService.retrieve_with_gating()` with Stage I submodular greedy and Stage II entropy control
-- `UncertaintyGatingService` for entropy calculation via Ollama
+- `UncertaintyGatingService` for entropy calculation via vLLM
 - 14 new integration tests
 - Updated docs/RETRIEVAL.md
 
@@ -475,7 +475,7 @@ python scripts/run_benchmark.py \
     "dataset": "LoCoMo",
     "model": "text-embedding-3-small",
     "num_queries": 500,
-    "ollama_endpoint": "http://localhost:11434"
+    "vllm_endpoint": "http://localhost:11434"
   }
 }
 ```
@@ -567,7 +567,7 @@ RUN_POSTGRES_TESTS=1 pytest --timeout=30 backend/tests/
 
 ### Vector Similarity Search Returning Nothing
 
-- Check embedding dimension (should be 1536 for OpenAI, 768 for Ollama)
+- Check embedding dimension (should be 1536 for OpenAI, 768 for vLLM)
 - Verify Qdrant payload includes `organization_id`
 - Ensure RLS org_id context is set before search
 

@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from app.agents.base import BaseAgent
-from app.agents.llm.ollama_breaker import create_ollama_client
+from app.agents.llm.llm_breaker import create_llm_client
 from app.agents.types import AgentContext, AgentResult
 from app.core.config import settings
 
@@ -236,7 +236,7 @@ class ProspectiveMemoryAgent(BaseAgent):
 
         # LLM path
         try:
-            client = create_ollama_client()
+            client = create_llm_client()
             prompt = (
                 "You are a deadline-detection assistant. Given a text snippet, "
                 "identify any deadline phrases and estimate offset hours.\n\n"
@@ -245,7 +245,7 @@ class ProspectiveMemoryAgent(BaseAgent):
                 "{trigger_type, trigger_at_offset_hours, reminder_content, urgency}), "
                 "deadline_detected (bool), deadline_tokens (list[str]), confidence (float)."
             )
-            resp = await client.generate(model=settings.OLLAMA_MODEL, prompt=prompt)
+            resp = await client.generate(model=settings.VLLM_MODEL, prompt=prompt)
             import json
 
             parsed = json.loads(resp.get("response", "{}"))

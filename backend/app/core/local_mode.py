@@ -22,15 +22,15 @@ def external_federation_enabled() -> bool:
     return not is_local_first_mode()
 
 
-def ollama_base_url_for_runtime() -> str:
-    """Resolve the expected Ollama base URL in local-first mode.
+def VLLM_BASE_URL_for_runtime() -> str:
+    """Resolve the expected vLLM base URL in local-first mode.
 
-    In edge mode we still respect explicit OLLAMA_BASE_URL; if unset we default
+    In edge mode we still respect explicit VLLM_BASE_URL; if unset we default
     to the in-cluster service name.
     """
-    configured = str(getattr(settings, "OLLAMA_BASE_URL", "") or "").strip()
+    configured = str(getattr(settings, "VLLM_BASE_URL", "") or "").strip()
     if configured:
         return configured
     if is_edge_deployment():
-        return "http://ollama:11434"
+        return "http://vllm:8000"
     return "http://localhost:11434"

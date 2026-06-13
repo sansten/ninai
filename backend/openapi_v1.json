@@ -34229,7 +34229,7 @@
             "type": "string",
             "title": "Dataset"
           },
-          "ollama_model": {
+          "vllm_model": {
             "anyOf": [
               {
                 "type": "string"
@@ -34238,7 +34238,7 @@
                 "type": "null"
               }
             ],
-            "title": "Ollama Model"
+            "title": "vLLM Model"
           },
           "duration_seconds": {
             "type": "number",
@@ -34287,7 +34287,7 @@
             "type": "string",
             "title": "Dataset"
           },
-          "ollama_model": {
+          "vllm_model": {
             "anyOf": [
               {
                 "type": "string"
@@ -34296,7 +34296,7 @@
                 "type": "null"
               }
             ],
-            "title": "Ollama Model"
+            "title": "vLLM Model"
           },
           "duration_seconds": {
             "type": "number",
@@ -34319,7 +34319,7 @@
           "mode",
           "strategy",
           "dataset",
-          "ollama_model",
+          "vllm_model",
           "duration_seconds",
           "composite_score",
           "results"

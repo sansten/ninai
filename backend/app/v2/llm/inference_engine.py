@@ -275,6 +275,32 @@ class InferenceEngine:
                     })
         return entities
 
+    async def generate_hypothetical(self, query: str) -> str:
+        """Generate a short hypothetical answer for HyDE-style embedding."""
+        prompt = (
+            "Generate a 1-2 sentence answer to the following question as if you know the answer from memory. "
+            "Return JSON: {\"answer\": \"...\"}\n"
+            f"Question: {query}"
+        )
+        raw = await self._generate_json(prompt, model=self._extract_model)
+        if isinstance(raw, dict):
+            return str(raw.get("answer", "")).strip()
+        return ""
+
+    async def expand_query(self, query: str) -> list[str]:
+        """Rewrite query into 2 alternative phrasings for query expansion."""
+        prompt = (
+            "Rewrite the following question in 2 alternative ways that might match how the answer "
+            "is phrased in a personal memory diary. Return JSON: {\"variants\": [\"...\", \"...\"]}\n"
+            f"Question: {query}"
+        )
+        raw = await self._generate_json(prompt, model=self._extract_model)
+        if isinstance(raw, dict):
+            variants = raw.get("variants", [])
+            if isinstance(variants, list):
+                return [str(v).strip() for v in variants if str(v).strip() and str(v).strip() != query][:2]
+        return []
+
     # ------------------------------------------------------------------
     # Main inference — structured JSON response
     # ------------------------------------------------------------------
@@ -460,6 +486,51 @@ class InferenceEngine:
         except Exception as exc:
             logger.warning("Gist generation failed: %s", exc)
             return ""
+
+    async def distill_evidence(
+        self, query: str, items: list[str], batch_size: int = 12, max_items: int = 24
+    ) -> list[str]:
+        """Query-focused VERBATIM extraction over retrieved chunks (map step of map-reduce).
+
+        Instead of handing the answer model 100 noisy chunks, the same model first copies
+        out only the lines relevant to the question — dates, names and numbers preserved
+        verbatim (NOT summarised, to avoid dropping the needle). The concatenated result is
+        a denoised, focused context. Measured headroom: feeding the 14B near-gold context
+        lifts it ~+11 ROUGE. Returns a list of relevant fact lines (possibly empty)."""
+        if not items:
+            return []
+        items = items[:max_items]
+        facts: list[str] = []
+        for start in range(0, len(items), batch_size):
+            batch = items[start:start + batch_size]
+            numbered = "\n".join(f"- {it[:400]}" for it in batch)
+            prompt = (
+                "From the conversation excerpts below, copy VERBATIM every line that could "
+                "help answer the question. Preserve dates (including any [YYYY-MM-DD] anchor), "
+                "names and numbers exactly as written — do NOT summarise or rephrase. Skip "
+                "irrelevant lines. If none are relevant, output exactly: NONE.\n\n"
+                f"QUESTION: {query}\n\nEXCERPTS:\n{numbered}\n\nRELEVANT LINES:"
+            )
+            try:
+                payload = {
+                    "model": self._model,
+                    "messages": [{"role": "user", "content": prompt}],
+                    "temperature": 0.0,
+                    "max_tokens": 400,
+                    "stream": False,
+                }
+                async with httpx.AsyncClient(timeout=self._timeout) as client:
+                    resp = await client.post(f"{self._base}{_CHAT_PATH}", json=payload)
+                    resp.raise_for_status()
+                    out = (resp.json()["choices"][0]["message"]["content"] or "").strip()
+                if out and out.upper() != "NONE":
+                    for line in out.split("\n"):
+                        line = line.strip().lstrip("-•* ").strip()
+                        if line and line.upper() != "NONE":
+                            facts.append(line)
+            except Exception as exc:
+                logger.warning("distill_evidence batch failed: %s", exc)
+        return facts
 
     # ------------------------------------------------------------------
     # Context pre-filtering — small model selects most relevant chunks

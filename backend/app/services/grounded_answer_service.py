@@ -31,10 +31,10 @@ class GroundedAnswerResult:
 class GroundedAnswerService:
     """Answer questions from a structured evidence package instead of flat snippets."""
 
-    _MAX_PROMPT_CHARS = 1600
-    _MAX_FACT_LINES = 5
-    _MAX_MEMORY_LINES = 5
-    _MAX_TIMELINE_LINES = 3
+    _MAX_PROMPT_CHARS = 2800
+    _MAX_FACT_LINES = 8
+    _MAX_MEMORY_LINES = 8
+    _MAX_TIMELINE_LINES = 5
     _MAX_SEMANTIC_LINES = 2
     _MAX_GRAPH_LINES = 2
     _MAX_GOAL_LINES = 2
@@ -97,6 +97,7 @@ class GroundedAnswerService:
             keep_alive=keep_alive,
         )
         final_answer = str(gateway_result.answer or "").strip()
+        final_answer = self._normalize_gateway_answer(final_answer)
         final_source = str(getattr(gateway_result, "answer_source", "") or "gateway_empty")
         final_model = gateway_result.model
         final_used_llm = bool(gateway_result.used_llm)
@@ -450,6 +451,37 @@ class GroundedAnswerService:
             if name:
                 support.append(f"entity:{name}")
         return support
+
+    @staticmethod
+    def _normalize_gateway_answer(answer: str) -> str:
+        """Normalize common model formatting wrappers while preserving content."""
+        text = str(answer or "").strip()
+        if not text:
+            return ""
+
+        # Some backends still emit explicit answer markers despite instruction.
+        lowered = text.lower()
+        for marker in ("final answer:", "answer:"):
+            idx = lowered.rfind(marker)
+            if idx != -1:
+                text = text[idx + len(marker):].strip()
+                lowered = text.lower()
+
+        if "\n" in text:
+            lines = [line.strip() for line in text.splitlines() if line.strip()]
+            filtered = [
+                line
+                for line in lines
+                if not line.lower().startswith(("question:", "facts:", "memory hits:", "timeline:"))
+            ]
+            text = (filtered[0] if filtered else lines[0]).strip() if lines else ""
+
+        # Remove trivial wrapper quotes/backticks only.
+        if len(text) >= 2 and ((text[0] == '"' and text[-1] == '"') or (text[0] == "'" and text[-1] == "'")):
+            text = text[1:-1].strip()
+        if text.startswith("`") and text.endswith("`") and len(text) > 2:
+            text = text[1:-1].strip()
+        return text
 
     def _estimate_confidence(
         self,

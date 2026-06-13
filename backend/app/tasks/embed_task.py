@@ -1,6 +1,6 @@
 """Async embedding and Qdrant indexing task.
 
-Runs after a memory write returns 201. Decouples the OpenAI/Ollama round-trip
+Runs after a memory write returns 201. Decouples the OpenAI/vLLM round-trip
 from the synchronous write path so POST /memories returns in <50 ms while the
 vector index is populated within seconds in the background.
 """

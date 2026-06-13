@@ -539,15 +539,15 @@ async def test_llm_path_falls_back_to_heuristic_on_bad_response(monkeypatch):
         async def complete_json(self, prompt, schema_hint, tool_event_sink=None):
             return {"bad_key": "wrong"}
 
-    monkeypatch.setattr(cga_mod, "create_ollama_client", lambda **kw: FakeClient())
+    monkeypatch.setattr(cga_mod, "create_llm_client", lambda **kw: FakeClient())
     monkeypatch.setattr(cga_mod, "settings",
                         type("S", (), {"AGENT_STRATEGY": "llm",
-                                       "OLLAMA_BASE_URL": "http://localhost:11434",
-                                       "OLLAMA_MODEL": "llama3.1:8b",
-                                       "OLLAMA_TIMEOUT_SECONDS": 5.0,
-                                       "OLLAMA_MAX_CONCURRENCY": 2,
+                                       "VLLM_BASE_URL": "http://localhost:11434",
+                                       "VLLM_MODEL": "llama3.1:8b",
+                                       "VLLM_TIMEOUT_SECONDS": 5.0,
+                                       "VLLM_MAX_CONCURRENCY": 2,
                                        "COMPOSITIONAL_STRATEGY": None,
-                                       "get_ollama_model": lambda self, p=None: "llama3.1:8b"})())
+                                       "get_vllm_model": lambda self, p=None: "llama3.1:8b"})())
 
     agent = CompositionalGeneralizationAgent()
     ctx = _ctx(
@@ -574,15 +574,15 @@ async def test_llm_path_accepts_valid_response(monkeypatch):
                 "rationale": "llm",
             }
 
-    monkeypatch.setattr(cga_mod, "create_ollama_client", lambda **kw: FakeClient())
+    monkeypatch.setattr(cga_mod, "create_llm_client", lambda **kw: FakeClient())
     monkeypatch.setattr(cga_mod, "settings",
                         type("S", (), {"AGENT_STRATEGY": "llm",
-                                       "OLLAMA_BASE_URL": "http://localhost:11434",
-                                       "OLLAMA_MODEL": "llama3.1:8b",
-                                       "OLLAMA_TIMEOUT_SECONDS": 5.0,
-                                       "OLLAMA_MAX_CONCURRENCY": 2,
+                                       "VLLM_BASE_URL": "http://localhost:11434",
+                                       "VLLM_MODEL": "llama3.1:8b",
+                                       "VLLM_TIMEOUT_SECONDS": 5.0,
+                                       "VLLM_MAX_CONCURRENCY": 2,
                                        "COMPOSITIONAL_STRATEGY": None,
-                                       "get_ollama_model": lambda self, p=None: "llama3.1:8b"})())
+                                       "get_vllm_model": lambda self, p=None: "llama3.1:8b"})())
 
     agent = CompositionalGeneralizationAgent()
     ctx = _ctx(content="deploy application", subtasks=[])

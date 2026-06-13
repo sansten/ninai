@@ -32,7 +32,12 @@ class V2InteractRequest(BaseModel):
         default=None,
         description="Override the inference model for this request only "
                     "(e.g. 'qwen2.5:7b' for fast SLM, 'qwen2.5:32b' for deep reasoning). "
-                    "Falls back to the server-configured OLLAMA_MODEL when omitted.",
+                    "Falls back to the server-configured VLLM_MODEL when omitted.",
+    )
+    raw_context: str | None = Field(
+        default=None,
+        description="When provided and NINAI_FULL_CONV_BYPASS=1, skip Phase 1 retrieval and "
+                    "use this text directly as the context for inference.",
     )
 
 
@@ -77,5 +82,5 @@ class V2GraphInspectResponse(BaseModel):
 class V2HealthResponse(BaseModel):
     engine_version: str = "v2"
     graph_available: bool
-    ollama_available: bool
+    llm_available: bool
     message: str

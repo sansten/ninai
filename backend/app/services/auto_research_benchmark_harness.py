@@ -84,7 +84,7 @@ class AutoResearchBenchmarkHarness:
                     mode="auto_research",
                     strategy=label,
                     dataset="gate_e",
-                    ollama_model=None,
+                    VLLM_MODEL=None,
                     duration_seconds=summary.duration_seconds,
                     composite_score=summary.composite_score,
                     results=summary.results,

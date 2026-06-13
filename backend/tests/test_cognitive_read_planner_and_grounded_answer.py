@@ -628,7 +628,7 @@ async def test_grounded_answer_service_compresses_verbose_single_value_answers()
                     llm_error=None,
                     answer_source="gateway",
                     llm_failure_mode=None,
-                    llm_endpoint="http://ollama-primary:11434",
+                    llm_endpoint="http://vllm-primary:11434",
                 ),
                 SimpleNamespace(
                     answer="Transgender woman",
@@ -638,7 +638,7 @@ async def test_grounded_answer_service_compresses_verbose_single_value_answers()
                     llm_error=None,
                     answer_source="gateway",
                     llm_failure_mode=None,
-                    llm_endpoint="http://ollama-primary:11434",
+                    llm_endpoint="http://vllm-primary:11434",
                 ),
             ]
         )
@@ -677,7 +677,7 @@ async def test_grounded_answer_service_compresses_verbose_single_value_answers()
     assert "DRAFT ANSWER: Caroline identifies as a transgender woman" in compression_prompt
     assert result.answer == "Transgender woman"
     assert result.answer_source == "gateway_compressed"
-    assert result.llm_endpoint == "http://ollama-primary:11434"
+    assert result.llm_endpoint == "http://vllm-primary:11434"
 
 
 def test_grounded_answer_service_question_profile_tracks_primary_subject_and_distractors():

@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import time
 from dataclasses import dataclass, field
 from typing import Any
@@ -36,7 +37,50 @@ _LLM_RERANK = os.environ.get("NINAI_LLM_RERANK", "1").lower() in ("1", "true", "
 # When on, it replaces the lossy truncated-snippet LLM pre-filter (falls back to it
 # if the model can't load). Targets the "answer chunk retrieved but not selected" failure.
 _CE_RERANK = os.environ.get("NINAI_CE_RERANK", "0").lower() in ("1", "true", "yes")
+# Cross-encoder shortlist size — CE trims the pool to this many before the LLM
+# pre-filter makes the final cut (must be > the LLM pre-filter's top_k of 12).
+_CE_SHORTLIST = int(os.environ.get("NINAI_CE_SHORTLIST", "16"))
+# Dense candidate pool fetched specifically for cross-encoder reranking. Larger than
+# QDRANT_TOP_K because the answer chunk is frequently ranked 30-100 by vector search;
+# the reranker promotes it into the shortlist. Only used when _CE_RERANK is on.
+_CE_POOL = int(os.environ.get("NINAI_CE_POOL", "100"))
+# LLM pre-filter funnel knobs. Measured: ~43% of persistent failures are answer chunks
+# that WERE retrieved but never reached the answer model — dropped by the pre-filter's
+# 300-char selection snippet and top_k=12 cut. Widening both delivers more retrieved
+# evidence to the answer step (the stage the reranker could not fix).
+_PREFILTER_CHARS = int(os.environ.get("NINAI_PREFILTER_CHARS", "300"))
+_PREFILTER_TOPK = int(os.environ.get("NINAI_PREFILTER_TOPK", "12"))
 _GIST_INTERVAL = int(os.environ.get("GIST_INTERVAL", "25"))
+_HYDE = os.environ.get("NINAI_HYDE", "0").lower() in ("1", "true", "yes")
+_QEXPAND = os.environ.get("NINAI_QEXPAND", "0").lower() in ("1", "true", "yes")
+_MULTIHOP_ITER = os.environ.get("NINAI_MULTIHOP_ITER", "0").lower() in ("1", "true", "yes")
+# Graph-connectivity render boost: promote retrieved chunks that share a discriminative
+# graph entity with the question's anchor chunks (the multi-hop bridge), so they survive
+# the prompt builder's top-K render cut even with low lexical overlap. See
+# _apply_graph_connectivity_boost. Off by default; reorders nothing destructively (only
+# stamps payload["_graph_bonus"]).
+# Query-focused distillation (map-reduce): the answer model first extracts only the
+# question-relevant lines (verbatim) from the retrieved chunks, then answers from that
+# denoised context. Targets distraction/refusal failures where the right fact is buried
+# in 100 chunks. Off by default; costs ~1-2 extra LLM calls per query.
+_DISTILL = os.environ.get("NINAI_DISTILL", "0").lower() in ("1", "true", "yes")
+_DISTILL_MAX = int(os.environ.get("NINAI_DISTILL_MAX", "24"))      # chunks fed to the map step
+_DISTILL_KEEP = int(os.environ.get("NINAI_DISTILL_KEEP", "3"))     # top original chunks kept as backup
+_GRAPH_RANK = os.environ.get("NINAI_GRAPH_RANK", "0").lower() in ("1", "true", "yes")
+# Top-K strongest (vector-order) chunks whose entities define the anchor set.
+_GRAPH_RANK_ANCHORS = int(os.environ.get("NINAI_GRAPH_RANK_ANCHORS", "5"))
+# Score added per shared discriminative entity. Tuned to be comparable to a strong
+# lexical term hit (~7-12) so one solid graph link can lift a bridge into the render set.
+_GRAPH_RANK_WEIGHT = int(os.environ.get("NINAI_GRAPH_RANK_WEIGHT", "8"))
+_GIST_INJECT = os.environ.get("NINAI_GIST_INJECT", "0").lower() in ("1", "true", "yes")
+_FULL_CONV_BYPASS = os.environ.get("NINAI_FULL_CONV_BYPASS", "0").lower() in ("1", "true", "yes")
+
+_MULTIHOP_PATTERNS = (
+    r"\bbecause of\b", r"\bafter\b.{1,40}\b(which|that|he|she|they)\b",
+    r"\bwhat led\b", r"\bhow did\b.{1,30}\baffect\b", r"\bas a result\b",
+    r"\bfollowing\b.{1,30}\bwhat\b", r"\bsince\b.{1,20}\b(did|was|started|began)\b",
+    r"\bwho introduced\b", r"\bwho got .{1,20} into\b", r"\bbefore .{1,20} when\b",
+)
 
 _REFUSAL_FRAGMENTS = (
     "not mentioned", "not provided", "not available", "no information",
@@ -58,6 +102,85 @@ def _is_refusal(text: str) -> bool:
     if not low or len(low) < 3:
         return True
     return any(p in low for p in _REFUSAL_FRAGMENTS)
+
+
+def _is_multihop_query(query: str) -> bool:
+    low = query.lower()
+    return any(re.search(p, low) for p in _MULTIHOP_PATTERNS)
+
+
+def _extract_caps_from_chunks(chunks: list[dict]) -> list[str]:
+    """Extract likely proper nouns from chunk payloads for hop-2 retrieval."""
+    seen: set[str] = set()
+    names: list[str] = []
+    for ch in chunks[:8]:
+        p = ch.get("payload", {})
+        text = str(p.get("text") or p.get("content") or p.get("summary") or "")
+        for word in re.findall(r"\b([A-Z][a-z]{2,15})\b", text):
+            if word not in seen and word not in {
+                "The", "This", "That", "When", "Where", "What",
+                "January", "February", "March", "April", "June",
+                "July", "August", "September", "October", "November", "December",
+            }:
+                seen.add(word)
+                names.append(word)
+                if len(names) >= 4:
+                    return names
+    return names
+
+def _apply_graph_connectivity_boost(
+    chunks: list[dict],
+    anchor_top_k: int = 5,
+    bonus_weight: int = 8,
+) -> int:
+    """Stamp payload['_graph_bonus'] on chunks that are graph-connected to the anchors.
+
+    The strongest retrieved chunks (first `anchor_top_k`, vector-score order) define an
+    anchor entity set. Any chunk sharing one of those entities is a candidate multi-hop
+    bridge and gets a bonus proportional to the number of shared *discriminative*
+    entities. Ubiquitous entities (present in a large fraction of the pool — typically
+    the main speakers) carry no signal, so they are excluded from the anchor set.
+
+    Mutates payloads in place; returns the number of chunks that received a bonus.
+    Safe no-op when chunks lack entity metadata.
+    """
+    if not chunks:
+        return 0
+
+    n = len(chunks)
+    # Document frequency of each entity across the pool → drop ubiquitous ones.
+    df: dict[str, int] = {}
+    for ch in chunks:
+        p = ch.get("payload", {}) or {}
+        ids = {str(e) for e in (p.get("entity_ids") or []) if e}
+        names = {str(e).lower() for e in (p.get("entity_names") or []) if e}
+        for key in ids | names:
+            df[key] = df.get(key, 0) + 1
+    common_cut = max(3, int(0.4 * n))
+    common = {k for k, c in df.items() if c > common_cut}
+
+    def _keys(ch: dict) -> set[str]:
+        p = ch.get("payload", {}) or {}
+        ids = {str(e) for e in (p.get("entity_ids") or []) if e}
+        names = {str(e).lower() for e in (p.get("entity_names") or []) if e}
+        return (ids | names) - common
+
+    anchor_entities: set[str] = set()
+    for ch in chunks[:anchor_top_k]:
+        anchor_entities |= _keys(ch)
+    if not anchor_entities:
+        return 0
+
+    boosted = 0
+    for ch in chunks:
+        shared = _keys(ch) & anchor_entities
+        if shared:
+            p = ch.get("payload", {}) or {}
+            p["_graph_bonus"] = len(shared) * bonus_weight
+            ch["payload"] = p
+            boosted += 1
+    return boosted
+
 
 logger = logging.getLogger(__name__)
 
@@ -115,6 +238,7 @@ class V2CognitiveLoop:
         ingest_only: bool = False,
         prev_utterance_id: str | None = None,
         model_hint: str | None = None,
+        raw_context: str | None = None,
     ) -> CognitiveLoopResult:
         t0 = time.monotonic()
         result = CognitiveLoopResult()
@@ -127,16 +251,52 @@ class V2CognitiveLoop:
         # ---------------------------------------------------------------
         # Skip retrieval in ingest_only mode — nothing useful is in the graph yet
         # and it saves a Qdrant + FalkorDB round-trip per ingested turn.
+        # Also skip when raw_context is provided (full conversation bypass mode).
         read: ReadResult = ReadResult()
-        if not ingest_only:
+        _raw_ctx_active = bool(raw_context and _FULL_CONV_BYPASS)
+        if not ingest_only and not _raw_ctx_active:
             try:
+                # When the cross-encoder reranker is active, fetch a LARGER dense pool
+                # so the reranker can promote answer chunks that vector search ranks
+                # below the default top_k (measured: evidence recall jumps 58%@30 ->
+                # 91%@100, so reranking a 30-pool leaves most of the gain on the table).
+                _pool = _CE_POOL if (_BENCH_MODE and _CE_RERANK) else None
+
+                # HyDE: generate a short hypothetical answer, average its embedding with
+                # the query embedding. Helps when question phrasing diverges from stored text.
+                query_hint: str | None = None
+                if _HYDE:
+                    try:
+                        query_hint = await self._engine.generate_hypothetical(user_input) or None
+                    except Exception:
+                        pass
+
                 read = await self._router.read(
                     tenant_id=tenant_id,
                     session_id=session_id,
                     query=user_input,
+                    qdrant_limit=_pool,
+                    query_hint=query_hint,
                 )
                 result.graph_nodes_retrieved = len(read.graph_nodes)
                 result.qdrant_chunks_retrieved = len(read.qdrant_chunks)
+
+                # Query expansion: generate 2 alternative phrasings and union results.
+                # Helps when the question's surface form diverges from stored text.
+                if _QEXPAND:
+                    try:
+                        variants = await self._engine.expand_query(user_input)
+                        seen_ids = {ch["id"] for ch in read.qdrant_chunks}
+                        for variant in variants:
+                            extra = await self._router.read(
+                                tenant_id, session_id, variant, qdrant_limit=_pool
+                            )
+                            for ch in extra.qdrant_chunks:
+                                if ch["id"] not in seen_ids:
+                                    read.qdrant_chunks.append(ch)
+                                    seen_ids.add(ch["id"])
+                    except Exception as exc:
+                        logger.warning("Query expansion failed: %s", exc)
             except Exception as exc:
                 logger.warning("Phase 1 retrieval failed: %s", exc)
                 result.error = f"retrieval: {exc}"
@@ -144,35 +304,46 @@ class V2CognitiveLoop:
         # ---------------------------------------------------------------
         # Phase 1b: context reranking / pre-filtering (bench mode)
         # ---------------------------------------------------------------
-        # Preferred: cross-encoder reranker (full query<->chunk relevance over the
-        # whole pool). Falls through to the LLM pre-filter if disabled/unavailable.
-        _ce_applied = False
-        if (not ingest_only and _BENCH_MODE and _CE_RERANK
-                and read.qdrant_chunks and len(read.qdrant_chunks) > 8):
+        # Two-stage: the cross-encoder reranks the full pool down to a SHORTLIST
+        # (coarse relevance + recall), then the LLM pre-filter makes the final precise
+        # selection. The CE COMPLEMENTS the LLM pre-filter — it does not replace it —
+        # so an ill-fit reranker can reorder/widen candidates but can't drop the answer
+        # chunk on its own; the LLM still gets the final say.
+        if (not ingest_only and not _raw_ctx_active and _BENCH_MODE and _CE_RERANK
+                and read.qdrant_chunks and len(read.qdrant_chunks) > _CE_SHORTLIST):
             try:
                 from app.v2.llm.reranker import cross_encoder_rerank
-                _reranked = await cross_encoder_rerank(user_input, read.qdrant_chunks, top_k=12)
+                _reranked = await cross_encoder_rerank(
+                    user_input, read.qdrant_chunks, top_k=_CE_SHORTLIST
+                )
                 if _reranked:
                     read.qdrant_chunks = _reranked
-                    _ce_applied = True
             except Exception as exc:
                 logger.warning("Cross-encoder rerank failed: %s", exc)
+            # Safety net: if the CE didn't trim the enlarged pool (model failed to
+            # load, returned None), cap it back to the standard top_k before the LLM
+            # pre-filter so a reranker failure degrades to the original behaviour
+            # rather than feeding the whole 100-chunk pool into the prompt. Chunks are
+            # in vector-score order, so this is the original top-_CE_SHORTLIST*2.
+            _cap = max(_CE_SHORTLIST, 30)
+            if read.qdrant_chunks and len(read.qdrant_chunks) > _cap:
+                read.qdrant_chunks = read.qdrant_chunks[:_cap]
 
-        if not ingest_only and _BENCH_MODE and _LLM_RERANK and not _ce_applied and read.qdrant_chunks:
+        if not ingest_only and not _raw_ctx_active and _BENCH_MODE and _LLM_RERANK and read.qdrant_chunks:
             try:
                 chunk_texts = []
                 for ch in read.qdrant_chunks:
                     p = ch.get("payload", {})
-                    t = str(p.get("text") or p.get("content") or p.get("summary") or "")[:300]
+                    t = str(p.get("text") or p.get("content") or p.get("summary") or "")[:_PREFILTER_CHARS]
                     chunk_texts.append(t)
                 if len(chunk_texts) > 8:
                     selected = await self._engine.select_relevant_context(
-                        user_input, chunk_texts, top_k=12
+                        user_input, chunk_texts, top_k=_PREFILTER_TOPK
                     )
                     selected_set = set(selected)
                     filtered = [ch for ch in read.qdrant_chunks
                                 if str((ch.get("payload") or {}).get("text") or
-                                       (ch.get("payload") or {}).get("content") or "")[:300]
+                                       (ch.get("payload") or {}).get("content") or "")[:_PREFILTER_CHARS]
                                 in selected_set]
                     # Always keep high-signal chunks regardless of LLM selection:
                     # gists (broad coverage) and entity chunks (precision recall).
@@ -188,6 +359,68 @@ class V2CognitiveLoop:
                         read.qdrant_chunks = high_sig_kept + filtered
             except Exception as exc:
                 logger.warning("LLM pre-filtering failed: %s", exc)
+
+        # Iterative multi-hop retrieval: for chained questions, extract entity names
+        # from the current shortlist and do a second retrieval round seeded by them.
+        if not ingest_only and not _raw_ctx_active and _MULTIHOP_ITER and _is_multihop_query(user_input) and read.qdrant_chunks:
+            try:
+                hop2_names = _extract_caps_from_chunks(read.qdrant_chunks)
+                seen_ids = {ch["id"] for ch in read.qdrant_chunks}
+                for name in hop2_names[:2]:
+                    extra = await self._router.read(tenant_id, session_id, name, qdrant_limit=_pool)
+                    for ch in extra.qdrant_chunks:
+                        if ch["id"] not in seen_ids:
+                            read.qdrant_chunks.append(ch)
+                            seen_ids.add(ch["id"])
+            except Exception as exc:
+                logger.warning("Iterative multi-hop retrieval failed: %s", exc)
+
+        # ---------------------------------------------------------------
+        # Phase 1b2: query-focused distillation (map-reduce)
+        # ---------------------------------------------------------------
+        # Replace the noisy chunk pool with the answer model's own verbatim extraction of
+        # the question-relevant lines, keeping a few top original chunks as a safety net in
+        # case the extraction drops the needle. Denoises context the way the gold-evidence
+        # probe showed lifts the small model ~+11 ROUGE.
+        if (not ingest_only and not _raw_ctx_active and _DISTILL and read.qdrant_chunks):
+            try:
+                _texts = []
+                for ch in read.qdrant_chunks:
+                    p = ch.get("payload", {}) or {}
+                    t = str(p.get("text") or p.get("content") or p.get("summary") or "").strip()
+                    if t:
+                        _texts.append(t)
+                facts = await self._llm_engine.distill_evidence(
+                    user_input, _texts, max_items=_DISTILL_MAX
+                )
+                if facts:
+                    distilled = [
+                        {"id": f"distill_{i}", "score": 1.0,
+                         "payload": {"text": f, "type": "segment_gist", "speaker": "", "anchor_date": ""}}
+                        for i, f in enumerate(facts)
+                    ]
+                    # Distilled facts first (rendered as high-priority gists), then a few
+                    # original chunks as backup against extraction misses.
+                    read.qdrant_chunks = distilled + read.qdrant_chunks[:_DISTILL_KEEP]
+            except Exception as exc:
+                logger.warning("Distillation stage failed: %s", exc)
+
+        # ---------------------------------------------------------------
+        # Phase 1c: graph-connectivity render boost
+        # ---------------------------------------------------------------
+        # The prompt builder renders only the top-K chunks (ranked by lexical overlap).
+        # A multi-hop bridge chunk often shares no question words with the query, so it
+        # is cut before the model sees it even though retrieval found it. Promote chunks
+        # that are graph-connected (share a discriminative entity) to the anchor chunks.
+        if (not ingest_only and not _raw_ctx_active and _GRAPH_RANK and read.qdrant_chunks):
+            try:
+                _apply_graph_connectivity_boost(
+                    read.qdrant_chunks,
+                    anchor_top_k=_GRAPH_RANK_ANCHORS,
+                    bonus_weight=_GRAPH_RANK_WEIGHT,
+                )
+            except Exception as exc:
+                logger.warning("Graph-connectivity boost failed: %s", exc)
 
         # ---------------------------------------------------------------
         # Phase 2: Inference & Execution
@@ -221,13 +454,33 @@ class V2CognitiveLoop:
                 other_nodes = [
                     n for n in read.graph_nodes if n.get("label") != "Utterance"
                 ]
+
+                # All-gist injection: prepend every conversation gist to the context so
+                # the model has a full summary arc regardless of vector ranking.
+                if _GIST_INJECT:
+                    try:
+                        extra_gists = await self._router.fetch_gists(tenant_id)
+                        seen_ids = {ch["id"] for ch in read.qdrant_chunks}
+                        prepend = [ch for ch in extra_gists if ch["id"] not in seen_ids]
+                        read.qdrant_chunks = prepend + read.qdrant_chunks
+                    except Exception as exc:
+                        logger.warning("Gist injection failed: %s", exc)
+
                 if _BENCH_MODE:
-                    prompt = build_bench_prompt(
-                        user_input=user_input,
-                        graph_nodes=other_nodes + session_utts,
-                        qdrant_chunks=read.qdrant_chunks,
-                        session_utterances=[],
-                    )
+                    if _raw_ctx_active:
+                        from app.v2.llm.prompt_builder import _BENCH_SYSTEM_INSTRUCTION
+                        prompt = (
+                            f"{_BENCH_SYSTEM_INSTRUCTION}\n\n"
+                            f"CONVERSATION CONTEXT:\n{raw_context}\n\n"
+                            f"QUESTION: {user_input}"
+                        )
+                    else:
+                        prompt = build_bench_prompt(
+                            user_input=user_input,
+                            graph_nodes=other_nodes + session_utts,
+                            qdrant_chunks=read.qdrant_chunks,
+                            session_utterances=[],
+                        )
                     infer_result = await active_engine.infer_plain(prompt)
                 else:
                     prompt = build_inference_prompt(

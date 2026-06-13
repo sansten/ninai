@@ -14,7 +14,7 @@ from app.services.goal_planner_agent import GoalPlannerAgent
 async def test_goal_planner_agent_proposes_goal():
     """Test that GoalPlannerAgent proposes a valid goal from user request."""
     
-    # Mock OllamaClient response
+    # Mock vLLMClient response
     mock_output = GoalPlannerAgentOutput(
         create_goal=True,
         goal={

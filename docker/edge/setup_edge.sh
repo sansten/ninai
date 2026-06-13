@@ -9,7 +9,7 @@ if [[ ! -f .env.edge ]]; then
   echo "Created .env.edge from template."
 fi
 
-EDGE_MODEL="$(grep -E '^OLLAMA_MODEL=' .env.edge | tail -n 1 | cut -d'=' -f2-)"
+EDGE_MODEL="$(grep -E '^VLLM_MODEL=' .env.edge | tail -n 1 | cut -d'=' -f2-)"
 EDGE_MODEL="${EDGE_MODEL:-qwen2.5:7b}"
 
 echo "Starting Ninai edge stack..."
@@ -35,13 +35,13 @@ until curl -fsS http://localhost:6333/healthz >/dev/null 2>&1; do
   sleep 2
 done
 
-echo "Waiting for Ollama..."
+echo "Waiting for vLLM..."
 until curl -fsS http://localhost:11434/api/tags >/dev/null 2>&1; do
   sleep 2
 done
 
 echo "Ensuring default model is present (${EDGE_MODEL})..."
-docker exec -i ninai-edge-ollama ollama pull "${EDGE_MODEL}" >/dev/null || true
+docker exec -i ninai-edge-vllm vllm pull "${EDGE_MODEL}" >/dev/null || true
 
 echo "Edge deployment ready."
 echo "API:    http://localhost:8000"

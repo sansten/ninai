@@ -11,7 +11,7 @@ from app.agents.llm.base import LLMClient
 from app.agents.llm.tool_events import ToolEventSink
 
 
-class OllamaClient(LLMClient):
+class VLLMClient(LLMClient):
     def __init__(
         self,
         *,
@@ -234,7 +234,7 @@ class OllamaClient(LLMClient):
         schema_hint: dict[str, Any],
         tool_event_sink: ToolEventSink | None = None,
     ) -> dict[str, Any]:
-        # Ollama /api/generate supports JSON mode via "format": "json".
+        # vLLM /api/generate supports JSON mode via "format": "json".
         payload = {
             "model": self._model,
             "prompt": prompt,
@@ -256,9 +256,9 @@ class OllamaClient(LLMClient):
                 await tool_event_sink(
                     {
                         "event_type": "tool_call",
-                        "summary_text": f"ollama.generate model={self._model} prompt_chars={len(prompt or '')}",
+                        "summary_text": f"llm.generate model={self._model} prompt_chars={len(prompt or '')}",
                         "payload": {
-                            "tool": "ollama.generate",
+                            "tool": "llm.generate",
                             "base_url": self._base_url,
                             "model": self._model,
                             "prompt_chars": len(prompt or ""),
@@ -291,8 +291,8 @@ class OllamaClient(LLMClient):
                     await tool_event_sink(
                         {
                             "event_type": "tool_result",
-                            "summary_text": f"ollama.generate error duration_ms={dt_ms:.1f}",
-                            "payload": {"tool": "ollama.generate", "ok": False, "duration_ms": dt_ms},
+                            "summary_text": f"llm.generate error duration_ms={dt_ms:.1f}",
+                            "payload": {"tool": "llm.generate", "ok": False, "duration_ms": dt_ms},
                         }
                     )
                 except Exception:
@@ -301,7 +301,7 @@ class OllamaClient(LLMClient):
             return {}
         self._last_error = ""
 
-        # Ollama returns {response: "{...}"}
+        # vLLM returns {response: "{...}"}
         raw = data.get("response")
         if not raw:
             if tool_event_sink is not None:
@@ -310,8 +310,8 @@ class OllamaClient(LLMClient):
                     await tool_event_sink(
                         {
                             "event_type": "tool_result",
-                            "summary_text": f"ollama.generate empty duration_ms={dt_ms:.1f}",
-                            "payload": {"tool": "ollama.generate", "ok": False, "duration_ms": dt_ms, "empty": True},
+                            "summary_text": f"llm.generate empty duration_ms={dt_ms:.1f}",
+                            "payload": {"tool": "llm.generate", "ok": False, "duration_ms": dt_ms, "empty": True},
                         }
                     )
                 except Exception:
@@ -325,9 +325,9 @@ class OllamaClient(LLMClient):
                     await tool_event_sink(
                         {
                             "event_type": "tool_result",
-                            "summary_text": f"ollama.generate ok duration_ms={dt_ms:.1f}",
+                            "summary_text": f"llm.generate ok duration_ms={dt_ms:.1f}",
                             "payload": {
-                                "tool": "ollama.generate",
+                                "tool": "llm.generate",
                                 "ok": True,
                                 "duration_ms": dt_ms,
                                 "result_keys": sorted(list(parsed.keys())) if isinstance(parsed, dict) else [],
@@ -344,8 +344,8 @@ class OllamaClient(LLMClient):
                     await tool_event_sink(
                         {
                             "event_type": "tool_result",
-                            "summary_text": f"ollama.generate invalid_json duration_ms={dt_ms:.1f}",
-                            "payload": {"tool": "ollama.generate", "ok": False, "duration_ms": dt_ms, "invalid_json": True},
+                            "summary_text": f"llm.generate invalid_json duration_ms={dt_ms:.1f}",
+                            "payload": {"tool": "llm.generate", "ok": False, "duration_ms": dt_ms, "invalid_json": True},
                         }
                     )
                 except Exception:

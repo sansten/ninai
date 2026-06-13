@@ -1,7 +1,7 @@
 """
 Tests for the NINAI v2 Graph-RAG + DNC cognitive engine.
 
-All external dependencies (FalkorDB, Ollama, Qdrant) are mocked.
+All external dependencies (FalkorDB, vLLM, Qdrant) are mocked.
 Tests verify the logic, data flow, and error-resilience of each component.
 """
 
@@ -50,7 +50,7 @@ def _make_engine() -> MagicMock:
     engine.extract_entities = AsyncMock(return_value=[
         {"id": "project_alpha", "name": "project alpha", "type": "task"},
     ])
-    from app.v2.llm.ollama_engine import InferenceResult
+    from app.v2.llm.vllm_engine import InferenceResult
     engine.infer = AsyncMock(return_value=InferenceResult(
         response="The project alpha deadline is Friday.",
         cited_node_ids=["e1", "e2"],
@@ -339,7 +339,7 @@ class TestV2CognitiveLoop:
     async def test_loop_inference_failure_returns_error_response(self):
         gc = _make_graph_client()
         engine = _make_engine()
-        engine.infer = AsyncMock(side_effect=RuntimeError("ollama down"))
+        engine.infer = AsyncMock(side_effect=RuntimeError("vllm down"))
         router = _make_router(graph_client=gc, engine=engine)
         loop = V2CognitiveLoop(dnc_router=router, reasoning_engine=engine)
 

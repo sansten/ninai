@@ -63,7 +63,7 @@ class TaskExecutionContext:
         """Record metrics to profiler."""
         try:
             # Calculate estimated cost based on tokens
-            # Ollama local = basically free, use $0.0001 per 1K tokens as baseline
+            # vLLM local = basically free, use $0.0001 per 1K tokens as baseline
             cost_per_1k = 0.0001  # Conservative estimate for local models
             estimated_cost_usd = (self.actual_tokens / 1000.0) * cost_per_1k
 

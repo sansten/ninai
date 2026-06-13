@@ -21,7 +21,10 @@ from typing import Any
 
 _MAX_GRAPH_NODES = 8
 _MAX_QDRANT_CHUNKS = 8
-_MAX_NODE_CONTENT_CHARS = 200
+# 600 keeps long turns intact (anchor dates / list items past the old 200-char cut
+# were invisible to the answer model even when retrieval found the right chunk).
+# 8 chunks x 600 chars ~= 1.2K tokens; the 14B serves at max-model-len=32768.
+_MAX_NODE_CONTENT_CHARS = 600
 _QUESTION_NAME_RE = re.compile(r"\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?\b")
 _QUESTION_TERM_RE = re.compile(r"[A-Za-z][A-Za-z'_-]{2,}")
 _STOP_NAME_WORDS = {
@@ -359,7 +362,12 @@ def build_bench_prompt(
             c.get("payload", {}).get("subject", ""),
             c.get("payload", {}).get("text", ""),
             c.get("payload", {}).get("content", ""),
-        ),
+        # _graph_bonus is precomputed upstream (cognitive_loop graph-connectivity pass):
+        # a chunk that shares a discriminative graph entity with the question's anchor
+        # chunks is a likely multi-hop bridge, so it earns a place in the rendered
+        # top-K even when its lexical overlap with the question is low. Absent (flag
+        # off) the bonus is 0 and ranking is unchanged.
+        ) + int(c.get("payload", {}).get("_graph_bonus", 0) or 0),
         reverse=True,
     )
 

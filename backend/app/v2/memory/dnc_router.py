@@ -42,6 +42,8 @@ from app.v2.memory.entity_extraction import parse_temporal_context
 # back-filled within seconds. OFF by default (inline extraction) so the benchmark
 # and any latency-tolerant caller are unchanged. See app/tasks/v2_enrich_task.py.
 _ASYNC_EXTRACT = os.environ.get("NINAI_ASYNC_EXTRACT", "0").lower() in ("1", "true", "yes")
+_HYDE = os.environ.get("NINAI_HYDE", "0").lower() in ("1", "true", "yes")
+_QEXPAND = os.environ.get("NINAI_QEXPAND", "0").lower() in ("1", "true", "yes")
 
 _Q_SKIP = frozenset({
     "what", "when", "where", "who", "why", "how", "which", "did", "does",
@@ -182,7 +184,14 @@ class DNCMemoryRouter:
     # Read weighting — Phase 1
     # ------------------------------------------------------------------
 
-    async def read(self, tenant_id: str, session_id: str, query: str) -> ReadResult:
+    async def read(
+        self, tenant_id: str, session_id: str, query: str, qdrant_limit: int | None = None,
+        query_hint: str | None = None,
+    ) -> ReadResult:
+        # qdrant_limit overrides the default top_k for the dense pool — used by the
+        # cross-encoder reranker path, which needs a LARGER candidate pool (the answer
+        # chunk is often ranked 30-100, so trimming to top_k=30 before reranking loses
+        # it). The reranker then trims this pool back down to the shortlist.
         result = ReadResult()
 
         # Pre-compute query signals used across multiple retrieval steps
@@ -195,7 +204,11 @@ class DNCMemoryRouter:
         if self._embed and self._qdrant:
             try:
                 embedding = await self._embed(query)
-                raw = await self._qdrant_search(tenant_id, embedding)
+                if query_hint:
+                    hint_emb = await self._embed(query_hint)
+                    if len(hint_emb) == len(embedding) and hint_emb:
+                        embedding = [(a + b) / 2 for a, b in zip(embedding, hint_emb)]
+                raw = await self._qdrant_search(tenant_id, embedding, limit=qdrant_limit)
                 qdrant_chunks = raw
                 seen_chunk_ids = {c["id"] for c in qdrant_chunks}
 
@@ -363,11 +376,15 @@ class DNCMemoryRouter:
         #    recency tiebreak). No keyword boost — tested and hurts adversarial.
         #    Priority nodes skip reranking (already at front).
         n_priority = len(priority_nodes)
+        # In CE-pool mode (qdrant_limit set), keep the full pool here so the downstream
+        # cross-encoder reranker can promote answer chunks ranked below the normal cut.
+        # Otherwise trim to the standard 20 (this internal step is cheap score fusion).
+        _top_q = qdrant_limit if qdrant_limit else 20
         reranked_qdrant, reranked_regular = rerank_context(
             query=query,
             qdrant_chunks=result.qdrant_chunks,
             graph_nodes=result.graph_nodes[n_priority:],
-            top_qdrant=20,
+            top_qdrant=_top_q,
             top_graph=25,
         )
         result.qdrant_chunks = reranked_qdrant
@@ -376,7 +393,7 @@ class DNCMemoryRouter:
         return result
 
     async def _qdrant_search(
-        self, tenant_id: str, embedding: list[float]
+        self, tenant_id: str, embedding: list[float], limit: int | None = None
     ) -> list[dict[str, Any]]:
         if not self._qdrant:
             return []
@@ -387,7 +404,7 @@ class DNCMemoryRouter:
             hits = await self._qdrant.search(
                 collection_name="memories",
                 query_vector=embedding,
-                limit=self._top_k,
+                limit=limit or self._top_k,
                 query_filter={"must": [{"key": "organization_id", "match": {"value": tenant_id}}]},
             )
             return [
@@ -396,6 +413,27 @@ class DNCMemoryRouter:
             ]
         except Exception as exc:
             logger.warning("Qdrant search error: %s", exc)
+            return []
+
+    async def fetch_gists(self, tenant_id: str, limit: int = 20) -> list[dict[str, Any]]:
+        """Retrieve all segment_gist chunks for a tenant (filter-only, no vector search)."""
+        if not self._qdrant:
+            return []
+        try:
+            from qdrant_client.http.models import Filter, FieldCondition, MatchValue
+            scroll_filter = Filter(must=[
+                FieldCondition(key="organization_id", match=MatchValue(value=tenant_id)),
+                FieldCondition(key="type", match=MatchValue(value="segment_gist")),
+            ])
+            hits, _ = await self._qdrant.scroll(
+                collection_name="memories",
+                scroll_filter=scroll_filter,
+                limit=limit,
+                with_payload=True,
+            )
+            return [{"id": str(h.id), "score": 1.0, "payload": h.payload or {}} for h in (hits or [])]
+        except Exception as exc:
+            logger.warning("Qdrant gist scroll error: %s", exc)
             return []
 
     # ------------------------------------------------------------------
@@ -484,7 +522,9 @@ class DNCMemoryRouter:
                         "utterance_id": utt_id,
                         "session_id": session_id,
                         "role": role,
-                        "text": utterance_text[:500],
+                        # 2000 matches _CE_MAX_CHARS in llm/reranker.py; the old 500-char
+                        # cap silently dropped anchor dates and list items from long turns.
+                        "text": utterance_text[:2000],
                         "tenant_id": tenant_id,
                         "anchor_date": anchor_date or "",
                         "speaker": speaker or "",

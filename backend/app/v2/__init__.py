@@ -2,7 +2,7 @@
 NINAI v2 — Graph-RAG + DNC Cognitive Architecture
 
 Three-component design:
-  A. Reasoning Engine  — stateless Ollama LLM (zero-shot, structured JSON output)
+  A. Reasoning Engine  — stateless LLM backend (zero-shot, structured JSON output)
   B. Knowledge Graph   — FalkorDB chronological graph (hippocampus)
   C. DNC Memory Router — read/write/purge weighting layer
 

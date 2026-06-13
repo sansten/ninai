@@ -270,10 +270,10 @@ def mock_settings():
     with patch("app.agents.silo_propagation_agent.settings") as m:
         m.SILO_PROPAGATION_STRATEGY = "heuristic"
         m.SILO_PROPAGATION_THRESHOLD = 0.5
-        m.OLLAMA_BASE_URL = "http://localhost:11434"
-        m.OLLAMA_MODEL = "llama3.1:8b"
-        m.OLLAMA_TIMEOUT_SECONDS = 5.0
-        m.OLLAMA_MAX_CONCURRENCY = 2
+        m.VLLM_BASE_URL = "http://localhost:11434"
+        m.VLLM_MODEL = "llama3.1:8b"
+        m.VLLM_TIMEOUT_SECONDS = 5.0
+        m.VLLM_MAX_CONCURRENCY = 2
         m.AGENT_STRATEGY = "heuristic"
         yield m
 
@@ -502,14 +502,14 @@ class TestSiloPropagationLLM:
         mock_client = AsyncMock()
         mock_client.complete_json = AsyncMock(return_value=good_resp)
         with patch("app.agents.silo_propagation_agent.settings") as m, \
-             patch("app.agents.silo_propagation_agent.create_ollama_client", return_value=mock_client):
+             patch("app.agents.silo_propagation_agent.create_llm_client", return_value=mock_client):
             m.SILO_PROPAGATION_STRATEGY = "llm"
             m.SILO_PROPAGATION_THRESHOLD = 0.5
             m.AGENT_STRATEGY = "llm"
-            m.OLLAMA_BASE_URL = "http://localhost:11434"
-            m.OLLAMA_MODEL = "llama3.1:8b"
-            m.OLLAMA_TIMEOUT_SECONDS = 5.0
-            m.OLLAMA_MAX_CONCURRENCY = 2
+            m.VLLM_BASE_URL = "http://localhost:11434"
+            m.VLLM_MODEL = "llama3.1:8b"
+            m.VLLM_TIMEOUT_SECONDS = 5.0
+            m.VLLM_MAX_CONCURRENCY = 2
             ctx = _ctx(
                 enrichment={"context_bundle": [_CROSS_SILO_ITEM], "business_domain": "support"}
             )
@@ -520,14 +520,14 @@ class TestSiloPropagationLLM:
     @pytest.mark.asyncio
     async def test_bad_llm_response_falls_back(self, agent):
         with patch("app.agents.silo_propagation_agent.settings") as m, \
-             patch("app.agents.silo_propagation_agent.create_ollama_client") as mock_factory:
+             patch("app.agents.silo_propagation_agent.create_llm_client") as mock_factory:
             m.SILO_PROPAGATION_STRATEGY = "llm"
             m.SILO_PROPAGATION_THRESHOLD = 0.5
             m.AGENT_STRATEGY = "llm"
-            m.OLLAMA_BASE_URL = "http://localhost:11434"
-            m.OLLAMA_MODEL = "llama3.1:8b"
-            m.OLLAMA_TIMEOUT_SECONDS = 5.0
-            m.OLLAMA_MAX_CONCURRENCY = 2
+            m.VLLM_BASE_URL = "http://localhost:11434"
+            m.VLLM_MODEL = "llama3.1:8b"
+            m.VLLM_TIMEOUT_SECONDS = 5.0
+            m.VLLM_MAX_CONCURRENCY = 2
             mock_client = AsyncMock()
             mock_client.complete_json = AsyncMock(return_value={"bad": "response"})
             mock_factory.return_value = mock_client
@@ -544,14 +544,14 @@ class TestSiloPropagationLLM:
             "target_domains": "not-a-list",  # wrong type
         }
         with patch("app.agents.silo_propagation_agent.settings") as m, \
-             patch("app.agents.silo_propagation_agent.create_ollama_client") as mock_factory:
+             patch("app.agents.silo_propagation_agent.create_llm_client") as mock_factory:
             m.SILO_PROPAGATION_STRATEGY = "llm"
             m.SILO_PROPAGATION_THRESHOLD = 0.5
             m.AGENT_STRATEGY = "llm"
-            m.OLLAMA_BASE_URL = "http://localhost:11434"
-            m.OLLAMA_MODEL = "llama3.1:8b"
-            m.OLLAMA_TIMEOUT_SECONDS = 5.0
-            m.OLLAMA_MAX_CONCURRENCY = 2
+            m.VLLM_BASE_URL = "http://localhost:11434"
+            m.VLLM_MODEL = "llama3.1:8b"
+            m.VLLM_TIMEOUT_SECONDS = 5.0
+            m.VLLM_MAX_CONCURRENCY = 2
             mock_client = AsyncMock()
             mock_client.complete_json = AsyncMock(return_value=partial)
             mock_factory.return_value = mock_client

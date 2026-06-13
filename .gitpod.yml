@@ -40,7 +40,7 @@ phases:
     
     # Start services in background
     - echo "Starting database and cache services..."
-    - cd /workspace/ninai && docker-compose -f docker-compose.yml up -d postgres redis qdrant ollama
+    - cd /workspace/ninai && docker-compose -f docker-compose.yml up -d postgres redis qdrant vllm
     - sleep 10  # Wait for services to be ready
     
     # Initialize database
@@ -96,7 +96,7 @@ ports:
     description: Qdrant
   - port: 11434
     visibility: private
-    description: Ollama
+    description: vLLM
   - port: 9090
     onOpen: open-preview
     visibility: public
@@ -152,8 +152,8 @@ env:
   DATABASE_URL: postgresql+asyncpg://ninai:ninai@localhost:5432/ninai_dev
   REDIS_URL: redis://localhost:6379
   QDRANT_URL: http://localhost:6333
-  OLLAMA_BASE_URL: http://localhost:11434
-  OLLAMA_MODEL: qwen2.5:7b
+  VLLM_BASE_URL: http://localhost:11434
+  VLLM_MODEL: qwen2.5:7b
   SECRET_KEY: dev-secret-key-change-in-production
   LOG_LEVEL: debug
   AGENT_STRATEGY: heuristic

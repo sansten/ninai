@@ -598,15 +598,15 @@ class TestValidateOutputs:
 
 class TestPhase11LLM:
     @pytest.mark.asyncio
-    async def test_llm_strategy_calls_ollama(self):
+    async def test_llm_strategy_calls_vllm(self):
         with patch("app.agents.proactive_memory_push_agent.settings") as m:
             m.PROACTIVE_PUSH_THRESHOLD = None
             m.PROACTIVE_PUSH_STRATEGY = "llm"
             m.AGENT_STRATEGY = "llm"
-            m.OLLAMA_BASE_URL = "http://localhost:11434"
-            m.OLLAMA_MODEL = "llama3.1:8b"
-            m.OLLAMA_TIMEOUT_SECONDS = 5.0
-            m.OLLAMA_MAX_CONCURRENCY = 2
+            m.VLLM_BASE_URL = "http://localhost:11434"
+            m.VLLM_MODEL = "llama3.1:8b"
+            m.VLLM_TIMEOUT_SECONDS = 5.0
+            m.VLLM_MAX_CONCURRENCY = 2
             mock_resp = {
                 "push_candidates": [],
                 "triggers_detected": ["overlap_alert"],
@@ -615,7 +615,7 @@ class TestPhase11LLM:
                 "rationale": "llm test",
             }
             with patch(
-                "app.agents.proactive_memory_push_agent.create_ollama_client"
+                "app.agents.proactive_memory_push_agent.create_llm_client"
             ) as mock_create:
                 mock_client = AsyncMock()
                 mock_client.complete_json = AsyncMock(return_value=mock_resp)
@@ -638,12 +638,12 @@ class TestPhase11LLM:
             m.PROACTIVE_PUSH_THRESHOLD = None
             m.PROACTIVE_PUSH_STRATEGY = "llm"
             m.AGENT_STRATEGY = "llm"
-            m.OLLAMA_BASE_URL = "http://localhost:11434"
-            m.OLLAMA_MODEL = "llama3.1:8b"
-            m.OLLAMA_TIMEOUT_SECONDS = 5.0
-            m.OLLAMA_MAX_CONCURRENCY = 2
+            m.VLLM_BASE_URL = "http://localhost:11434"
+            m.VLLM_MODEL = "llama3.1:8b"
+            m.VLLM_TIMEOUT_SECONDS = 5.0
+            m.VLLM_MAX_CONCURRENCY = 2
             with patch(
-                "app.agents.proactive_memory_push_agent.create_ollama_client"
+                "app.agents.proactive_memory_push_agent.create_llm_client"
             ) as mock_create:
                 mock_client = AsyncMock()
                 mock_client.complete_json = AsyncMock(return_value={"bad": "response"})
@@ -665,12 +665,12 @@ class TestPhase11LLM:
             m.PROACTIVE_PUSH_THRESHOLD = None
             m.PROACTIVE_PUSH_STRATEGY = "llm"
             m.AGENT_STRATEGY = "llm"
-            m.OLLAMA_BASE_URL = "http://localhost:11434"
-            m.OLLAMA_MODEL = "llama3.1:8b"
-            m.OLLAMA_TIMEOUT_SECONDS = 5.0
-            m.OLLAMA_MAX_CONCURRENCY = 2
+            m.VLLM_BASE_URL = "http://localhost:11434"
+            m.VLLM_MODEL = "llama3.1:8b"
+            m.VLLM_TIMEOUT_SECONDS = 5.0
+            m.VLLM_MAX_CONCURRENCY = 2
             with patch(
-                "app.agents.proactive_memory_push_agent.create_ollama_client"
+                "app.agents.proactive_memory_push_agent.create_llm_client"
             ) as mock_create:
                 mock_client = AsyncMock()
                 mock_client.complete_json = AsyncMock(return_value=None)

@@ -201,13 +201,13 @@ class TestNarrativeCompressionAgentRun:
             }
         )
         with patch("app.agents.narrative_compression_agent.settings") as mock_settings, patch(
-            "app.agents.narrative_compression_agent.create_ollama_client", return_value=mock_client
+            "app.agents.narrative_compression_agent.create_llm_client", return_value=mock_client
         ):
             mock_settings.NARRATIVE_COMPRESSION_STRATEGY = "llm"
-            mock_settings.OLLAMA_BASE_URL = "http://localhost:11434"
-            mock_settings.OLLAMA_TIMEOUT_SECONDS = 5.0
-            mock_settings.OLLAMA_MAX_CONCURRENCY = 2
-            mock_settings.get_ollama_model = lambda _x: "qwen2.5:7b"
+            mock_settings.VLLM_BASE_URL = "http://localhost:11434"
+            mock_settings.VLLM_TIMEOUT_SECONDS = 5.0
+            mock_settings.VLLM_MAX_CONCURRENCY = 2
+            mock_settings.get_vllm_model = lambda _x: "qwen2.5:7b"
             result = await agent.run("m1", _ctx([]))
         assert result.outputs["compressed_narrative"] == "Summary."
 
@@ -217,13 +217,13 @@ class TestNarrativeCompressionAgentRun:
         mock_client = MagicMock()
         mock_client.complete_json = AsyncMock(return_value={"bad": "shape"})
         with patch("app.agents.narrative_compression_agent.settings") as mock_settings, patch(
-            "app.agents.narrative_compression_agent.create_ollama_client", return_value=mock_client
+            "app.agents.narrative_compression_agent.create_llm_client", return_value=mock_client
         ):
             mock_settings.NARRATIVE_COMPRESSION_STRATEGY = "llm"
-            mock_settings.OLLAMA_BASE_URL = "http://localhost:11434"
-            mock_settings.OLLAMA_TIMEOUT_SECONDS = 5.0
-            mock_settings.OLLAMA_MAX_CONCURRENCY = 2
-            mock_settings.get_ollama_model = lambda _x: "qwen2.5:7b"
+            mock_settings.VLLM_BASE_URL = "http://localhost:11434"
+            mock_settings.VLLM_TIMEOUT_SECONDS = 5.0
+            mock_settings.VLLM_MAX_CONCURRENCY = 2
+            mock_settings.get_vllm_model = lambda _x: "qwen2.5:7b"
             result = await agent.run("m1", _ctx([]))
         assert result.outputs["rationale"] == "heuristic"
 

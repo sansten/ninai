@@ -35,7 +35,7 @@ async def get_llm_config(
     row = res.scalar_one_or_none()
     if not row:
         return {
-            "provider": "ollama",
+            "provider": "local",
             "model": "qwen2.5:7b",
             "is_active": True,
         }
@@ -55,7 +55,10 @@ async def set_llm_config(
     db: AsyncSession = Depends(get_db),
 ):
     await set_tenant_context(db, tenant.user_id, tenant.org_id, tenant.roles_string, tenant.clearance_level)
-    if body.provider not in VALID_PROVIDERS:
+    normalized_provider = (body.provider or "").strip().lower()
+    if normalized_provider == "vllm":
+        normalized_provider = "local"
+    if normalized_provider not in VALID_PROVIDERS:
         raise HTTPException(
             status_code=400,
             detail=f"Invalid provider. Must be one of {sorted(VALID_PROVIDERS)}",
@@ -75,7 +78,7 @@ async def set_llm_config(
         )
         db.add(row)
 
-    row.provider = body.provider
+    row.provider = normalized_provider
     row.model = body.model
     row.api_key_ref = body.api_key_ref
     row.base_url = body.base_url

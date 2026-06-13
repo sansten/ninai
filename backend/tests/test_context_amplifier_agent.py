@@ -523,14 +523,14 @@ class TestContextAmplifierLLM:
 
     @pytest.mark.asyncio
     @patch("app.agents.context_amplifier_agent.settings")
-    @patch("app.agents.context_amplifier_agent.create_ollama_client")
+    @patch("app.agents.context_amplifier_agent.create_llm_client")
     async def test_good_llm_response_used(self, mock_client_factory, mock_settings, agent):
         mock_settings.CONTEXT_AMPLIFIER_STRATEGY = "llm"
         mock_settings.AGENT_STRATEGY = "llm"
-        mock_settings.OLLAMA_BASE_URL = "http://localhost:11434"
-        mock_settings.OLLAMA_MODEL = "llama3.1:8b"
-        mock_settings.OLLAMA_TIMEOUT_SECONDS = 5.0
-        mock_settings.OLLAMA_MAX_CONCURRENCY = 2
+        mock_settings.VLLM_BASE_URL = "http://localhost:11434"
+        mock_settings.VLLM_MODEL = "llama3.1:8b"
+        mock_settings.VLLM_TIMEOUT_SECONDS = 5.0
+        mock_settings.VLLM_MAX_CONCURRENCY = 2
 
         mock_client = AsyncMock()
         mock_client.complete_json = AsyncMock(
@@ -550,14 +550,14 @@ class TestContextAmplifierLLM:
 
     @pytest.mark.asyncio
     @patch("app.agents.context_amplifier_agent.settings")
-    @patch("app.agents.context_amplifier_agent.create_ollama_client")
+    @patch("app.agents.context_amplifier_agent.create_llm_client")
     async def test_bad_llm_response_falls_back(self, mock_client_factory, mock_settings, agent):
         mock_settings.CONTEXT_AMPLIFIER_STRATEGY = "llm"
         mock_settings.AGENT_STRATEGY = "llm"
-        mock_settings.OLLAMA_BASE_URL = "http://localhost:11434"
-        mock_settings.OLLAMA_MODEL = "llama3.1:8b"
-        mock_settings.OLLAMA_TIMEOUT_SECONDS = 5.0
-        mock_settings.OLLAMA_MAX_CONCURRENCY = 2
+        mock_settings.VLLM_BASE_URL = "http://localhost:11434"
+        mock_settings.VLLM_MODEL = "llama3.1:8b"
+        mock_settings.VLLM_TIMEOUT_SECONDS = 5.0
+        mock_settings.VLLM_MAX_CONCURRENCY = 2
 
         mock_client = AsyncMock()
         mock_client.complete_json = AsyncMock(return_value="not a dict")
@@ -569,14 +569,14 @@ class TestContextAmplifierLLM:
 
     @pytest.mark.asyncio
     @patch("app.agents.context_amplifier_agent.settings")
-    @patch("app.agents.context_amplifier_agent.create_ollama_client")
+    @patch("app.agents.context_amplifier_agent.create_llm_client")
     async def test_missing_list_field_falls_back(self, mock_client_factory, mock_settings, agent):
         mock_settings.CONTEXT_AMPLIFIER_STRATEGY = "llm"
         mock_settings.AGENT_STRATEGY = "llm"
-        mock_settings.OLLAMA_BASE_URL = "http://localhost:11434"
-        mock_settings.OLLAMA_MODEL = "llama3.1:8b"
-        mock_settings.OLLAMA_TIMEOUT_SECONDS = 5.0
-        mock_settings.OLLAMA_MAX_CONCURRENCY = 2
+        mock_settings.VLLM_BASE_URL = "http://localhost:11434"
+        mock_settings.VLLM_MODEL = "llama3.1:8b"
+        mock_settings.VLLM_TIMEOUT_SECONDS = 5.0
+        mock_settings.VLLM_MAX_CONCURRENCY = 2
 
         mock_client = AsyncMock()
         mock_client.complete_json = AsyncMock(

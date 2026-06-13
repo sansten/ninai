@@ -125,7 +125,7 @@ export interface BenchmarkRun {
   mode: string;
   strategy: string;
   dataset: string;
-  ollama_model?: string | null;
+  vllm_model?: string | null;
   duration_seconds: number;
   composite_score: number;
   results: BenchmarkResult[];

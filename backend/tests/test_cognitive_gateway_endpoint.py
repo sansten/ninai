@@ -129,7 +129,7 @@ async def test_gateway_answer_endpoint_routes_large_structured_prompt_through_gr
                 answer_source="gateway_compressed",
                 llm_error=None,
                 llm_failure_mode=None,
-                llm_endpoint="http://ollama-primary:11434",
+                llm_endpoint="http://vllm-primary:11434",
                 grounded=True,
                 confidence=0.8,
                 support=["memory:Adoption agencies"],
@@ -180,7 +180,7 @@ async def test_gateway_answer_endpoint_routes_large_structured_prompt_through_gr
 
     assert result["answer"] == "researching adoption agencies"
     assert result["answer_source"] == "gateway_compressed"
-    assert result["llm_endpoint"] == "http://ollama-primary:11434"
+    assert result["llm_endpoint"] == "http://vllm-primary:11434"
     assert called["grounded"] == 1
     assert called["gateway"] == 0
     assert called["set_tenant_context"] == 0

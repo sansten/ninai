@@ -24,17 +24,17 @@ def test_explicit_local_first_disables_federation(monkeypatch):
 def test_cloud_mode_keeps_federation_enabled(monkeypatch):
     monkeypatch.setattr(local_mode.settings, "DEPLOYMENT_MODE", "cloud", raising=False)
     monkeypatch.setattr(local_mode.settings, "LOCAL_FIRST_MODE", False, raising=False)
-    monkeypatch.setattr(local_mode.settings, "OLLAMA_BASE_URL", "", raising=False)
+    monkeypatch.setattr(local_mode.settings, "VLLM_BASE_URL", "", raising=False)
 
     assert local_mode.is_edge_deployment() is False
     assert local_mode.is_local_first_mode() is False
     assert local_mode.external_federation_enabled() is True
-    assert local_mode.ollama_base_url_for_runtime() == "http://localhost:11434"
+    assert local_mode.vllm_base_url_for_runtime() == "http://localhost:11434"
 
 
-def test_edge_mode_ollama_default(monkeypatch):
+def test_edge_mode_vllm_default(monkeypatch):
     monkeypatch.setattr(local_mode.settings, "DEPLOYMENT_MODE", "edge", raising=False)
     monkeypatch.setattr(local_mode.settings, "LOCAL_FIRST_MODE", False, raising=False)
-    monkeypatch.setattr(local_mode.settings, "OLLAMA_BASE_URL", "", raising=False)
+    monkeypatch.setattr(local_mode.settings, "VLLM_BASE_URL", "", raising=False)
 
-    assert local_mode.ollama_base_url_for_runtime() == "http://ollama:11434"
+    assert local_mode.vllm_base_url_for_runtime() == "http://vllm:11434"

@@ -220,7 +220,7 @@ async def test_llm_valid_json_used():
             "confidence": 0.9,
         }
     )
-    with patch("app.agents.adaptive_persona_agent.create_ollama_client", return_value=fake):
+    with patch("app.agents.adaptive_persona_agent.create_llm_client", return_value=fake):
         result = await agent.run("m1", _ctx())
     assert result.outputs["rationale"] == "llm"
 
@@ -231,7 +231,7 @@ async def test_llm_invalid_json_falls_back_to_heuristic():
     agent = AdaptivePersonaAgent()
     fake = AsyncMock()
     fake.complete_json = AsyncMock(return_value={"bad": "shape"})
-    with patch("app.agents.adaptive_persona_agent.create_ollama_client", return_value=fake):
+    with patch("app.agents.adaptive_persona_agent.create_llm_client", return_value=fake):
         result = await agent.run("m1", _ctx())
     assert result.outputs["rationale"] == "heuristic"
 
@@ -242,7 +242,7 @@ async def test_llm_prompt_contains_persona_fields():
     agent = AdaptivePersonaAgent()
     fake = AsyncMock()
     fake.complete_json = AsyncMock(return_value={"adapted_content": "x", "persona_applied": "a_b", "changes_made": []})
-    with patch("app.agents.adaptive_persona_agent.create_ollama_client", return_value=fake):
+    with patch("app.agents.adaptive_persona_agent.create_llm_client", return_value=fake):
         await agent.run("m1", _ctx())
     prompt = fake.complete_json.call_args.kwargs["prompt"]
     assert "PERSONA" in prompt

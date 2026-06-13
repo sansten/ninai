@@ -435,13 +435,13 @@ class TestEntityResolutionAgentLLM:
         mock_client.complete_json = AsyncMock(return_value=mock_resp)
 
         with patch("app.agents.entity_resolution_agent.settings") as mock_s, \
-             patch("app.agents.entity_resolution_agent.create_ollama_client", return_value=mock_client):
+             patch("app.agents.entity_resolution_agent.create_llm_client", return_value=mock_client):
             mock_s.ENTITY_RESOLUTION_STRATEGY = None
             mock_s.AGENT_STRATEGY = "llm"
-            mock_s.OLLAMA_BASE_URL = "http://localhost:11434"
-            mock_s.OLLAMA_MODEL = "llama3.1:8b"
-            mock_s.OLLAMA_TIMEOUT_SECONDS = 5.0
-            mock_s.OLLAMA_MAX_CONCURRENCY = 2
+            mock_s.VLLM_BASE_URL = "http://localhost:11434"
+            mock_s.VLLM_MODEL = "llama3.1:8b"
+            mock_s.VLLM_TIMEOUT_SECONDS = 5.0
+            mock_s.VLLM_MAX_CONCURRENCY = 2
             result = await agent.run("mem-1", _make_context("Acme Corp renewed their contract."))
 
         assert result.confidence == 0.9
@@ -454,13 +454,13 @@ class TestEntityResolutionAgentLLM:
         mock_client.complete_json = AsyncMock(return_value={"bad": "response"})
 
         with patch("app.agents.entity_resolution_agent.settings") as mock_s, \
-             patch("app.agents.entity_resolution_agent.create_ollama_client", return_value=mock_client):
+             patch("app.agents.entity_resolution_agent.create_llm_client", return_value=mock_client):
             mock_s.ENTITY_RESOLUTION_STRATEGY = None
             mock_s.AGENT_STRATEGY = "llm"
-            mock_s.OLLAMA_BASE_URL = "http://localhost:11434"
-            mock_s.OLLAMA_MODEL = "llama3.1:8b"
-            mock_s.OLLAMA_TIMEOUT_SECONDS = 5.0
-            mock_s.OLLAMA_MAX_CONCURRENCY = 2
+            mock_s.VLLM_BASE_URL = "http://localhost:11434"
+            mock_s.VLLM_MODEL = "llama3.1:8b"
+            mock_s.VLLM_TIMEOUT_SECONDS = 5.0
+            mock_s.VLLM_MAX_CONCURRENCY = 2
             rels = [{"type": "x", "concept": "client"}]
             result = await agent.run("mem-1", _make_context("", relationships=rels))
 
@@ -480,13 +480,13 @@ class TestEntityResolutionAgentLLM:
         })
 
         with patch("app.agents.entity_resolution_agent.settings") as mock_s, \
-             patch("app.agents.entity_resolution_agent.create_ollama_client", return_value=mock_client):
+             patch("app.agents.entity_resolution_agent.create_llm_client", return_value=mock_client):
             mock_s.ENTITY_RESOLUTION_STRATEGY = None
             mock_s.AGENT_STRATEGY = "llm"
-            mock_s.OLLAMA_BASE_URL = "http://localhost:11434"
-            mock_s.OLLAMA_MODEL = "llama3.1:8b"
-            mock_s.OLLAMA_TIMEOUT_SECONDS = 5.0
-            mock_s.OLLAMA_MAX_CONCURRENCY = 2
+            mock_s.VLLM_BASE_URL = "http://localhost:11434"
+            mock_s.VLLM_MODEL = "llama3.1:8b"
+            mock_s.VLLM_TIMEOUT_SECONDS = 5.0
+            mock_s.VLLM_MAX_CONCURRENCY = 2
             result = await agent.run("mem-1", _make_context("Budget review meeting."))
 
         assert result.outputs["rationale"] == "heuristic"
@@ -517,13 +517,13 @@ class TestEntityResolutionAgentLLM:
         mock_client.complete_json = AsyncMock(return_value=mock_resp)
 
         with patch("app.agents.entity_resolution_agent.settings") as mock_s, \
-             patch("app.agents.entity_resolution_agent.create_ollama_client", return_value=mock_client):
+             patch("app.agents.entity_resolution_agent.create_llm_client", return_value=mock_client):
             mock_s.ENTITY_RESOLUTION_STRATEGY = None
             mock_s.AGENT_STRATEGY = "llm"
-            mock_s.OLLAMA_BASE_URL = "http://localhost:11434"
-            mock_s.get_ollama_model = lambda _: "qwen2.5:0.5b"
-            mock_s.OLLAMA_TIMEOUT_SECONDS = 5.0
-            mock_s.OLLAMA_MAX_CONCURRENCY = 2
+            mock_s.VLLM_BASE_URL = "http://localhost:11434"
+            mock_s.get_vllm_model = lambda _: "qwen2.5:0.5b"
+            mock_s.VLLM_TIMEOUT_SECONDS = 5.0
+            mock_s.VLLM_MAX_CONCURRENCY = 2
             result = await agent.run(
                 "mem-1",
                 _make_context("[Caroline] I moved from my home country, Sweden."),
@@ -565,13 +565,13 @@ class TestEntityResolutionAgentLLM:
         mock_client.complete_json = AsyncMock(return_value=mock_resp)
 
         with patch("app.agents.entity_resolution_agent.settings") as mock_s, \
-             patch("app.agents.entity_resolution_agent.create_ollama_client", return_value=mock_client):
+             patch("app.agents.entity_resolution_agent.create_llm_client", return_value=mock_client):
             mock_s.ENTITY_RESOLUTION_STRATEGY = None
             mock_s.AGENT_STRATEGY = "llm"
-            mock_s.OLLAMA_BASE_URL = "http://localhost:11434"
-            mock_s.get_ollama_model = lambda _: "qwen2.5:0.5b"
-            mock_s.OLLAMA_TIMEOUT_SECONDS = 5.0
-            mock_s.OLLAMA_MAX_CONCURRENCY = 2
+            mock_s.VLLM_BASE_URL = "http://localhost:11434"
+            mock_s.get_vllm_model = lambda _: "qwen2.5:0.5b"
+            mock_s.VLLM_TIMEOUT_SECONDS = 5.0
+            mock_s.VLLM_MAX_CONCURRENCY = 2
             result = await agent.run(
                 "mem-1",
                 _make_context("[Caroline] Researching adoption agencies on June 14, 2026."),

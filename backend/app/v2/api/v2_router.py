@@ -70,7 +70,7 @@ async def v2_interact(
     Run the full three-phase v2 cognitive loop for one user turn.
 
     Phase 1: dual-path retrieval (FalkorDB subgraph + Qdrant dense)
-    Phase 2: Graph-RAG inference via Ollama
+    Phase 2: Graph-RAG inference via configured LLM backend
     Phase 3: graph write-back + decay + pruning
     """
     tenant_id = _resolve_tenant(req.tenant_id, current_user or {})
@@ -84,6 +84,7 @@ async def v2_interact(
         ingest_only=req.ingest_only,
         prev_utterance_id=req.prev_utterance_id,
         model_hint=req.model_hint,
+        raw_context=req.raw_context,
     )
 
     return V2InteractResponse(
@@ -149,20 +150,20 @@ async def v2_health() -> V2HealthResponse:
     """Verify v2 component connectivity."""
     loop = get_v2_loop()
     graph_ok = loop._router._graph.is_available()  # type: ignore[attr-defined]
-    ollama_ok = False
+    llm_ok = False
     try:
-        ollama_ok = await loop._engine.is_available()  # type: ignore[attr-defined]
+        llm_ok = await loop._engine.is_available()  # type: ignore[attr-defined]
     except Exception:
         pass
 
     msg_parts = []
     if not graph_ok:
         msg_parts.append("FalkorDB unreachable")
-    if not ollama_ok:
-        msg_parts.append("Ollama unreachable")
+    if not llm_ok:
+        msg_parts.append("LLM backend unreachable")
 
     return V2HealthResponse(
         graph_available=graph_ok,
-        ollama_available=ollama_ok,
+        llm_available=llm_ok,
         message="; ".join(msg_parts) if msg_parts else "all systems operational",
     )

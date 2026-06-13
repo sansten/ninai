@@ -26,7 +26,7 @@ from typing import Any
 
 from app.agents.base import BaseAgent
 from app.agents.types import AgentContext, AgentResult
-from app.agents.llm.ollama_breaker import create_ollama_client
+from app.agents.llm.llm_breaker import create_llm_client
 from app.core.config import settings
 
 
@@ -855,11 +855,11 @@ class EntityResolutionAgent(BaseAgent):
                 "Return JSON with exactly these keys: resolved_entities, unresolved_entities, "
                 "cross_silo_links, structured_facts, confidence, rationale"
             )
-            client = create_ollama_client(
-                base_url=str(getattr(settings, "OLLAMA_BASE_URL", "http://localhost:11434")),
-                model=str(settings.get_ollama_model("agents")),
-                timeout_seconds=float(getattr(settings, "OLLAMA_TIMEOUT_SECONDS", 5.0)),
-                max_concurrency=int(getattr(settings, "OLLAMA_MAX_CONCURRENCY", 2)),
+            client = create_llm_client(
+                base_url=str(getattr(settings, "VLLM_BASE_URL", "http://localhost:11434")),
+                model=str(settings.get_llm_model("agents")),
+                timeout_seconds=float(getattr(settings, "VLLM_TIMEOUT_SECONDS", 5.0)),
+                max_concurrency=int(getattr(settings, "VLLM_MAX_CONCURRENCY", 2)),
             )
             try:
                 resp = await client.complete_json(

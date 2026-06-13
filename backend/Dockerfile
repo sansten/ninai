@@ -18,7 +18,7 @@ WORKDIR /app
 # Install Python dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt && \
-    python -c "from sentence_transformers import CrossEncoder; CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')"
+    python -c "from sentence_transformers import CrossEncoder; CrossEncoder('BAAI/bge-reranker-base')"
 
 # Copy application code
 COPY . .
@@ -29,7 +29,8 @@ RUN sed -i 's/\r//' /entrypoint.sh && \
     chmod +x /entrypoint.sh && \
     adduser --disabled-password --gecos '' appuser && \
     chown -R appuser:appuser /app && \
-    chown appuser:appuser /entrypoint.sh
+    chown appuser:appuser /entrypoint.sh && \
+    echo "ninai:x:1001:0::/tmp:/bin/sh" >> /etc/passwd
 
 USER appuser
 

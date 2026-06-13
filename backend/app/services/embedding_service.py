@@ -19,7 +19,7 @@ from app.core.config import settings
 
 
 class EmbeddingService:
-    _ollama_sem: asyncio.Semaphore | None = None
+    _backend_sem: asyncio.Semaphore | None = None
     _cache_lock: asyncio.Lock | None = None
     _cache: "OrderedDict[str, tuple[datetime, list[float]]]" = OrderedDict()
     _cache_max_size: int = int(os.getenv("EMBEDDING_CACHE_MAX_SIZE", "2000") or 2000)
@@ -34,10 +34,10 @@ class EmbeddingService:
         return [0.0] * int(settings.EMBEDDING_DIMENSIONS)
 
     @classmethod
-    def _ollama_semaphore(cls) -> asyncio.Semaphore:
-        if cls._ollama_sem is None:
-            cls._ollama_sem = asyncio.Semaphore(int(getattr(settings, "OLLAMA_MAX_CONCURRENCY", 2) or 2))
-        return cls._ollama_sem
+    def _backend_semaphore(cls) -> asyncio.Semaphore:
+        if cls._backend_sem is None:
+            cls._backend_sem = asyncio.Semaphore(int(getattr(settings, "VLLM_MAX_CONCURRENCY", 2) or 2))
+        return cls._backend_sem
 
     @classmethod
     def _embedding_cache_lock(cls) -> asyncio.Lock:
@@ -82,30 +82,30 @@ class EmbeddingService:
                 cls._cache.popitem(last=False)
 
     @classmethod
-    async def _embed_ollama(cls, text: str) -> list[float]:
+    async def _embed_local_backend(cls, text: str) -> list[float]:
         # Prefer a dedicated CPU endpoint for embeddings so GPU inference
         # models are not repeatedly evicted during mixed ingest workloads.
         base_url = str(
-            getattr(settings, "OLLAMA_BASE_URL_CPU", None)
-            or getattr(settings, "OLLAMA_BASE_URL", "http://localhost:11434")
+            getattr(settings, "VLLM_BASE_URL_CPU", None)
+            or getattr(settings, "VLLM_BASE_URL", "http://localhost:11434")
             or "http://localhost:11434"
         ).rstrip("/")
-        model = str(getattr(settings, "OLLAMA_EMBEDDING_MODEL", None) or "nomic-embed-text")
-        timeout = float(getattr(settings, "OLLAMA_TIMEOUT_SECONDS", 5.0) or 5.0)
+        model = str(getattr(settings, "LOCAL_EMBEDDING_MODEL", None) or "nomic-embed-text")
+        timeout = float(getattr(settings, "VLLM_TIMEOUT_SECONDS", 5.0) or 5.0)
 
         payload: dict[str, Any] = {"model": model, "input": text}
 
-        async with cls._ollama_semaphore():
+        async with cls._backend_semaphore():
             async with httpx.AsyncClient(timeout=timeout) as client:
                 resp = await client.post(f"{base_url}/api/embed", json=payload)
                 resp.raise_for_status()
                 data = resp.json()
 
-        # /api/embed returns {"embeddings": [[...floats...]]} (Ollama ≥0.4.x)
+        # /api/embed returns {"embeddings": [[...floats...]]} on local runtimes.
         raw = data.get("embeddings") if isinstance(data, dict) else None
         emb = raw[0] if isinstance(raw, list) and raw else None
         if not isinstance(emb, list) or not emb:
-            raise ValueError("Ollama embedding response missing 'embeddings' list")
+            raise ValueError("Embedding response missing 'embeddings' list")
 
         # Normalize to floats.
         return [float(x) for x in emb]
@@ -131,22 +131,22 @@ class EmbeddingService:
 
         provider = str(getattr(settings, "EMBEDDING_PROVIDER", "auto") or "auto").lower()
 
-        # Local-first default: if no OpenAI key, try Ollama.
+        # Local-first default: if no OpenAI key, try the local embedding backend.
         if provider == "auto":
-            provider = "openai" if bool(settings.OPENAI_API_KEY) else "ollama"
+            provider = "openai" if bool(settings.OPENAI_API_KEY) else "local"
 
-        if provider == "ollama":
-            model = str(getattr(settings, "OLLAMA_EMBEDDING_MODEL", None) or "nomic-embed-text")
-            key = cls._cache_key("ollama", model, cleaned)
+        if provider in {"local", "vllm"}:
+            model = str(getattr(settings, "LOCAL_EMBEDDING_MODEL", None) or "nomic-embed-text")
+            key = cls._cache_key("local", model, cleaned)
             cached = await cls._cache_get(key)
             if cached is not None:
                 return cached
             try:
-                emb = await cls._embed_ollama(cleaned)
+                emb = await cls._embed_local_backend(cleaned)
                 await cls._cache_set(key, emb)
                 return emb
             except Exception:
-                # If Ollama isn't available, fall back to OpenAI if configured; otherwise zeros.
+                # If local embedding backend isn't available, fall back to OpenAI if configured.
                 if settings.OPENAI_API_KEY:
                     try:
                         model = str(getattr(settings, "EMBEDDING_MODEL", None) or "text-embedding-3-small")
@@ -172,14 +172,14 @@ class EmbeddingService:
                 await cls._cache_set(key, emb)
                 return emb
             except Exception:
-                # If OpenAI isn't configured/available, fall back to Ollama; otherwise zeros.
+                # If OpenAI isn't configured/available, fall back to local backend; otherwise zeros.
                 try:
-                    model = str(getattr(settings, "OLLAMA_EMBEDDING_MODEL", None) or "nomic-embed-text")
-                    key = cls._cache_key("ollama", model, cleaned)
+                    model = str(getattr(settings, "LOCAL_EMBEDDING_MODEL", None) or "nomic-embed-text")
+                    key = cls._cache_key("local", model, cleaned)
                     cached = await cls._cache_get(key)
                     if cached is not None:
                         return cached
-                    emb = await cls._embed_ollama(cleaned)
+                    emb = await cls._embed_local_backend(cleaned)
                     await cls._cache_set(key, emb)
                     return emb
                 except Exception:

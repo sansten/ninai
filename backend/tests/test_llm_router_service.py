@@ -34,7 +34,7 @@ def _mk_config(**kwargs):
     base = {
         "id": "cfg-1",
         "organization_id": "org-1",
-        "provider": "ollama",
+        "provider": "vllm",
         "model": "qwen2.5:7b",
         "api_key_ref": None,
         "base_url": None,
@@ -62,14 +62,14 @@ async def test_get_config_returns_active_config():
 
 
 @pytest.mark.asyncio
-async def test_complete_falls_back_to_ollama_when_no_config():
+async def test_complete_falls_back_to_vllm_when_no_config():
     db = _session_with_scalar(None)
     svc = LlmRouterService(db, "org-1")
-    with patch.object(svc, "_call_ollama", new=AsyncMock(return_value=LlmCallResult(
-        provider="ollama", model="qwen2.5:7b", content="test response", tokens_used=10
+    with patch.object(svc, "_call_vllm", new=AsyncMock(return_value=LlmCallResult(
+        provider="vllm", model="qwen2.5:7b", content="test response", tokens_used=10
     ))):
         result = await svc.complete(prompt="test prompt")
-    assert result.provider == "ollama"
+    assert result.provider == "vllm"
 
 
 @pytest.mark.asyncio
@@ -97,10 +97,10 @@ async def test_complete_routes_to_anthropic():
 
 
 @pytest.mark.asyncio
-async def test_call_ollama_handles_timeout():
+async def test_call_vllm_handles_timeout():
     svc = LlmRouterService(_session_with_scalar(None), "org-1")
-    result = await svc._call_ollama("test-model", "prompt", "system", 512)
-    assert result.provider == "ollama"
+    result = await svc._call_vllm("test-model", "prompt", "system", 512)
+    assert result.provider == "vllm"
     assert result.content == ""
     assert result.tokens_used == 0
 
@@ -133,7 +133,7 @@ def test_model_contract():
 
 
 def test_valid_providers():
-    assert VALID_PROVIDERS == frozenset({"ollama", "openai", "anthropic"})
+    assert VALID_PROVIDERS == frozenset({"vllm", "openai", "anthropic"})
 
 
 def test_router_registration():

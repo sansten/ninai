@@ -20,7 +20,7 @@ All notable changes to the Ninai Python SDK are documented in this file.
   - `interact(user_input, session_id, prev_utterance_id)` — full 3-phase cognitive loop
     (dual-path retrieval → Graph-RAG inference → FalkorDB write-back + decay).
   - `graph_inspect(entity_ids, hops, limit)` — inspect the FalkorDB knowledge graph.
-  - `health()` — verify FalkorDB + Ollama connectivity.
+  - `health()` — verify FalkorDB + vLLM connectivity.
 
 - `V2InteractResult` model — response, `cited_node_ids`, `extracted_entities`,
   `graph_nodes_retrieved`, `qdrant_chunks_retrieved`, `graph_writes`, `decay_stats`, `latency_ms`.

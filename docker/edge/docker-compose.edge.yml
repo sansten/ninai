@@ -26,8 +26,8 @@ services:
       - QDRANT_PORT=6333
       - QDRANT_URL=http://qdrant:6333
       - QDRANT_TIMEOUT_SECONDS=${QDRANT_TIMEOUT_SECONDS:-2.5}
-      - OLLAMA_BASE_URL=http://ollama:11434
-      - OLLAMA_MODEL=${OLLAMA_MODEL:-qwen2.5:7b}
+      - VLLM_BASE_URL=http://vllm:11434
+      - VLLM_MODEL=${VLLM_MODEL:-qwen2.5:7b}
       - AGENT_STRATEGY=${AGENT_STRATEGY:-llm}
       - DEPLOYMENT_MODE=edge
       - LOCAL_FIRST_MODE=true
@@ -41,17 +41,17 @@ services:
         condition: service_healthy
       qdrant:
         condition: service_started
-      ollama:
+      vllm:
         condition: service_started
 
-  ollama:
-    image: ollama/ollama:latest
-    container_name: ninai-edge-ollama
+  vllm:
+    image: vllm/vllm:latest
+    container_name: ninai-edge-vllm
     restart: unless-stopped
     ports:
       - "11434:11434"
     volumes:
-      - ollama_data:/root/.ollama
+      - vllm_data:/root/.vllm
 
   qdrant:
     image: qdrant/qdrant:latest
@@ -120,7 +120,7 @@ services:
       start_period: 10s
 
 volumes:
-  ollama_data:
+  vllm_data:
   qdrant_data:
   postgres_data:
   redis_data:

@@ -93,7 +93,7 @@ def test_acknowledge_tasks_have_low_score_and_no_keywords():
 
 
 # ---------------------------------------------------------------------------
-# Benchmark run tests (async, heuristic mode — no Ollama needed)
+# Benchmark run tests (async, heuristic mode — no vLLM needed)
 # ---------------------------------------------------------------------------
 
 

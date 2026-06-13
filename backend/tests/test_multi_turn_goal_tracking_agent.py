@@ -711,12 +711,12 @@ async def test_run_llm_path_success():
     ctx = _mk_context(enrichment=_mk_enrichment(), strategy="llm")
     with patch("app.agents.multi_turn_goal_tracking_agent.settings") as mock_settings:
         mock_settings.MULTI_TURN_GOAL_STRATEGY = "llm"
-        mock_settings.OLLAMA_BASE_URL = "http://localhost:11434"
-        mock_settings.OLLAMA_MODEL = "llama3.1:8b"
-        mock_settings.OLLAMA_TIMEOUT_SECONDS = 5.0
-        mock_settings.OLLAMA_MAX_CONCURRENCY = 2
+        mock_settings.VLLM_BASE_URL = "http://localhost:11434"
+        mock_settings.VLLM_MODEL = "llama3.1:8b"
+        mock_settings.VLLM_TIMEOUT_SECONDS = 5.0
+        mock_settings.VLLM_MAX_CONCURRENCY = 2
         with patch(
-            "app.agents.multi_turn_goal_tracking_agent.create_ollama_client",
+            "app.agents.multi_turn_goal_tracking_agent.create_llm_client",
             return_value=mock_client,
         ):
             result = await agent.run("m1", ctx)
@@ -737,12 +737,12 @@ async def test_run_llm_fallback_on_bad_response():
     )
     with patch("app.agents.multi_turn_goal_tracking_agent.settings") as mock_settings:
         mock_settings.MULTI_TURN_GOAL_STRATEGY = "llm"
-        mock_settings.OLLAMA_BASE_URL = "http://localhost:11434"
-        mock_settings.OLLAMA_MODEL = "llama3.1:8b"
-        mock_settings.OLLAMA_TIMEOUT_SECONDS = 5.0
-        mock_settings.OLLAMA_MAX_CONCURRENCY = 2
+        mock_settings.VLLM_BASE_URL = "http://localhost:11434"
+        mock_settings.VLLM_MODEL = "llama3.1:8b"
+        mock_settings.VLLM_TIMEOUT_SECONDS = 5.0
+        mock_settings.VLLM_MAX_CONCURRENCY = 2
         with patch(
-            "app.agents.multi_turn_goal_tracking_agent.create_ollama_client",
+            "app.agents.multi_turn_goal_tracking_agent.create_llm_client",
             return_value=mock_client,
         ):
             result = await agent.run("m1", ctx)
@@ -760,12 +760,12 @@ async def test_run_llm_fallback_on_none_response():
     ctx = _mk_context(enrichment=_mk_enrichment(), strategy="llm")
     with patch("app.agents.multi_turn_goal_tracking_agent.settings") as mock_settings:
         mock_settings.MULTI_TURN_GOAL_STRATEGY = "llm"
-        mock_settings.OLLAMA_BASE_URL = "http://localhost:11434"
-        mock_settings.OLLAMA_MODEL = "llama3.1:8b"
-        mock_settings.OLLAMA_TIMEOUT_SECONDS = 5.0
-        mock_settings.OLLAMA_MAX_CONCURRENCY = 2
+        mock_settings.VLLM_BASE_URL = "http://localhost:11434"
+        mock_settings.VLLM_MODEL = "llama3.1:8b"
+        mock_settings.VLLM_TIMEOUT_SECONDS = 5.0
+        mock_settings.VLLM_MAX_CONCURRENCY = 2
         with patch(
-            "app.agents.multi_turn_goal_tracking_agent.create_ollama_client",
+            "app.agents.multi_turn_goal_tracking_agent.create_llm_client",
             return_value=mock_client,
         ):
             result = await agent.run("m1", ctx)

@@ -176,7 +176,7 @@ def _post_to_api(summary: dict[str, Any], *, base_url: str, token: str | None) -
         "mode": summary["mode"],
         "strategy": summary["strategy"],
         "dataset": summary["dataset"],
-        "ollama_model": os.environ.get("OLLAMA_MODEL_AGENTS"),
+        "vllm_model": os.environ.get("VLLM_MODEL_AGENTS"),
         "duration_seconds": summary["duration_seconds"],
         "composite_score": summary["composite_score"],
         "results": summary["results"],
@@ -197,7 +197,7 @@ def main() -> int:
     parser.add_argument("--mode", default="unit", choices=["unit", "integration", "full"])
     parser.add_argument("--strategy", default="heuristic", choices=["heuristic", "llm"])
     parser.add_argument("--dataset", default="synthetic", choices=["synthetic", "kaggle"])
-    parser.add_argument("--ollama-model", default=None, help="Optional override for OLLAMA_MODEL_AGENTS")
+    parser.add_argument("--vllm-model", default=None, help="Optional override for VLLM_MODEL_AGENTS")
     parser.add_argument("--runs", type=int, default=1, help="Number of repeated runs (≥2 adds mean±stddev)")
     parser.add_argument("--json", action="store_true", help="Print machine-readable JSON summary")
     parser.add_argument(
@@ -214,10 +214,10 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    if args.ollama_model:
-        os.environ["OLLAMA_MODEL_AGENTS"] = str(args.ollama_model)
+    if args.vllm_model:
+        os.environ["VLLM_MODEL_AGENTS"] = str(args.vllm_model)
         try:
-            settings.OLLAMA_MODEL_AGENTS = str(args.ollama_model)
+            settings.VLLM_MODEL_AGENTS = str(args.vllm_model)
         except Exception:
             pass
 

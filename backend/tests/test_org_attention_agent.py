@@ -95,10 +95,10 @@ def mock_settings():
     with patch("app.agents.org_attention_agent.settings") as m:
         m.ORG_ATTENTION_STRATEGY = "heuristic"
         m.ORG_ATTENTION_THRESHOLD = 0.5
-        m.OLLAMA_BASE_URL = "http://localhost:11434"
-        m.OLLAMA_MODEL = "llama3.1:8b"
-        m.OLLAMA_TIMEOUT_SECONDS = 5.0
-        m.OLLAMA_MAX_CONCURRENCY = 2
+        m.VLLM_BASE_URL = "http://localhost:11434"
+        m.VLLM_MODEL = "llama3.1:8b"
+        m.VLLM_TIMEOUT_SECONDS = 5.0
+        m.VLLM_MAX_CONCURRENCY = 2
         m.AGENT_STRATEGY = "heuristic"
         yield m
 
@@ -522,12 +522,12 @@ class TestPhase10LLM:
         with patch("app.agents.org_attention_agent.settings") as ms:
             ms.ORG_ATTENTION_STRATEGY = "llm"
             ms.ORG_ATTENTION_THRESHOLD = 0.5
-            ms.OLLAMA_BASE_URL = "http://localhost:11434"
-            ms.OLLAMA_MODEL = "llama3.1:8b"
-            ms.OLLAMA_TIMEOUT_SECONDS = 5.0
-            ms.OLLAMA_MAX_CONCURRENCY = 2
+            ms.VLLM_BASE_URL = "http://localhost:11434"
+            ms.VLLM_MODEL = "llama3.1:8b"
+            ms.VLLM_TIMEOUT_SECONDS = 5.0
+            ms.VLLM_MAX_CONCURRENCY = 2
             ms.AGENT_STRATEGY = "llm"
-            with patch("app.agents.org_attention_agent.create_ollama_client") as mc:
+            with patch("app.agents.org_attention_agent.create_llm_client") as mc:
                 client_mock = AsyncMock()
                 client_mock.complete_json = AsyncMock(return_value=good_resp)
                 mc.return_value = client_mock
@@ -541,12 +541,12 @@ class TestPhase10LLM:
         with patch("app.agents.org_attention_agent.settings") as ms:
             ms.ORG_ATTENTION_STRATEGY = "llm"
             ms.ORG_ATTENTION_THRESHOLD = 0.5
-            ms.OLLAMA_BASE_URL = "http://localhost:11434"
-            ms.OLLAMA_MODEL = "llama3.1:8b"
-            ms.OLLAMA_TIMEOUT_SECONDS = 5.0
-            ms.OLLAMA_MAX_CONCURRENCY = 2
+            ms.VLLM_BASE_URL = "http://localhost:11434"
+            ms.VLLM_MODEL = "llama3.1:8b"
+            ms.VLLM_TIMEOUT_SECONDS = 5.0
+            ms.VLLM_MAX_CONCURRENCY = 2
             ms.AGENT_STRATEGY = "llm"
-            with patch("app.agents.org_attention_agent.create_ollama_client") as mc:
+            with patch("app.agents.org_attention_agent.create_llm_client") as mc:
                 client_mock = AsyncMock()
                 client_mock.complete_json = AsyncMock(return_value={"bad": "response"})
                 mc.return_value = client_mock

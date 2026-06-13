@@ -458,14 +458,14 @@ class TestAgentRunLLM:
         mock_client.complete_json = AsyncMock(return_value=llm_response)
 
         with patch("app.agents.playbook_execution_tracker_agent.settings") as mock_settings, \
-             patch("app.agents.playbook_execution_tracker_agent.create_ollama_client",
+             patch("app.agents.playbook_execution_tracker_agent.create_llm_client",
                    return_value=mock_client):
             mock_settings.PLAYBOOK_TRACKER_STRATEGY = "llm"
             mock_settings.AGENT_STRATEGY = "llm"
-            mock_settings.OLLAMA_BASE_URL = "http://localhost:11434"
-            mock_settings.OLLAMA_MODEL = "llama3.1:8b"
-            mock_settings.OLLAMA_TIMEOUT_SECONDS = 5.0
-            mock_settings.OLLAMA_MAX_CONCURRENCY = 2
+            mock_settings.VLLM_BASE_URL = "http://localhost:11434"
+            mock_settings.VLLM_MODEL = "llama3.1:8b"
+            mock_settings.VLLM_TIMEOUT_SECONDS = 5.0
+            mock_settings.VLLM_MAX_CONCURRENCY = 2
             result = await agent.run("mem-llm", self._context())
 
         assert result.status == "success"
@@ -478,14 +478,14 @@ class TestAgentRunLLM:
         mock_client.complete_json = AsyncMock(return_value={"garbage": True})
 
         with patch("app.agents.playbook_execution_tracker_agent.settings") as mock_settings, \
-             patch("app.agents.playbook_execution_tracker_agent.create_ollama_client",
+             patch("app.agents.playbook_execution_tracker_agent.create_llm_client",
                    return_value=mock_client):
             mock_settings.PLAYBOOK_TRACKER_STRATEGY = "llm"
             mock_settings.AGENT_STRATEGY = "llm"
-            mock_settings.OLLAMA_BASE_URL = "http://localhost:11434"
-            mock_settings.OLLAMA_MODEL = "llama3.1:8b"
-            mock_settings.OLLAMA_TIMEOUT_SECONDS = 5.0
-            mock_settings.OLLAMA_MAX_CONCURRENCY = 2
+            mock_settings.VLLM_BASE_URL = "http://localhost:11434"
+            mock_settings.VLLM_MODEL = "llama3.1:8b"
+            mock_settings.VLLM_TIMEOUT_SECONDS = 5.0
+            mock_settings.VLLM_MAX_CONCURRENCY = 2
             result = await agent.run("mem-llm-fallback", self._context())
 
         assert result.status == "success"
@@ -503,14 +503,14 @@ class TestAgentRunLLM:
         mock_client.complete_json = AsyncMock(return_value=llm_response)
 
         with patch("app.agents.playbook_execution_tracker_agent.settings") as mock_settings, \
-             patch("app.agents.playbook_execution_tracker_agent.create_ollama_client",
+             patch("app.agents.playbook_execution_tracker_agent.create_llm_client",
                    return_value=mock_client):
             mock_settings.PLAYBOOK_TRACKER_STRATEGY = "llm"
             mock_settings.AGENT_STRATEGY = "llm"
-            mock_settings.OLLAMA_BASE_URL = "http://localhost:11434"
-            mock_settings.OLLAMA_MODEL = "llama3.1:8b"
-            mock_settings.OLLAMA_TIMEOUT_SECONDS = 5.0
-            mock_settings.OLLAMA_MAX_CONCURRENCY = 2
+            mock_settings.VLLM_BASE_URL = "http://localhost:11434"
+            mock_settings.VLLM_MODEL = "llama3.1:8b"
+            mock_settings.VLLM_TIMEOUT_SECONDS = 5.0
+            mock_settings.VLLM_MAX_CONCURRENCY = 2
             result = await agent.run("mem-llm-fb2", self._context())
 
         assert result.outputs["rationale"] == "heuristic"

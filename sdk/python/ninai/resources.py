@@ -1512,13 +1512,13 @@ class V2EngineResource:
     Use this when you want explicit v2 control without changing the client default.
 
     Architecture:
-        Component A — Ollama reasoning engine (stateless LLM)
+        Component A — vLLM reasoning engine (stateless LLM)
         Component B — FalkorDB chronological knowledge graph (hippocampus)
         Component C — DNC memory router (read/write/purge weighting)
 
     Three-phase loop per call:
         Phase 1 (Read)  — dual-path retrieval: Qdrant dense + FalkorDB subgraph
-        Phase 2 (Infer) — Graph-RAG prompt → Ollama → response + cited_node_ids
+        Phase 2 (Infer) — Graph-RAG prompt → vLLM → response + cited_node_ids
         Phase 3 (Learn) — graph write-back, edge reinforcement, decay, pruning
 
     Usage::
@@ -1546,7 +1546,7 @@ class V2EngineResource:
 
         # Check v2 component health
         health = client.v2.health()
-        print(health.graph_available, health.ollama_available)
+        print(health.graph_available, health.llm_available)
     """
 
     def __init__(self, client: "NinaiClient") -> None:
@@ -1619,6 +1619,6 @@ class V2EngineResource:
         return V2GraphInspectResult(**response)
 
     def health(self) -> V2HealthResult:
-        """Check v2 component health (FalkorDB + Ollama connectivity)."""
+        """Check v2 component health (FalkorDB + vLLM connectivity)."""
         response = self._client._get("/v2/health")
         return V2HealthResult(**response)

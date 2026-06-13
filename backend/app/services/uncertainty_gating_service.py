@@ -34,14 +34,14 @@ logger = logging.getLogger(__name__)
 DEFAULT_ENTROPY_THRESHOLD = 0.1     # δ in Eq. (8), bits of uncertainty reduction
 DEFAULT_MAX_EXPANSION_ITEMS = 10    # Budget for Stage II expansion
 DEFAULT_TEMPERATURE = 0.0           # Low temp for entropy calculation
-OLLAMA_TIMEOUT = 30.0               # Timeout for LLM calls
+VLLM_TIMEOUT = 30.0               # Timeout for LLM calls
 
 
 class UncertaintyGatingService:
     """Entropy-based adaptive evidence expansion (GAP-4)."""
 
     def __init__(self):
-        self.ollama_base_url = settings.OLLAMA_BASE_URL
+        self.VLLM_BASE_URL = settings.VLLM_BASE_URL
 
     # ── Public API ──────────────────────────────────────────────────
 
@@ -158,7 +158,7 @@ class UncertaintyGatingService:
     async def _compute_entropy(self, query: str, context: str) -> float:
         """Compute H_reader(y|C) — the LLM's predictive entropy.
 
-        Calls Ollama with logprobs enabled to get token-level probabilities,
+        Calls vLLM with logprobs enabled to get token-level probabilities,
         then computes Shannon entropy over the output distribution.
 
         H = -Σ p(y_i) log₂ p(y_i)
@@ -167,8 +167,8 @@ class UncertaintyGatingService:
             # Build prompt
             prompt = self._build_prompt(query, context)
 
-            # Call Ollama with logprobs
-            response_data = await self._call_ollama_with_logprobs(prompt=prompt)
+            # Call vLLM with logprobs
+            response_data = await self._call_vllm_with_logprobs(prompt=prompt)
 
             # Extract probabilities and compute entropy
             entropy = self._calculate_entropy_from_logprobs(response_data)
@@ -179,15 +179,15 @@ class UncertaintyGatingService:
             logger.warning("Entropy computation failed: %s, returning default=1.0", exc)
             return 1.0  # High entropy = uncertain
 
-    async def _call_ollama_with_logprobs(self, prompt: str) -> Dict[str, Any]:
-        """Call Ollama API with logprobs enabled."""
-        model_name = settings.get_ollama_model("uncertainty")
+    async def _call_vllm_with_logprobs(self, prompt: str) -> Dict[str, Any]:
+        """Call vLLM API with logprobs enabled."""
+        model_name = settings.get_llm_model("uncertainty")
         logger.info(
-            "llm.model_route provider=ollama purpose=uncertainty model=%s base_url=%s",
+            "llm.model_route provider=local purpose=uncertainty model=%s base_url=%s",
             model_name,
-            self.ollama_base_url,
+            self.VLLM_BASE_URL,
         )
-        url = f"{self.ollama_base_url}/api/generate"
+        url = f"{self.VLLM_BASE_URL}/api/generate"
         payload = {
             "model": model_name,
             "prompt": prompt,
@@ -199,7 +199,7 @@ class UncertaintyGatingService:
             },
         }
 
-        async with httpx.AsyncClient(timeout=OLLAMA_TIMEOUT) as client:
+        async with httpx.AsyncClient(timeout=VLLM_TIMEOUT) as client:
             resp = await client.post(url, json=payload)
             resp.raise_for_status()
             return resp.json()
@@ -236,7 +236,7 @@ class UncertaintyGatingService:
             # Return total entropy (not per-token average)
             return total_entropy
 
-        # Case 2: response_data is dict from Ollama
+        # Case 2: response_data is dict from vLLM
         if isinstance(response_data, dict):
             logprobs = response_data.get("logprobs")
             if logprobs and isinstance(logprobs, list):

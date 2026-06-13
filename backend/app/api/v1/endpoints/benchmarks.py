@@ -62,7 +62,7 @@ class BenchmarkRunCreate(BaseModel):
     mode: str
     strategy: str
     dataset: str
-    ollama_model: Optional[str] = None
+    VLLM_MODEL: Optional[str] = None
     duration_seconds: float
     composite_score: float
     results: list[Any]
@@ -74,7 +74,7 @@ class BenchmarkRunResponse(BaseModel):
     mode: str
     strategy: str
     dataset: str
-    ollama_model: Optional[str]
+    VLLM_MODEL: Optional[str]
     duration_seconds: float
     composite_score: float
     results: list[Any]
@@ -109,7 +109,7 @@ async def create_benchmark_run(
         mode=payload.mode,
         strategy=payload.strategy,
         dataset=payload.dataset,
-        ollama_model=payload.ollama_model,
+        VLLM_MODEL=payload.VLLM_MODEL,
         duration_seconds=payload.duration_seconds,
         composite_score=payload.composite_score,
         results=payload.results,
@@ -171,7 +171,7 @@ def _to_response(run: BenchmarkRun) -> BenchmarkRunResponse:
         mode=run.mode,
         strategy=run.strategy,
         dataset=run.dataset,
-        ollama_model=run.ollama_model,
+        VLLM_MODEL=run.VLLM_MODEL,
         duration_seconds=run.duration_seconds,
         composite_score=run.composite_score,
         results=run.results,

@@ -30,7 +30,7 @@ from typing import Any
 
 from app.agents.base import BaseAgent
 from app.agents.types import AgentContext, AgentResult
-from app.agents.llm.ollama_breaker import create_ollama_client
+from app.agents.llm.llm_breaker import create_llm_client
 from app.core.config import settings
 
 
@@ -269,8 +269,8 @@ class OrchestrationBusAgent(BaseAgent):
             agent_names = list(explicit_names)
         elif strategy == "llm":
             try:
-                model = str(getattr(settings, "OLLAMA_MODEL", "qwen2.5:7b"))
-                client = create_ollama_client()
+                model = str(getattr(settings, "VLLM_MODEL", "qwen2.5:7b"))
+                client = create_llm_client()
                 agent_names = await _llm_agent_names(content, enrichment, client, model)
             except Exception:
                 agent_names = list(_DEFAULT_AGENTS)

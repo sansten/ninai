@@ -631,14 +631,14 @@ class TestRunLLMPath:
         mock_client = MagicMock()
         mock_client.complete_json = AsyncMock(return_value=llm_resp)
         with patch("app.agents.adaptive_enrichment_budget_agent.settings") as ms, \
-             patch("app.agents.adaptive_enrichment_budget_agent.create_ollama_client",
+             patch("app.agents.adaptive_enrichment_budget_agent.create_llm_client",
                    return_value=mock_client):
             ms.ENRICHMENT_BUDGET_STRATEGY = "llm"
             ms.AGENT_STRATEGY = "llm"
-            ms.OLLAMA_BASE_URL = "http://localhost:11434"
-            ms.OLLAMA_MODEL = "llama3.1:8b"
-            ms.OLLAMA_TIMEOUT_SECONDS = 5.0
-            ms.OLLAMA_MAX_CONCURRENCY = 2
+            ms.VLLM_BASE_URL = "http://localhost:11434"
+            ms.VLLM_MODEL = "llama3.1:8b"
+            ms.VLLM_TIMEOUT_SECONDS = 5.0
+            ms.VLLM_MAX_CONCURRENCY = 2
             result = await agent.run("mem-llm", ctx)
         return result
 
@@ -677,14 +677,14 @@ class TestRunLLMPath:
         mock_client = MagicMock()
         mock_client.complete_json = AsyncMock(return_value=None)
         with patch("app.agents.adaptive_enrichment_budget_agent.settings") as ms, \
-             patch("app.agents.adaptive_enrichment_budget_agent.create_ollama_client",
+             patch("app.agents.adaptive_enrichment_budget_agent.create_llm_client",
                    return_value=mock_client):
             ms.ENRICHMENT_BUDGET_STRATEGY = None
             ms.AGENT_STRATEGY = "llm"
-            ms.OLLAMA_BASE_URL = "http://localhost:11434"
-            ms.OLLAMA_MODEL = "llama3.1:8b"
-            ms.OLLAMA_TIMEOUT_SECONDS = 5.0
-            ms.OLLAMA_MAX_CONCURRENCY = 2
+            ms.VLLM_BASE_URL = "http://localhost:11434"
+            ms.VLLM_MODEL = "llama3.1:8b"
+            ms.VLLM_TIMEOUT_SECONDS = 5.0
+            ms.VLLM_MAX_CONCURRENCY = 2
             result = await agent.run("mem-3", ctx)
         assert result.status == "success"
 

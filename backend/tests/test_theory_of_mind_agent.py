@@ -757,12 +757,12 @@ async def test_run_llm_strategy_valid_response():
     mock_client = MagicMock()
     mock_client.complete_json = AsyncMock(return_value=llm_resp)
     with patch("app.agents.theory_of_mind_agent.settings") as mock_settings, \
-         patch("app.agents.theory_of_mind_agent.create_ollama_client", return_value=mock_client):
+         patch("app.agents.theory_of_mind_agent.create_llm_client", return_value=mock_client):
         mock_settings.AGENT_STRATEGY = "llm"
-        mock_settings.OLLAMA_BASE_URL = "http://localhost:11434"
-        mock_settings.OLLAMA_MODEL = "qwen2.5:7b"
-        mock_settings.OLLAMA_TIMEOUT_SECONDS = 5.0
-        mock_settings.OLLAMA_MAX_CONCURRENCY = 2
+        mock_settings.VLLM_BASE_URL = "http://localhost:11434"
+        mock_settings.VLLM_MODEL = "qwen2.5:7b"
+        mock_settings.VLLM_TIMEOUT_SECONDS = 5.0
+        mock_settings.VLLM_MAX_CONCURRENCY = 2
         result = await agent.run("mem-1", ctx)
     assert result.status == "success"
     assert result.outputs["rationale"] == "llm"
@@ -776,12 +776,12 @@ async def test_run_llm_invalid_response_falls_back():
     mock_client = MagicMock()
     mock_client.complete_json = AsyncMock(return_value={"bad": "response"})
     with patch("app.agents.theory_of_mind_agent.settings") as mock_settings, \
-         patch("app.agents.theory_of_mind_agent.create_ollama_client", return_value=mock_client):
+         patch("app.agents.theory_of_mind_agent.create_llm_client", return_value=mock_client):
         mock_settings.AGENT_STRATEGY = "llm"
-        mock_settings.OLLAMA_BASE_URL = "http://localhost:11434"
-        mock_settings.OLLAMA_MODEL = "qwen2.5:7b"
-        mock_settings.OLLAMA_TIMEOUT_SECONDS = 5.0
-        mock_settings.OLLAMA_MAX_CONCURRENCY = 2
+        mock_settings.VLLM_BASE_URL = "http://localhost:11434"
+        mock_settings.VLLM_MODEL = "qwen2.5:7b"
+        mock_settings.VLLM_TIMEOUT_SECONDS = 5.0
+        mock_settings.VLLM_MAX_CONCURRENCY = 2
         result = await agent.run("mem-1", ctx)
     assert result.status == "success"
     assert result.outputs["rationale"] == "heuristic"
@@ -794,12 +794,12 @@ async def test_run_llm_exception_falls_back():
     mock_client = MagicMock()
     mock_client.complete_json = AsyncMock(side_effect=RuntimeError("timeout"))
     with patch("app.agents.theory_of_mind_agent.settings") as mock_settings, \
-         patch("app.agents.theory_of_mind_agent.create_ollama_client", return_value=mock_client):
+         patch("app.agents.theory_of_mind_agent.create_llm_client", return_value=mock_client):
         mock_settings.AGENT_STRATEGY = "llm"
-        mock_settings.OLLAMA_BASE_URL = "http://localhost:11434"
-        mock_settings.OLLAMA_MODEL = "qwen2.5:7b"
-        mock_settings.OLLAMA_TIMEOUT_SECONDS = 5.0
-        mock_settings.OLLAMA_MAX_CONCURRENCY = 2
+        mock_settings.VLLM_BASE_URL = "http://localhost:11434"
+        mock_settings.VLLM_MODEL = "qwen2.5:7b"
+        mock_settings.VLLM_TIMEOUT_SECONDS = 5.0
+        mock_settings.VLLM_MAX_CONCURRENCY = 2
         result = await agent.run("mem-1", ctx)
     assert result.status == "success"
     assert result.outputs["rationale"] == "heuristic"

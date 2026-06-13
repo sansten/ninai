@@ -704,12 +704,12 @@ async def gateway_answer(
 ) -> dict[str, Any]:
     """Generate an answer to a question using pre-fetched memory context.
 
-    LLM inference runs server-side against the in-cluster Ollama instance.
+    LLM inference runs server-side against the in-cluster vLLM instance.
 
     Request body:
       question  (str, required)
       memories  (list[dict], required — each with a "content" field)
-      model     (str, optional — defaults to OLLAMA_MODEL_AGENTS)
+      model     (str, optional — defaults to VLLM_MODEL_AGENTS)
       num_ctx   (int, optional, default 32768)
     """
     question = str(payload.get("question") or "")
