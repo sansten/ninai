@@ -5,9 +5,10 @@ Mounted at /v2 when NINAI_ENGINE_VERSION=v2.
 All endpoints require the same JWT auth used by v1.
 
 Endpoints:
-  POST /v2/interact        — single cognitive turn (3-phase pipeline)
-  POST /v2/graph/inspect   — inspect graph subgraph by entity ids
-  GET  /v2/health          — component health check
+  POST /v2/interact            — single cognitive turn (3-phase pipeline)
+  GET  /v2/enrichment/status   — async-extract pending count for a tenant (cheap poll)
+  POST /v2/graph/inspect       — inspect graph subgraph by entity ids
+  GET  /v2/health              — component health check
 """
 
 from __future__ import annotations
@@ -17,6 +18,7 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException
 
 from app.v2.api.schemas import (
+    V2EnrichmentStatusResponse,
     V2GraphInspectRequest,
     V2GraphInspectResponse,
     V2GraphNode,
@@ -24,6 +26,7 @@ from app.v2.api.schemas import (
     V2InteractRequest,
     V2InteractResponse,
 )
+from app.v2.memory.dnc_router import _count_enrich_pending
 from app.v2.pipeline.factory import get_v2_loop
 
 logger = logging.getLogger(__name__)
@@ -98,8 +101,35 @@ async def v2_interact(
         qdrant_chunks_retrieved=result.qdrant_chunks_retrieved,
         graph_writes=result.graph_writes,
         decay_stats=result.decay_stats,
+        enrichment_pending=result.enrichment_pending,
+        pending_enrichments=result.pending_enrichments,
         latency_ms=result.latency_ms,
         error=result.error,
+    )
+
+
+# ---------------------------------------------------------------------------
+# GET /v2/enrichment/status
+# ---------------------------------------------------------------------------
+
+@v2_router.get("/enrichment/status", response_model=V2EnrichmentStatusResponse)
+async def v2_enrichment_status(
+    tenant: str | None = None,
+    current_user=_AUTH,  # type: ignore[assignment]
+) -> V2EnrichmentStatusResponse:
+    """How many async entity extractions are still in flight for the tenant.
+
+    Cheap counterpart to the `enrichment_pending` field on /v2/interact: a client can
+    poll this after ingest and wait for `pending == 0` before issuing a graph-dependent
+    query, without paying for a full cognitive turn. Always 0 in the default inline
+    (synchronous) extraction path.
+    """
+    tenant_id = _resolve_tenant(tenant, current_user or {})
+    pending = await _count_enrich_pending(tenant_id)
+    return V2EnrichmentStatusResponse(
+        tenant_id=tenant_id,
+        pending=pending,
+        enrichment_pending=pending > 0,
     )
 
 

@@ -141,11 +141,57 @@ def _extract_query_dates(query: str) -> list[str]:
 logger = logging.getLogger(__name__)
 
 
+# Async-extract progress tracking. With NINAI_ASYNC_EXTRACT=1 the entity graph is
+# back-filled by a background task, so a query issued moments after a write may see an
+# incomplete graph. We record in-flight enrichments in a per-tenant Redis set so read()
+# can surface a "pending" hint. Every op is best-effort — a Redis failure must never
+# break the write or read path.
+_ENRICH_PENDING_TTL = 600  # seconds; safety net so a lost task can't pin the hint on forever
+
+
+def _enrich_pending_key(tenant_id: str) -> str:
+    return f"v2:enrich:pending:{tenant_id}"
+
+
+async def _mark_enrich_pending(tenant_id: str, utt_id: str) -> None:
+    try:
+        from app.core.redis import get_redis
+        r = await get_redis()
+        key = _enrich_pending_key(tenant_id)
+        await r.sadd(key, utt_id)
+        await r.expire(key, _ENRICH_PENDING_TTL)
+    except Exception as exc:
+        logger.debug("mark enrich pending failed (non-fatal): %s", exc)
+
+
+async def _clear_enrich_pending(tenant_id: str, utt_id: str) -> None:
+    try:
+        from app.core.redis import get_redis
+        r = await get_redis()
+        await r.srem(_enrich_pending_key(tenant_id), utt_id)
+    except Exception as exc:
+        logger.debug("clear enrich pending failed (non-fatal): %s", exc)
+
+
+async def _count_enrich_pending(tenant_id: str) -> int:
+    try:
+        from app.core.redis import get_redis
+        r = await get_redis()
+        return int(await r.scard(_enrich_pending_key(tenant_id)))
+    except Exception as exc:
+        logger.debug("count enrich pending failed (non-fatal): %s", exc)
+        return 0
+
+
 @dataclass
 class ReadResult:
     graph_nodes: list[dict[str, Any]] = field(default_factory=list)
     qdrant_chunks: list[dict[str, Any]] = field(default_factory=list)
     seed_entity_ids: list[str] = field(default_factory=list)
+    # Count of in-flight async entity extractions for the tenant at read time
+    # (NINAI_ASYNC_EXTRACT). 0 in the default inline path. >0 means the graph is
+    # still being back-filled, so graph-derived context may be incomplete.
+    pending_enrichments: int = 0
 
 
 @dataclass
@@ -390,6 +436,9 @@ class DNCMemoryRouter:
         result.qdrant_chunks = reranked_qdrant
         result.graph_nodes = result.graph_nodes[:n_priority] + reranked_regular
 
+        if _ASYNC_EXTRACT:
+            result.pending_enrichments = await _count_enrich_pending(tenant_id)
+
         return result
 
     async def _qdrant_search(
@@ -552,6 +601,7 @@ class DNCMemoryRouter:
                     point_id=result.qdrant_point_id,
                     utterance_text=utterance_text,
                 )
+                await _mark_enrich_pending(tenant_id, utt_id)
             except Exception as exc:
                 logger.warning("Async enrich enqueue failed (non-fatal): %s", exc)
 
@@ -677,6 +727,7 @@ class DNCMemoryRouter:
         back-fill entity ids/names onto the episodic Qdrant point so retrieval
         payloads match the inline path."""
         if not self._graph.is_available():
+            await _clear_enrich_pending(tenant_id, utt_id)
             return
         temporal_ctx = parse_temporal_context(utterance_text)
         anchor_date = temporal_ctx.get("anchor_date")
@@ -699,6 +750,10 @@ class DNCMemoryRouter:
                 )
             except Exception as exc:
                 logger.warning("Async point payload backfill failed: %s", exc)
+        # Extraction + back-fill done for this utterance. Cleared only on the success
+        # path: if anything above raised, the hint stays "pending" until the task retry
+        # succeeds or the per-tenant TTL expires (fail-safe toward "not yet ready").
+        await _clear_enrich_pending(tenant_id, utt_id)
 
     async def write_gist(
         self,

@@ -196,6 +196,11 @@ class CognitiveLoopResult:
     qdrant_chunks_retrieved: int = 0
     graph_writes: int = 0
     decay_stats: dict[str, int] = field(default_factory=dict)
+    # Async-extract (NINAI_ASYNC_EXTRACT) progress hint: number of entity extractions
+    # still in flight for the tenant at read time, and a convenience bool. Both are 0/
+    # False in the default inline path. >0 means graph context may be incomplete.
+    pending_enrichments: int = 0
+    enrichment_pending: bool = False
     latency_ms: int = 0
     error: str = ""
 
@@ -280,6 +285,8 @@ class V2CognitiveLoop:
                 )
                 result.graph_nodes_retrieved = len(read.graph_nodes)
                 result.qdrant_chunks_retrieved = len(read.qdrant_chunks)
+                result.pending_enrichments = read.pending_enrichments
+                result.enrichment_pending = read.pending_enrichments > 0
 
                 # Query expansion: generate 2 alternative phrasings and union results.
                 # Helps when the question's surface form diverges from stored text.

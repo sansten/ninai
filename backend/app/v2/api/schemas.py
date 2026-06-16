@@ -52,8 +52,22 @@ class V2InteractResponse(BaseModel):
     qdrant_chunks_retrieved: int
     graph_writes: int
     decay_stats: dict[str, int]
+    # Async-extract progress hint (NINAI_ASYNC_EXTRACT). pending_enrichments > 0 /
+    # enrichment_pending = True means the entity graph for this tenant is still being
+    # back-filled, so graph-derived context in this response may be incomplete.
+    enrichment_pending: bool = False
+    pending_enrichments: int = 0
     latency_ms: int
     error: str
+
+
+class V2EnrichmentStatusResponse(BaseModel):
+    """Cheap poll for async-extract progress (NINAI_ASYNC_EXTRACT). Lets a client wait
+    for the entity graph to finish back-filling before issuing a graph-dependent query,
+    without paying for a full /v2/interact call."""
+    tenant_id: str
+    pending: int = 0
+    enrichment_pending: bool = False
 
 
 class V2GraphInspectRequest(BaseModel):
