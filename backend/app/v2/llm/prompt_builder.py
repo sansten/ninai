@@ -197,13 +197,19 @@ _CA_AGE_RE = re.compile(r"\b(\d{1,3})\s*(?:years?\s*old|yr\b)", re.I)
 _CA_PCT_RE = re.compile(r"(\d+(?:\.\d+)?)\s*%")
 _CA_TEMPORAL_ORDER_RE = re.compile(
     r"\b(which.{0,30}first|came first|most recently|most recent|"
-    r"earliest|latest|which.{0,30}before)\b",
+    r"earliest|latest|which.{0,30}before|which.{0,30}last|"
+    r"start(?:ed)? first|finish(?:ed)? first|set up first|buy first|bought first)\b",
     re.I,
 )
 _CA_DATE_ARITH_RE = re.compile(
     r"\b(how (many|long).{0,20}(days?|weeks?|months?)|"
-    r"days? (between|before|after|since|until|passed))\b",
+    r"days? (between|before|after|since|until|passed)|"
+    r"how old.{0,20}when|age.{0,20}when.{0,20}moved|how long.{0,20}take|"
+    r"how long.{0,20}before|weeks?.{0,10}ago|days?.{0,10}ago)\b",
     re.I,
+)
+_CA_COMBINED_DURATION_RE = re.compile(
+    r"\b(combined|total(?:led)?|altogether|both|in total|add(?:ed)? up)\b", re.I
 )
 _CA_NUMERIC_Q_RE = re.compile(
     r"\b(how many|how much|total|how long|how often|number of)\b", re.I
@@ -298,24 +304,27 @@ def _compute_query_analysis(
     findings: list[str] = []
 
     # ── Temporal ordering ──────────────────────────────────────────────────
-    # For "which came first / most recently" questions: sort retrieved chunks
-    # by their stored anchor_date and present a chronological list so the
-    # model can read off the ordering rather than inferring from prose.
+    # For "which came first / most recently" questions: sort by anchor_date and
+    # present a clean First/Last conclusion rather than a raw date list (which
+    # caused the LLM to output dates instead of the named item).
     if _CA_TEMPORAL_ORDER_RE.search(question):
         dated = [(d, t) for d, t in dated_texts if d and len(d) >= 8]
         if dated:
             dated.sort(key=lambda x: x[0])
-            lines = [f"[{d}] {t[:120].replace(chr(10), ' ')}" for d, t in dated[:8]]
+            earliest_d, earliest_t = dated[0]
+            latest_d, latest_t = dated[-1]
+            first_snippet = earliest_t[:100].replace("\n", " ")
+            last_snippet = latest_t[:100].replace("\n", " ")
             findings.append(
-                "Chronological ordering of retrieved evidence:\n    "
-                + "\n    ".join(lines)
+                f"Chronological order (oldest→newest):\n"
+                f"    FIRST [{earliest_d}]: {first_snippet}\n"
+                f"    LAST  [{latest_d}]: {last_snippet}"
             )
 
     # ── Date arithmetic ────────────────────────────────────────────────────
-    # For "how many days between X and Y" questions: extract event dates from
-    # the retrieved content and compute the difference.
+    # For "how many days between / since / ago" questions: compute from stored
+    # anchor_dates (most reliable), fall back to prose month+day extraction.
     if _CA_DATE_ARITH_RE.search(question):
-        # Prefer full ISO anchor_dates from payload (most reliable)
         iso_dates: list[_date] = []
         for d, _ in dated_texts:
             if d and len(d) >= 10:
@@ -330,10 +339,9 @@ def _compute_query_analysis(
             diff = abs((d2 - d1).days)
             findings.append(
                 f"Date range in retrieved evidence: {d1} → {d2}. "
-                f"Difference: {diff} days (~{diff // 7} weeks)"
+                f"Difference: {diff} days (~{round(diff / 7, 1)} weeks)"
             )
         else:
-            # Fall back to month+day patterns in prose text
             ref_year = 2023
             anchor_years = [int(d[:4]) for d, _ in dated_texts if d and len(d) >= 4]
             if anchor_years:
@@ -344,14 +352,37 @@ def _compute_query_analysis(
                 diff = abs((d2 - d1).days)
                 findings.append(
                     f"Dates extracted from retrieved text: {d1} and {d2}. "
-                    f"Difference: {diff} days"
+                    f"Difference: {diff} days (~{round(diff / 7, 1)} weeks)"
                 )
 
-    # Numeric aggregation (money sums, duration sums) is intentionally excluded.
-    # Multi-session questions require evidence spread across many sessions; retrieval
-    # is almost always incomplete, so a partial sum from retrieved chunks misleads
-    # the LLM into confidently reporting the wrong total. Rule 18 in the system
-    # instruction already asks the LLM to count from full context.
+        # For relative-time questions ("X weeks ago", "X days ago"): surface the
+        # most recent anchor date in context so the LLM has a reference point.
+        if re.search(r"\b(ago|since)\b", question, re.I) and unique_iso:
+            ref = unique_iso[-1]
+            findings.append(f"Most recent date in retrieved context: {ref} (use as reference for relative-time questions)")
+
+    # ── Combined duration (safe aggregation) ──────────────────────────────
+    # "How long combined / total / altogether to finish both books?" — unlike
+    # cross-session counts, these sum a small fixed set of named items present
+    # in the question itself. Only fire when the question explicitly asks for
+    # a combined/total duration and the retrieved context is single-session.
+    if (
+        _CA_COMBINED_DURATION_RE.search(question)
+        and re.search(r"\b(how long|how many days|how many weeks)\b", question, re.I)
+        and len(set(d for d, _ in dated_texts if d)) <= 3  # single-session guard
+    ):
+        durations = _ca_durations_days(full_text)
+        if 2 <= len(durations) <= 6:  # only when a small fixed set is present
+            total_days = sum(durations)
+            total_weeks = round(total_days / 7, 1)
+            findings.append(
+                f"Duration expressions found: {durations} days each. "
+                f"Combined total: {total_days} days ({total_weeks} weeks)"
+            )
+
+    # Numeric aggregation across sessions (money sums, open-ended counts) is
+    # intentionally excluded — incomplete multi-session retrieval produces wrong
+    # partial sums. Rule 18 asks the LLM to count from full context.
 
     # ── Comparative / average ──────────────────────────────────────────────
     # Only for self-contained extractable values (percentages, ages) where the

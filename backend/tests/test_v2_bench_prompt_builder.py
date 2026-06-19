@@ -67,7 +67,9 @@ def test_compute_temporal_ordering_sorts_by_anchor_date() -> None:
         qdrant_chunks=chunks,
     )
     assert "COMPUTED ANALYSIS" in result
-    # S22 date (2023-02-15) should appear before XPS date (2023-03-20) in sorted list
+    # FIRST entry should be S22 (2023-02-15), LAST should be XPS (2023-03-20)
+    assert "FIRST" in result
+    assert "LAST" in result
     assert result.index("2023-02-15") < result.index("2023-03-20")
 
 
