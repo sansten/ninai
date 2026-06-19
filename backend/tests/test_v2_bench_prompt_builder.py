@@ -114,9 +114,13 @@ def test_compute_date_arith_not_triggered_for_unrelated_question() -> None:
     assert "days" not in result.lower() or "COMPUTED" not in result
 
 
-# ── Fix 2: numeric aggregation ───────────────────────────────────────────
+# ── Numeric aggregation excluded (money/duration sums removed) ────────────
+# Money and duration sums are not injected because multi-session retrieval is
+# almost always incomplete — a partial sum misleads the LLM into confidently
+# reporting the wrong total. Rule 18 handles counting from full context.
 
-def test_compute_money_sum() -> None:
+def test_compute_money_sum_not_injected() -> None:
+    # Sums from retrieved chunks should NOT appear — retrieval is often partial
     chunks = _chunks([
         ("I spent $40 on a new bike lock.", "2023-01-10"),
         ("I bought cycling shoes for $120.", "2023-02-01"),
@@ -127,11 +131,10 @@ def test_compute_money_sum() -> None:
         graph_nodes=[],
         qdrant_chunks=chunks,
     )
-    assert "COMPUTED ANALYSIS" in result
-    assert "185" in result  # $40 + $120 + $25 = $185
+    assert "Monetary amounts" not in result
 
 
-def test_compute_duration_sum() -> None:
+def test_compute_duration_sum_not_injected() -> None:
     chunks = _chunks([
         ("I just got back from a 3-day solo camping trip to Big Sur.", "2023-04-05"),
         ("I spent 5 days camping in Yosemite this year.", "2023-06-15"),
@@ -141,22 +144,6 @@ def test_compute_duration_sum() -> None:
         graph_nodes=[],
         qdrant_chunks=chunks,
     )
-    assert "COMPUTED ANALYSIS" in result
-    assert "8 days" in result
-
-
-def test_compute_duration_not_triggered_for_date_arith_question() -> None:
-    # "how many days between" should not also trigger the duration accumulator
-    chunks = _chunks([
-        ("I attended Sunday mass on January 2nd.", "2023-01-02"),
-        ("I went to Ash Wednesday on February 1st.", "2023-02-01"),
-    ])
-    result = _compute_query_analysis(
-        "How many days had passed between the Sunday mass and the Ash Wednesday service?",
-        graph_nodes=[],
-        qdrant_chunks=chunks,
-    )
-    # Should have date arith finding but NOT a spurious duration sum
     assert "Duration expressions" not in result
 
 
@@ -190,7 +177,8 @@ def test_compute_percentage_found() -> None:
 
 # ── Integration: COMPUTED ANALYSIS appears in full prompt ────────────────
 
-def test_bench_prompt_includes_computed_analysis_for_money_question() -> None:
+def test_bench_prompt_no_computed_analysis_for_money_question() -> None:
+    # Money sums are excluded — partial retrieval would give wrong totals
     chunks = _chunks([
         ("I spent $40 on a bike lock.", "2023-01-10"),
         ("I bought a helmet for $145.", "2023-02-01"),
@@ -201,8 +189,7 @@ def test_bench_prompt_includes_computed_analysis_for_money_question() -> None:
         qdrant_chunks=chunks,
         session_utterances=[],
     )
-    assert "COMPUTED ANALYSIS" in prompt
-    assert "185" in prompt
+    assert "Monetary amounts" not in prompt
 
 
 def test_bench_prompt_no_computed_analysis_for_simple_question() -> None:
@@ -212,9 +199,9 @@ def test_bench_prompt_no_computed_analysis_for_simple_question() -> None:
         qdrant_chunks=[],
         session_utterances=[],
     )
-    # The system instruction mentions "COMPUTED ANALYSIS" in rule 19, but there
-    # should be no data block (header line contains the em-dash suffix).
-    assert "pre-computed from retrieved memory" not in prompt
+    # No data block should appear — the unique sentinel is the "(pre-computed" prefix
+    # which only appears in the injected data header, not in rule 19.
+    assert "(pre-computed from retrieved memory" not in prompt
 
 
 def test_compute_returns_empty_when_no_retrieved_content() -> None:

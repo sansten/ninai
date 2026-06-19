@@ -110,7 +110,7 @@ You are a memory-QA system. Find the answer in context and output it as a SHORT 
 16. SPEAKER CONFUSION: The context has multiple people. Always identify WHICH person the question asks about. If the question says "Tim" look only at Tim's facts; never confuse Tim's facts with John's or Joanna's.
 17. ASSISTANT-PROVIDED FACTS: Facts the ASSISTANT stated earlier in the conversation (definitions, explanations, descriptions, lists, or counts the assistant gave) are valid evidence — answer from them exactly as you would from the user's own statements. Do NOT refuse just because the user did not personally say it.
 18. COUNTING & TOTALS ("how many", "how much total", "how often", "how many times"): Identify EACH distinct qualifying item or event in the context, count them, and output the running TOTAL as a single number or amount ("5", "$185", "3 times"). Do NOT list the items in place of the count, and do NOT stop early — re-scan all context so you neither miss nor double-count. Sum money/quantities across every relevant entry.
-19. COMPUTED ANALYSIS section: If a "COMPUTED ANALYSIS" block appears in the context, its values are pre-computed from the memory record and take precedence over your own arithmetic. Use the computed total, date difference, or ordering directly as your answer — do not re-compute.
+19. COMPUTED ANALYSIS section: If a "COMPUTED ANALYSIS" block appears in the context, its values are derived from retrieved memory entries. Use computed date differences and chronological orderings as supporting evidence. For counts and totals, treat the computed value as a starting point but verify against ALL context above — if the context contains additional instances not reflected in the computed value, use your own count.
 
 Think 2–3 sentences, then:
 FINAL ANSWER: <bare answer phrase>\
@@ -347,31 +347,15 @@ def _compute_query_analysis(
                     f"Difference: {diff} days"
                 )
 
-    # ── Numeric aggregation ────────────────────────────────────────────────
-    # For "how much total / how many days" questions: sum amounts/durations
-    # found in the retrieved chunks and present the computed total.
-    if _CA_NUMERIC_Q_RE.search(question):
-        if re.search(r"\b(spent|cost|paid|money|amount|expense|\$)\b", question, re.I):
-            amounts = _ca_money_amounts(full_text)
-            if amounts:
-                findings.append(
-                    f"Monetary amounts in retrieved context: {amounts}. "
-                    f"Sum: ${sum(amounts):,.2f}"
-                )
-
-        if re.search(r"\b(days?|nights?|weeks?)\b", question, re.I) and not re.search(
-            r"\bbetween\b|\bago\b|\bpassed\b|\bbefore\b|\bafter\b", question, re.I
-        ):
-            durations = _ca_durations_days(full_text)
-            if durations:
-                findings.append(
-                    f"Duration expressions in retrieved context: {durations} days individually. "
-                    f"Total: {sum(durations)} days"
-                )
+    # Numeric aggregation (money sums, duration sums) is intentionally excluded.
+    # Multi-session questions require evidence spread across many sessions; retrieval
+    # is almost always incomplete, so a partial sum from retrieved chunks misleads
+    # the LLM into confidently reporting the wrong total. Rule 18 in the system
+    # instruction already asks the LLM to count from full context.
 
     # ── Comparative / average ──────────────────────────────────────────────
-    # For "average age" or "what percentage" questions: extract values and
-    # compute aggregate.
+    # Only for self-contained extractable values (percentages, ages) where the
+    # answer is a single datum present in context, not an accumulation.
     if _CA_COMPARATIVE_RE.search(question):
         if re.search(r"\baverage.{0,20}age\b|\bage.{0,20}average\b", question, re.I):
             ages = [int(m) for m in _CA_AGE_RE.findall(full_text)]
@@ -388,7 +372,7 @@ def _compute_query_analysis(
     if not findings:
         return ""
 
-    header = "COMPUTED ANALYSIS (pre-computed from retrieved memory — use these values directly):"
+    header = "COMPUTED ANALYSIS (pre-computed from retrieved memory — use as supporting evidence):"
     body = "\n".join(f"  • {f}" for f in findings)
     return f"{header}\n{body}"
 
