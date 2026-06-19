@@ -17,6 +17,7 @@ Output schema the model must return:
 from __future__ import annotations
 
 import re
+from datetime import date as _date
 from typing import Any
 
 _MAX_GRAPH_NODES = 8
@@ -109,6 +110,7 @@ You are a memory-QA system. Find the answer in context and output it as a SHORT 
 16. SPEAKER CONFUSION: The context has multiple people. Always identify WHICH person the question asks about. If the question says "Tim" look only at Tim's facts; never confuse Tim's facts with John's or Joanna's.
 17. ASSISTANT-PROVIDED FACTS: Facts the ASSISTANT stated earlier in the conversation (definitions, explanations, descriptions, lists, or counts the assistant gave) are valid evidence — answer from them exactly as you would from the user's own statements. Do NOT refuse just because the user did not personally say it.
 18. COUNTING & TOTALS ("how many", "how much total", "how often", "how many times"): Identify EACH distinct qualifying item or event in the context, count them, and output the running TOTAL as a single number or amount ("5", "$185", "3 times"). Do NOT list the items in place of the count, and do NOT stop early — re-scan all context so you neither miss nor double-count. Sum money/quantities across every relevant entry.
+19. COMPUTED ANALYSIS section: If a "COMPUTED ANALYSIS" block appears in the context, its values are pre-computed from the memory record and take precedence over your own arithmetic. Use the computed total, date difference, or ordering directly as your answer — do not re-compute.
 
 Think 2–3 sentences, then:
 FINAL ANSWER: <bare answer phrase>\
@@ -172,6 +174,223 @@ def _question_term_score(question_terms: list[str], *texts: str) -> int:
 
 def _relevance_score(target_names: list[str], question_terms: list[str], *texts: str) -> int:
     return _target_score(target_names, *texts) + _question_term_score(question_terms, *texts)
+
+
+# ---------------------------------------------------------------------------
+# Computed-analysis helpers — derive numeric/temporal facts from retrieved
+# content before the LLM sees it, so counting/summing/ordering is done in
+# deterministic code rather than by the model.
+# ---------------------------------------------------------------------------
+
+_CA_MONEY_RE = re.compile(
+    r"\$\s*[\d,]+(?:\.\d+)?|\b[\d,]+(?:\.\d+)?\s*(?:dollars?|usd)\b", re.I
+)
+_CA_DURATION_RE = re.compile(r"\b(\d+)[\s-]?(day|night|week|month)s?\b", re.I)
+_CA_FULL_DATE_RE = re.compile(
+    r"\b(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|"
+    r"aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)"
+    r"\s+(\d{1,2})(?:st|nd|rd|th)?\b",
+    re.I,
+)
+_CA_NUMERIC_DMY_RE = re.compile(r"\b(\d{1,2})/(\d{1,2})\b")
+_CA_AGE_RE = re.compile(r"\b(\d{1,3})\s*(?:years?\s*old|yr\b)", re.I)
+_CA_PCT_RE = re.compile(r"(\d+(?:\.\d+)?)\s*%")
+_CA_TEMPORAL_ORDER_RE = re.compile(
+    r"\b(which.{0,30}first|came first|most recently|most recent|"
+    r"earliest|latest|which.{0,30}before)\b",
+    re.I,
+)
+_CA_DATE_ARITH_RE = re.compile(
+    r"\b(how (many|long).{0,20}(days?|weeks?|months?)|"
+    r"days? (between|before|after|since|until|passed))\b",
+    re.I,
+)
+_CA_NUMERIC_Q_RE = re.compile(
+    r"\b(how many|how much|total|how long|how often|number of)\b", re.I
+)
+_CA_COMPARATIVE_RE = re.compile(
+    r"\b(most|least|highest|lowest|average|percent(?:age)?|increase|decrease)\b", re.I
+)
+_CA_MONTH_NUM = {
+    "jan": 1, "feb": 2, "mar": 3, "apr": 4, "may": 5, "jun": 6,
+    "jul": 7, "aug": 8, "sep": 9, "oct": 10, "nov": 11, "dec": 12,
+}
+
+
+def _ca_money_amounts(text: str) -> list[float]:
+    out: list[float] = []
+    for m in _CA_MONEY_RE.finditer(text):
+        raw = re.sub(r"[^\d.]", "", m.group())
+        try:
+            out.append(float(raw))
+        except ValueError:
+            pass
+    return out
+
+
+def _ca_durations_days(text: str) -> list[int]:
+    out: list[int] = []
+    for m in _CA_DURATION_RE.finditer(text):
+        n, unit = int(m.group(1)), m.group(2).lower()
+        if unit in ("day", "night"):
+            out.append(n)
+        elif unit == "week":
+            out.append(n * 7)
+    return out
+
+
+def _ca_prose_dates(text: str, ref_year: int = 2023) -> list[_date]:
+    out: list[_date] = []
+    for m in _CA_FULL_DATE_RE.finditer(text):
+        mo = _CA_MONTH_NUM.get(m.group(1).lower()[:3])
+        day = int(m.group(2))
+        if mo:
+            try:
+                out.append(_date(ref_year, mo, day))
+            except ValueError:
+                pass
+    for m in _CA_NUMERIC_DMY_RE.finditer(text):
+        try:
+            out.append(_date(ref_year, int(m.group(1)), int(m.group(2))))
+        except ValueError:
+            pass
+    return out
+
+
+def _compute_query_analysis(
+    question: str,
+    graph_nodes: list,
+    qdrant_chunks: list,
+) -> str:
+    """Pre-compute numeric/temporal answers from already-retrieved memory content.
+
+    This function works purely from what Qdrant and the graph already returned —
+    no access to the raw dataset. The result is injected into the prompt as a
+    COMPUTED ANALYSIS block that the LLM is instructed to treat as authoritative
+    for numeric/temporal questions (rule 19 in _BENCH_SYSTEM_INSTRUCTION).
+
+    Returns an empty string when the question type does not benefit from
+    pre-computation or when the retrieved content lacks sufficient signal.
+    """
+    # Collect text + ISO anchor dates from every retrieved node/chunk.
+    all_texts: list[str] = []
+    dated_texts: list[tuple[str, str]] = []  # (iso_date_str, text)
+
+    for node in graph_nodes:
+        text = str(node.get("content") or node.get("text") or "").strip()
+        d = str(node.get("canonical_date") or node.get("anchor_date") or "")
+        if text:
+            all_texts.append(text)
+            dated_texts.append((d, text))
+
+    for chunk in qdrant_chunks:
+        payload = chunk.get("payload", {})
+        text = str(payload.get("text") or payload.get("content") or "").strip()
+        d = str(payload.get("anchor_date") or "")
+        if text:
+            all_texts.append(text)
+            dated_texts.append((d, text))
+
+    if not all_texts:
+        return ""
+
+    full_text = " ".join(all_texts)
+    findings: list[str] = []
+
+    # ── Temporal ordering ──────────────────────────────────────────────────
+    # For "which came first / most recently" questions: sort retrieved chunks
+    # by their stored anchor_date and present a chronological list so the
+    # model can read off the ordering rather than inferring from prose.
+    if _CA_TEMPORAL_ORDER_RE.search(question):
+        dated = [(d, t) for d, t in dated_texts if d and len(d) >= 8]
+        if dated:
+            dated.sort(key=lambda x: x[0])
+            lines = [f"[{d}] {t[:120].replace(chr(10), ' ')}" for d, t in dated[:8]]
+            findings.append(
+                "Chronological ordering of retrieved evidence:\n    "
+                + "\n    ".join(lines)
+            )
+
+    # ── Date arithmetic ────────────────────────────────────────────────────
+    # For "how many days between X and Y" questions: extract event dates from
+    # the retrieved content and compute the difference.
+    if _CA_DATE_ARITH_RE.search(question):
+        # Prefer full ISO anchor_dates from payload (most reliable)
+        iso_dates: list[_date] = []
+        for d, _ in dated_texts:
+            if d and len(d) >= 10:
+                try:
+                    iso_dates.append(_date(int(d[:4]), int(d[5:7]), int(d[8:10])))
+                except (ValueError, IndexError):
+                    pass
+
+        unique_iso = sorted(set(iso_dates))
+        if len(unique_iso) >= 2 and unique_iso[0] != unique_iso[-1]:
+            d1, d2 = unique_iso[0], unique_iso[-1]
+            diff = abs((d2 - d1).days)
+            findings.append(
+                f"Date range in retrieved evidence: {d1} → {d2}. "
+                f"Difference: {diff} days (~{diff // 7} weeks)"
+            )
+        else:
+            # Fall back to month+day patterns in prose text
+            ref_year = 2023
+            anchor_years = [int(d[:4]) for d, _ in dated_texts if d and len(d) >= 4]
+            if anchor_years:
+                ref_year = anchor_years[0]
+            prose = _ca_prose_dates(full_text, ref_year)
+            if len(prose) >= 2:
+                d1, d2 = min(prose), max(prose)
+                diff = abs((d2 - d1).days)
+                findings.append(
+                    f"Dates extracted from retrieved text: {d1} and {d2}. "
+                    f"Difference: {diff} days"
+                )
+
+    # ── Numeric aggregation ────────────────────────────────────────────────
+    # For "how much total / how many days" questions: sum amounts/durations
+    # found in the retrieved chunks and present the computed total.
+    if _CA_NUMERIC_Q_RE.search(question):
+        if re.search(r"\b(spent|cost|paid|money|amount|expense|\$)\b", question, re.I):
+            amounts = _ca_money_amounts(full_text)
+            if amounts:
+                findings.append(
+                    f"Monetary amounts in retrieved context: {amounts}. "
+                    f"Sum: ${sum(amounts):,.2f}"
+                )
+
+        if re.search(r"\b(days?|nights?|weeks?)\b", question, re.I) and not re.search(
+            r"\bbetween\b|\bago\b|\bpassed\b|\bbefore\b|\bafter\b", question, re.I
+        ):
+            durations = _ca_durations_days(full_text)
+            if durations:
+                findings.append(
+                    f"Duration expressions in retrieved context: {durations} days individually. "
+                    f"Total: {sum(durations)} days"
+                )
+
+    # ── Comparative / average ──────────────────────────────────────────────
+    # For "average age" or "what percentage" questions: extract values and
+    # compute aggregate.
+    if _CA_COMPARATIVE_RE.search(question):
+        if re.search(r"\baverage.{0,20}age\b|\bage.{0,20}average\b", question, re.I):
+            ages = [int(m) for m in _CA_AGE_RE.findall(full_text)]
+            if ages:
+                findings.append(
+                    f"Ages found: {ages}. Average: {sum(ages) / len(ages):.1f}"
+                )
+
+        if re.search(r"\bpercent(?:age)?\b|\bdiscount\b", question, re.I):
+            pcts = _CA_PCT_RE.findall(full_text)
+            if pcts:
+                findings.append(f"Percentages found in retrieved text: {[p + '%' for p in pcts[:6]]}")
+
+    if not findings:
+        return ""
+
+    header = "COMPUTED ANALYSIS (pre-computed from retrieved memory — use these values directly):"
+    body = "\n".join(f"  • {f}" for f in findings)
+    return f"{header}\n{body}"
 
 
 def build_bench_prompt(
@@ -300,6 +519,14 @@ def build_bench_prompt(
                     if fk not in seen_pa:
                         seen_pa.add(fk)
                         parts.append(f"    • {fact}")
+        parts.append("")
+
+    # Computed analysis — deterministic pre-processing of retrieved content for
+    # numeric/temporal/comparative questions. Injected before the raw memory record
+    # so the model reads the computed value first (rule 19).
+    computed = _compute_query_analysis(question, graph_nodes, qdrant_chunks)
+    if computed:
+        parts.append(computed)
         parts.append("")
 
     parts.append("AUTHORITATIVE MEMORY RECORD (this is the retrieved record for the people in this question — treat it as ground truth, not a guess):")
