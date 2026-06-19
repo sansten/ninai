@@ -520,6 +520,42 @@ class V2GraphClient:
     # Health
     # ------------------------------------------------------------------
 
+    async def fetch_top_entities(
+        self,
+        tenant_id: str,
+        exclude_types: list[str] | None = None,
+        limit: int = 20,
+    ) -> list[dict[str, Any]]:
+        """Fetch top-weight non-person, non-event entities for the context wiki."""
+        excluded = exclude_types or ["person_profile", "temporal_event"]
+        excl_list = ", ".join(f"'{self._esc(t)}'" for t in excluded)
+        cypher = (
+            f"MATCH (e:Entity {{tenant_id: '{self._esc(tenant_id)}'}}) "
+            f"WHERE NOT e.entity_type IN [{excl_list}] "
+            f"RETURN e.id AS id, e.name AS name, e.entity_type AS entity_type, "
+            f"  COALESCE(e.content, e.text, e.value) AS content, "
+            f"  e.weight AS weight "
+            f"ORDER BY e.weight DESC LIMIT {limit}"
+        )
+        return await self._aquery(tenant_id, cypher)
+
+    async def fetch_recent_temporal_events(
+        self,
+        tenant_id: str,
+        limit: int = 15,
+    ) -> list[dict[str, Any]]:
+        """Fetch recent temporal events sorted newest-first (no date filter)."""
+        cypher = (
+            f"MATCH (e:Entity {{tenant_id: '{self._esc(tenant_id)}'}}) "
+            f"WHERE e.entity_type = 'temporal_event' "
+            f"RETURN e.id AS id, e.name AS name, "
+            f"  COALESCE(e.content, e.text, e.value) AS content, "
+            f"  e.subject AS subject, e.canonical_date AS canonical_date, "
+            f"  e.weight AS weight "
+            f"ORDER BY e.canonical_date DESC LIMIT {limit}"
+        )
+        return await self._aquery(tenant_id, cypher)
+
     def is_available(self) -> bool:
         if not self._redis:
             return False

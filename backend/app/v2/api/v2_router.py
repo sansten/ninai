@@ -8,6 +8,7 @@ Endpoints:
   POST /v2/interact            — single cognitive turn (3-phase pipeline)
   GET  /v2/enrichment/status   — async-extract pending count for a tenant (cheap poll)
   POST /v2/graph/inspect       — inspect graph subgraph by entity ids
+  GET  /v2/context/wiki        — structured world briefing from the knowledge graph
   GET  /v2/health              — component health check
 """
 
@@ -18,6 +19,7 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException
 
 from app.v2.api.schemas import (
+    V2ContextWikiResponse,
     V2EnrichmentStatusResponse,
     V2GraphInspectRequest,
     V2GraphInspectResponse,
@@ -25,6 +27,9 @@ from app.v2.api.schemas import (
     V2HealthResponse,
     V2InteractRequest,
     V2InteractResponse,
+    V2WikiEvent,
+    V2WikiPerson,
+    V2WikiTopic,
 )
 from app.v2.memory.dnc_router import _count_enrich_pending
 from app.v2.pipeline.factory import get_v2_loop
@@ -168,6 +173,98 @@ async def v2_graph_inspect(
         nodes=nodes,
         seed_count=len(req.entity_ids),
         tenant_id=tenant_id,
+    )
+
+
+# ---------------------------------------------------------------------------
+# GET /v2/context/wiki
+# ---------------------------------------------------------------------------
+
+def _build_wiki_text(
+    people: list[V2WikiPerson],
+    events: list[V2WikiEvent],
+    topics: list[V2WikiTopic],
+) -> str:
+    lines: list[str] = []
+    if people:
+        lines.append("## People")
+        for p in people:
+            lines.append(f"**{p.name}**: {p.profile}")
+        lines.append("")
+    if events:
+        lines.append("## Recent Events")
+        for e in events:
+            prefix = f"[{e.date}]" if e.date else ""
+            subj = f"{e.subject}: " if e.subject else ""
+            lines.append(f"{prefix} {subj}{e.summary}".strip())
+        lines.append("")
+    if topics:
+        lines.append("## Key Topics")
+        for t in topics:
+            lines.append(f"**{t.name}** ({t.entity_type}): {t.summary}")
+    return "\n".join(lines)
+
+
+@v2_router.get("/context/wiki", response_model=V2ContextWikiResponse)
+async def v2_context_wiki(
+    tenant: str | None = None,
+    limit_people: int = 10,
+    limit_events: int = 15,
+    limit_topics: int = 20,
+    current_user=_AUTH,  # type: ignore[assignment]
+) -> V2ContextWikiResponse:
+    """Return a structured world briefing assembled from the tenant's knowledge graph.
+
+    Assembles person profiles, recent temporal events, and top-weight entities into
+    a pre-formatted context page ('LLM wiki') that an agent can load before starting
+    a task — grounding it in what the system knows without a full retrieval pass.
+    """
+    tenant_id = _resolve_tenant(tenant, current_user or {})
+    loop = get_v2_loop()
+    graph_client = loop._router._graph  # type: ignore[attr-defined]
+
+    people_raw, events_raw, topics_raw = await __import__("asyncio").gather(
+        graph_client.fetch_all_profiles(tenant_id, limit=limit_people),
+        graph_client.fetch_recent_temporal_events(tenant_id, limit=limit_events),
+        graph_client.fetch_top_entities(tenant_id, limit=limit_topics),
+    )
+
+    people = [
+        V2WikiPerson(
+            name=str(p.get("subject") or p.get("name") or ""),
+            profile=str(p.get("content") or ""),
+        )
+        for p in people_raw
+        if p.get("subject") or p.get("name")
+    ]
+
+    events = [
+        V2WikiEvent(
+            date=str(e.get("canonical_date") or ""),
+            subject=str(e.get("subject") or ""),
+            summary=str(e.get("content") or e.get("name") or ""),
+        )
+        for e in events_raw
+    ]
+
+    topics = [
+        V2WikiTopic(
+            name=str(t.get("name") or ""),
+            summary=str(t.get("content") or "")[:200],
+            entity_type=str(t.get("entity_type") or ""),
+            weight=float(t.get("weight") or 0.0),
+        )
+        for t in topics_raw
+        if t.get("name")
+    ]
+
+    wiki_text = _build_wiki_text(people, events, topics)
+    return V2ContextWikiResponse(
+        tenant_id=tenant_id,
+        people=people,
+        recent_events=events,
+        topics=topics,
+        wiki_text=wiki_text,
     )
 
 

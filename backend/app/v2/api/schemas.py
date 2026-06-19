@@ -98,3 +98,35 @@ class V2HealthResponse(BaseModel):
     graph_available: bool
     llm_available: bool
     message: str
+
+
+class V2WikiPerson(BaseModel):
+    name: str
+    profile: str
+
+
+class V2WikiEvent(BaseModel):
+    date: str
+    subject: str
+    summary: str
+
+
+class V2WikiTopic(BaseModel):
+    name: str
+    summary: str
+    entity_type: str
+    weight: float
+
+
+class V2ContextWikiResponse(BaseModel):
+    """Structured world briefing assembled from the tenant's knowledge graph.
+
+    Mirrors Brain's 'LLM wiki' concept: a pre-formatted context page that agents
+    can load before starting a task to ground themselves in what they know about
+    the user's world without doing per-question retrieval.
+    """
+    tenant_id: str
+    people: list[V2WikiPerson]
+    recent_events: list[V2WikiEvent]
+    topics: list[V2WikiTopic]
+    wiki_text: str
