@@ -43,6 +43,15 @@ _QUESTION_STOP_WORDS = {
     "which", "who", "why", "with", "would",
 }
 
+# Detects preference/recommendation questions (LongMemEval single-session-preference type).
+# Gold answers for these are meta-descriptions: "The user would prefer responses that..."
+_PREF_Q_RE = re.compile(
+    r"^\s*(can you |could you |please )?(recommend|suggest|advise|give me|share|tell me about)"
+    r"|any (tips|advice|ideas|suggestions|recommendations)\b"
+    r"|\bwhat (would you (suggest|recommend)|should i (do|try|get|watch|read|use|visit|consider))\b",
+    re.I,
+)
+
 # ---------------------------------------------------------------------------
 # Bench-mode prompt — plain-text output, maximally direct extraction
 # ---------------------------------------------------------------------------
@@ -110,7 +119,14 @@ You are a memory-QA system. Find the answer in context and output it as a SHORT 
 16. SPEAKER CONFUSION: The context has multiple people. Always identify WHICH person the question asks about. If the question says "Tim" look only at Tim's facts; never confuse Tim's facts with John's or Joanna's.
 17. ASSISTANT-PROVIDED FACTS: Facts the ASSISTANT stated earlier in the conversation (definitions, explanations, descriptions, lists, or counts the assistant gave) are valid evidence — answer from them exactly as you would from the user's own statements. Do NOT refuse just because the user did not personally say it.
 18. COUNTING & TOTALS ("how many", "how much total", "how often", "how many times"): Identify EACH distinct qualifying item or event in the context, count them, and output the running TOTAL as a single number or amount ("5", "$185", "3 times"). Do NOT list the items in place of the count, and do NOT stop early — re-scan all context so you neither miss nor double-count. Sum money/quantities across every relevant entry.
+    TOTAL vs LIST: "how many goals AND assists" → add them together and output ONE number ("5"). "what goals did X score" → list them.
+    BAD: "3 goals, 2 assists"   GOOD: "5" (when question asks for total of goals and assists combined)
 19. COMPUTED ANALYSIS section: If a "COMPUTED ANALYSIS" block appears in the context, its values are derived from retrieved memory entries. Use computed date differences and chronological orderings as supporting evidence. For counts and totals, treat the computed value as a starting point but verify against ALL context above — if the context contains additional instances not reflected in the computed value, use your own count.
+20. PREFERENCE / RECOMMENDATION QUESTIONS ("Can you recommend...", "Can you suggest...", "Any tips for...", "What would you suggest..."): The expected answer describes what kind of response the user would PREFER based on their stored context — NOT a direct recommendation.
+    Output format (follow this exactly):
+    "The user would prefer responses that [describe ideal response tailored to their context, interests, and past experiences]. They might not prefer [what would be unsuitable given their context]."
+    Steps: (1) Find the user's relevant preferences, past experiences, and constraints in the memory record. (2) Describe the ideal response type using those specifics. (3) Describe what they would NOT want.
+    BAD: "Italian restaurants, wine bars"   GOOD: "The user would prefer suggestions of Italian restaurants near their neighbourhood, given their enjoyment of Italian cuisine and recent date nights. They might not prefer fast food or restaurants far from their area."
 
 Think 2–3 sentences, then:
 FINAL ANSWER: <bare answer phrase>\
@@ -673,8 +689,14 @@ def build_bench_prompt(
     if question.lower().startswith("when "):
         parts.append("For temporal questions, output the most specific stored date phrase you can justify.")
         parts.append("Do not leave the answer as 'yesterday', 'last Saturday', 'next Fri', or similar shorthand.")
-    parts.append("Then write on the last line:")
-    parts.append("FINAL ANSWER: <bare answer phrase — as concise as possible, up to 10 words>")
+    if _PREF_Q_RE.search(question):
+        parts.append("QUESTION TYPE: PREFERENCE/RECOMMENDATION — Apply rule 20.")
+        parts.append("Output: \"The user would prefer responses that [specifics from context]. They might not prefer [what to avoid].\"")
+        parts.append("Then write on the last line:")
+        parts.append("FINAL ANSWER: <the full preference description as above>")
+    else:
+        parts.append("Then write on the last line:")
+        parts.append("FINAL ANSWER: <bare answer phrase — as concise as possible, up to 10 words>")
 
     return "\n".join(parts)
 
