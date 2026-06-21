@@ -43,15 +43,6 @@ _QUESTION_STOP_WORDS = {
     "which", "who", "why", "with", "would",
 }
 
-# Detects preference/recommendation questions (LongMemEval single-session-preference type).
-# Gold answers for these are meta-descriptions: "The user would prefer responses that..."
-_PREF_Q_RE = re.compile(
-    r"^\s*(can you |could you |please )?(recommend|suggest|advise|give me|share|tell me about)"
-    r"|any (tips|advice|ideas|suggestions|recommendations)\b"
-    r"|\bwhat (would you (suggest|recommend)|should i (do|try|get|watch|read|use|visit|consider))\b",
-    re.I,
-)
-
 # ---------------------------------------------------------------------------
 # Bench-mode prompt — plain-text output, maximally direct extraction
 # ---------------------------------------------------------------------------
@@ -689,14 +680,8 @@ def build_bench_prompt(
     if question.lower().startswith("when "):
         parts.append("For temporal questions, output the most specific stored date phrase you can justify.")
         parts.append("Do not leave the answer as 'yesterday', 'last Saturday', 'next Fri', or similar shorthand.")
-    if _PREF_Q_RE.search(question):
-        parts.append("QUESTION TYPE: PREFERENCE/RECOMMENDATION — Apply rule 20.")
-        parts.append("Output: \"The user would prefer responses that [specifics from context]. They might not prefer [what to avoid].\"")
-        parts.append("Then write on the last line:")
-        parts.append("FINAL ANSWER: <the full preference description as above>")
-    else:
-        parts.append("Then write on the last line:")
-        parts.append("FINAL ANSWER: <bare answer phrase — as concise as possible, up to 10 words>")
+    parts.append("Then write on the last line:")
+    parts.append("FINAL ANSWER: <bare answer phrase — as concise as possible, up to 10 words>")
 
     return "\n".join(parts)
 
