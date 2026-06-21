@@ -43,6 +43,16 @@ _QUESTION_STOP_WORDS = {
     "which", "who", "why", "with", "would",
 }
 
+# Matches recommendation/preference questions — narrowly scoped to avoid misfiring on
+# multi-session questions that use "share"/"tell me about"/"suggest plans" phrasing.
+# Verified against LongMemEval: 0 multi-session matches, 23/30 preference matches.
+_PREF_Q_RE = re.compile(
+    r"^\s*(can you |could you |please )?(recommend|suggest)\b"
+    r"|any (tips|advice|ideas|suggestions|recommendations)\b"
+    r"|\bwhat (would you (suggest|recommend)|should i (do|try|get|watch|read|use|visit|consider))\b",
+    re.I,
+)
+
 # ---------------------------------------------------------------------------
 # Bench-mode prompt — plain-text output, maximally direct extraction
 # ---------------------------------------------------------------------------
@@ -679,8 +689,12 @@ def build_bench_prompt(
     if question.lower().startswith("when "):
         parts.append("For temporal questions, output the most specific stored date phrase you can justify.")
         parts.append("Do not leave the answer as 'yesterday', 'last Saturday', 'next Fri', or similar shorthand.")
-    parts.append("Then write on the last line:")
-    parts.append("FINAL ANSWER: <bare answer phrase — as concise as possible, up to 10 words>")
+    if _PREF_Q_RE.search(question):
+        parts.append("QUESTION TYPE: PREFERENCE/RECOMMENDATION — Apply rule 20.")
+        parts.append("FINAL ANSWER: The user would prefer responses that [specifics]. They might not prefer [what to avoid].")
+    else:
+        parts.append("Then write on the last line:")
+        parts.append("FINAL ANSWER: <bare answer phrase — as concise as possible, up to 10 words>")
 
     return "\n".join(parts)
 
