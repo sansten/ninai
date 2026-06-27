@@ -78,6 +78,8 @@ celery_app = Celery(
         "app.tasks.environment_sync",
         "app.tasks.strategy_evolution",
         "app.tasks.playbook_auto_synthesis_pipeline",
+        "app.tasks.prediction_error_pipeline",
+        "app.tasks.schema_formation_pipeline",
         "app.tasks.retention_enforcement",
         "app.tasks.cognitive_heartbeat",
         "app.tasks.proactive_push_beat",
@@ -177,6 +179,8 @@ celery_app.conf.update(
         # Continuous learning — strategy evolution (Phase 50)
         "app.tasks.strategy_evolution.strategy_evolution_pipeline_task": {"queue": "q.maintenance"},
         "app.tasks.playbook_auto_synthesis_pipeline.playbook_auto_synthesis_task": {"queue": "q.maintenance"},
+        "app.tasks.prediction_error_pipeline.consolidate_prediction_errors_task": {"queue": "q.maintenance"},
+        "app.tasks.schema_formation_pipeline.schema_formation_task": {"queue": "q.maintenance"},
 
         # Cognitive OS heartbeat
         "app.tasks.cognitive_heartbeat.cognitive_heartbeat_task": {"queue": "q.cognitive_loop"},
@@ -249,6 +253,16 @@ celery_app.conf.update(
         "nightly-playbook-auto-synthesis": {
             "task": "app.tasks.playbook_auto_synthesis_pipeline.playbook_auto_synthesis_task",
             "schedule": crontab(minute=0, hour=4),
+            "kwargs": {"window_days": 30},
+        },
+        "nightly-prediction-error-consolidation": {
+            "task": "app.tasks.prediction_error_pipeline.consolidate_prediction_errors_task",
+            "schedule": crontab(minute=15, hour=4),
+            "kwargs": {"since_days": 7},
+        },
+        "nightly-schema-formation": {
+            "task": "app.tasks.schema_formation_pipeline.schema_formation_task",
+            "schedule": crontab(minute=30, hour=4),
             "kwargs": {"window_days": 30},
         },
         "cognitive-os-heartbeat": {
