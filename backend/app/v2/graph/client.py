@@ -409,11 +409,41 @@ class V2GraphClient:
         cypher = (
             f"MATCH (e:Entity {{tenant_id: '{self._esc(tenant_id)}'}}) "
             f"WHERE e.entity_type = 'person_profile' AND "
-            f"  (e.subject IN [{name_list}] OR {contains_clauses}) "
+            f"  (e.subject IN [{name_list}] OR e.name IN [{name_list}] OR {contains_clauses}) "
             f"RETURN e.id AS id, e.name AS name, e.entity_type AS entity_type, "
             f"  e.content AS content, e.subject AS subject, "
             f"  e.weight AS weight, e.created_at AS created_at "
             f"LIMIT 10"
+        )
+        return await self._aquery(tenant_id, cypher)
+
+    async def fetch_personal_attributes_by_subject(
+        self,
+        tenant_id: str,
+        person_names: list[str],
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        """Fetch all personal_attribute nodes for the given subject names.
+
+        This bypasses Qdrant seeding and goes directly to the graph — critical for
+        exhaustive persona recall (e.g. MSC 'what do you remember about Speaker 1?').
+        """
+        if not person_names:
+            return []
+        # Use exact subject match to avoid cross-speaker contamination
+        # (CONTAINS 'Speaker' would match both 'Speaker 1' and 'Speaker 2').
+        subject_clauses = " OR ".join(
+            f"e.subject = '{self._esc(n)}'"
+            for n in person_names[:4]
+        )
+        cypher = (
+            f"MATCH (e:Entity {{tenant_id: '{self._esc(tenant_id)}'}}) "
+            f"WHERE e.entity_type = 'personal_attribute' AND ({subject_clauses}) "
+            f"RETURN e.id AS id, e.name AS name, e.entity_type AS entity_type, "
+            f"  e.content AS content, e.subject AS subject, "
+            f"  e.attribute AS attribute, e.value AS value, "
+            f"  e.weight AS weight, e.created_at AS created_at "
+            f"ORDER BY e.weight DESC LIMIT {limit}"
         )
         return await self._aquery(tenant_id, cypher)
 

@@ -370,6 +370,17 @@ class DNCMemoryRouter:
         # 4. Direct entity retrieval — fetch person profiles and temporal events
         #    by name/date extracted from the query, bypassing graph traversal.
         query_names = _extract_query_names(query)
+        # Also extract "Speaker N" / "User N" compound labels (digit suffix) that
+        # the title-case word regex misses — critical for MSC-style persona recall.
+        # When a compound like "Speaker 1" is found, remove the bare prefix "Speaker"
+        # so that CONTAINS-based graph queries don't match across all numbered speakers.
+        for m in re.finditer(r"\b(Speaker|User|Person|Bot)\s+(\d+)\b", query, re.I):
+            compound = f"{m.group(1).title()} {m.group(2)}"
+            bare = m.group(1).title()
+            if bare in query_names:
+                query_names.remove(bare)
+            if compound not in query_names:
+                query_names.append(compound)
         query_dates = _extract_query_dates(query)
         priority_nodes: list[dict[str, Any]] = []
         if self._graph.is_available():
@@ -381,6 +392,15 @@ class DNCMemoryRouter:
                     priority_nodes.extend(profiles)
                 except Exception as exc:
                     logger.warning("Profile fetch failed: %s", exc)
+                # Direct personal_attribute lookup — bypasses Qdrant seeding for
+                # exhaustive persona recall (e.g. "what do you remember about Speaker 1?")
+                try:
+                    attr_nodes = await self._graph.fetch_personal_attributes_by_subject(
+                        tenant_id, query_names
+                    )
+                    priority_nodes.extend(attr_nodes)
+                except Exception as exc:
+                    logger.warning("Personal attribute fetch failed: %s", exc)
             else:
                 # No explicit name in query — fetch top profiles as generic context
                 try:
