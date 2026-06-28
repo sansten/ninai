@@ -240,6 +240,7 @@ tests/
 | 78 | Reward Signal Propagation | Done (RewardPropagationService, 29 tests, 5454 total passing) |
 | 79 | Adversarial Robustness Monitor | Done (AdversarialRobustnessMonitor, 34 tests, 5488 total passing) |
 | 80 | Cognitive State Checkpoint & Restore | Done (CognitiveCheckpointService, CognitiveStateCheckpoint model, 33 tests, 5521 total passing) |
+| 85 | Consensus-Gated Memory Promotion | Done (MemoryConsensusService, 54 tests, 5575 total passing) |
 
 ## Cognitive OS Vision
 
