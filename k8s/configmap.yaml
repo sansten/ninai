@@ -25,6 +25,12 @@ data:
   # Engine version gate: "v1" = legacy multi-agent, "v2" = Graph-RAG + DNC
   NINAI_ENGINE_VERSION: "v2"
 
+  # Phase 92 — ReAct-style multi-hop retrieval. Off by default; enable to activate
+  # iterative retrieval for chain questions (up to NINAI_MULTI_HOP_V2_MAX_HOPS+1 Qdrant
+  # calls per query). Validate latency impact before enabling in high-QPS production.
+  NINAI_MULTI_HOP_V2: "1"
+  NINAI_MULTI_HOP_V2_MAX_HOPS: "2"
+
   # Vector database settings
   QDRANT_HOST: "qdrant-service"
   QDRANT_PORT: "6333"
