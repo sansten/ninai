@@ -113,6 +113,7 @@ You are a memory-QA system. Find the answer in context and output it as a SHORT 
     BAD: "a sport"  GOOD: "bowling"
     Priority: EXTRACTED FACTS and PROFILE sections have the precise terms — use them over generic utterance text.
 14. WRONG-FRAMING: If the question's premise is slightly wrong but the underlying fact exists, answer the real fact. E.g. "What did Maria donate to a luxury store?" — even if there's no luxury store in context, if Maria donated something, give that item.
+    EXCEPTION — do NOT apply wrong-framing when the question uses a distinct proper name (a specific person, doctor, role title, instrument, or activity) that is simply absent from context. "Dr. Johnson" is not a wrong framing of "Dr. Smith" — they are different people. "violin" is not a wrong framing of "guitar". If the named entity does not appear anywhere in the retrieved context, respond: Not mentioned
 15. INFERENCE QUESTIONS ("might", "likely", "would probably", "could", "based on X"): These REQUIRE inference — NEVER say "Not mentioned". Give the most plausible specific answer from context evidence.
     BAD: "Not mentioned"   GOOD: "middle-class or wealthy" (inferred from expensive purchases in context)
     BAD: "Cannot determine"   GOOD: "Psychology, counseling" (inferred from their volunteer/career interests)
@@ -128,8 +129,8 @@ You are a memory-QA system. Find the answer in context and output it as a SHORT 
     Steps: (1) Find the user's relevant preferences, past experiences, and constraints in the memory record. (2) Describe the ideal response type using those specifics. (3) Describe what they would NOT want.
     BAD: "Italian restaurants, wine bars"   GOOD: "The user would prefer suggestions of Italian restaurants near their neighbourhood, given their enjoyment of Italian cuisine and recent date nights. They might not prefer fast food or restaurants far from their area."
 
-Think 2–3 sentences, then:
-FINAL ANSWER: <bare answer phrase>\
+21. COMPARISON / ORDERING QUESTIONS ("which came first", "who did X first, A or B?", "which of X or Y"): BOTH named items must appear in the retrieved context. If only one is present and the question asks you to compare or order both, respond: Not mentioned
+    BAD (only one item found): answer with the one you found   GOOD: Not mentioned\
 """
 
 
@@ -689,11 +690,26 @@ def build_bench_prompt(
     if question.lower().startswith("when "):
         parts.append("For temporal questions, output the most specific stored date phrase you can justify.")
         parts.append("Do not leave the answer as 'yesterday', 'last Saturday', 'next Fri', or similar shorthand.")
+    # Entity-presence check — placed LAST so it overrides the "authoritative record"
+    # framing above. For unanswerable questions the named entity is simply absent;
+    # finding a different-but-similar item does NOT satisfy the check.
+    parts.append("")
+    parts.append("══ ENTITY CHECK (final step — overrides the framing above) ══")
+    parts.append("A) List every distinct named entity / activity / quantity the question requires")
+    parts.append("   (e.g. both 'Hawaii' AND 'Seattle', both 'Tom' AND 'Alex', both 'bus' AND 'taxi',")
+    parts.append("   both 'tomatoes' AND 'chili peppers', 'violin', 'uncle's birthday party', etc.).")
+    parts.append("B) Confirm EACH appears in the AUTHORITATIVE MEMORY RECORD above with EXPLICIT evidence.")
+    parts.append("   A similar-but-different item does NOT count: uncle's party ≠ friend's party,")
+    parts.append("   violin ≠ guitar, Dr. Johnson ≠ Dr. Smith, vintage films ≠ movies.")
+    parts.append("C) If ANY required entity is absent from the record: output exactly: Not mentioned")
+    parts.append("   This is the correct answer when the entity is genuinely missing — not a failure.")
+    parts.append("   Exception: rule 15 inference questions ('might', 'likely', 'would') skip this check.")
+    parts.append("")
     if _PREF_Q_RE.search(question):
         parts.append("QUESTION TYPE: PREFERENCE/RECOMMENDATION — Apply rule 20.")
         parts.append("FINAL ANSWER: The user would prefer responses that [specifics]. They might not prefer [what to avoid].")
     else:
-        parts.append("Then write on the last line:")
+        parts.append("Think through steps A–C above, then write on the last line:")
         parts.append("FINAL ANSWER: <bare answer phrase — as concise as possible, up to 10 words>")
 
     return "\n".join(parts)
