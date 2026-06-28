@@ -54,6 +54,11 @@ _GIST_INTERVAL = int(os.environ.get("GIST_INTERVAL", "25"))
 _HYDE = os.environ.get("NINAI_HYDE", "0").lower() in ("1", "true", "yes")
 _QEXPAND = os.environ.get("NINAI_QEXPAND", "0").lower() in ("1", "true", "yes")
 _MULTIHOP_ITER = os.environ.get("NINAI_MULTIHOP_ITER", "0").lower() in ("1", "true", "yes")
+# Phase 92 multi-hop retrieval service: ReAct-style iterative retrieval with LLM/heuristic
+# next-hop query generation. Off by default — enables multiple Qdrant round-trips per query
+# (up to 3 additional hops). Enable after validating latency impact on your deployment.
+_MULTI_HOP_V2 = os.environ.get("NINAI_MULTI_HOP_V2", "0").lower() in ("1", "true", "yes")
+_MULTI_HOP_V2_MAX_HOPS = int(os.environ.get("NINAI_MULTI_HOP_V2_MAX_HOPS", "3"))
 # Graph-connectivity render boost: promote retrieved chunks that share a discriminative
 # graph entity with the question's anchor chunks (the multi-hop bridge), so they survive
 # the prompt builder's top-K render cut even with low lexical overlap. See
@@ -607,9 +612,36 @@ class V2CognitiveLoop:
             except Exception as exc:
                 logger.warning("LLM pre-filtering failed: %s", exc)
 
-        # Iterative multi-hop retrieval: for chained questions, extract entity names
-        # from the current shortlist and do a second retrieval round seeded by them.
-        if not ingest_only and not _raw_ctx_active and _MULTIHOP_ITER and _is_multihop_query(user_input) and read.qdrant_chunks:
+        # Iterative multi-hop retrieval (v2): ReAct-style service with LLM/heuristic
+        # next-hop planning, proper chunk deduplication, and configurable hop count.
+        # Replaces the basic _MULTIHOP_ITER when enabled; both can coexist but v2 takes
+        # priority to avoid double-fetching the same chains.
+        if not ingest_only and not _raw_ctx_active and _MULTI_HOP_V2 and read.qdrant_chunks:
+            try:
+                from app.services.multi_hop_retrieval_service import MultiHopRetrievalService
+                _mh_svc = MultiHopRetrievalService(max_hops=_MULTI_HOP_V2_MAX_HOPS)
+
+                async def _router_retrieve(q: str):
+                    return await self._router.read(tenant_id, session_id, q, qdrant_limit=_pool)
+
+                _mh_result = await _mh_svc.retrieve(user_input, _router_retrieve)
+                # Merge hop chunks into read — deduplicated by the service already.
+                existing_ids = {ch["id"] for ch in read.qdrant_chunks}
+                for ch in _mh_result.all_chunks:
+                    if ch.get("id") and ch["id"] not in existing_ids:
+                        read.qdrant_chunks.append(ch)
+                        existing_ids.add(ch["id"])
+                if _mh_result.n_hops_taken > 1:
+                    logger.debug(
+                        "MultiHopV2: %d hops, %d total chunks for query=%r",
+                        _mh_result.n_hops_taken, len(_mh_result.all_chunks), user_input[:60],
+                    )
+            except Exception as exc:
+                logger.warning("MultiHopV2 retrieval failed: %s", exc)
+
+        # Iterative multi-hop retrieval (v1, basic): extract entity names from the current
+        # shortlist and do a second retrieval round seeded by them.
+        elif not ingest_only and not _raw_ctx_active and _MULTIHOP_ITER and _is_multihop_query(user_input) and read.qdrant_chunks:
             try:
                 hop2_names = _extract_caps_from_chunks(read.qdrant_chunks)
                 seen_ids = {ch["id"] for ch in read.qdrant_chunks}
