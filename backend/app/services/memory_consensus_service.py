@@ -22,10 +22,14 @@ Flow:
 
 from __future__ import annotations
 
+import json
+import logging
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -88,7 +92,7 @@ class MemoryConsensusService:
 
     VALID_VERDICTS = frozenset({"confirm", "contradict", "insufficient"})
 
-    def __init__(self, *, quorum_k: int = 2, quorum_n: int = 3) -> None:
+    def __init__(self, *, quorum_k: int = 2, quorum_n: int = 3, redis_url: str | None = None) -> None:
         if quorum_k < 1:
             raise ValueError("quorum_k must be >= 1")
         if quorum_n < quorum_k:
@@ -102,6 +106,147 @@ class MemoryConsensusService:
         self._shared: dict[str, SharedFact] = {}
         # agent_id → set of claim_ids the agent acknowledged receiving
         self._receipts: dict[str, set[str]] = {}
+
+        # Optional Redis write-through persistence — survives pod restarts and
+        # enables cross-pod consistency. When None, in-memory dicts are the only store.
+        self._r = None
+        self._redis_prefix = "mcs"
+        if redis_url:
+            try:
+                import redis as _redis_sync
+                self._r = _redis_sync.Redis.from_url(redis_url, decode_responses=True)
+                self._load_from_redis()
+            except Exception as exc:
+                logger.warning("MemoryConsensusService: Redis init failed (%s); using in-memory only", exc)
+                self._r = None
+
+    # ------------------------------------------------------------------
+    # Redis persistence helpers
+    # ------------------------------------------------------------------
+
+    def _rkey(self, *parts: str) -> str:
+        return ":".join([self._redis_prefix] + list(parts))
+
+    def _persist_claim(self, claim: MemoryClaim) -> None:
+        if self._r is None:
+            return
+        try:
+            data = {
+                "claim_id": claim.claim_id, "content": claim.content,
+                "submitter": claim.submitter, "org_id": claim.org_id,
+                "confidence": claim.confidence,
+                "submitted_at": claim.submitted_at.isoformat(),
+                "provenance": claim.provenance, "status": claim.status,
+            }
+            self._r.set(self._rkey("claim", claim.claim_id), json.dumps(data))
+            self._r.sadd(self._rkey("claim_ids"), claim.claim_id)
+        except Exception as exc:
+            logger.warning("Redis persist_claim failed: %s", exc)
+
+    def _persist_votes(self, claim_id: str, votes: list[ClaimVote]) -> None:
+        if self._r is None:
+            return
+        try:
+            data = [
+                {"claim_id": v.claim_id, "evaluator": v.evaluator, "verdict": v.verdict,
+                 "confidence": v.confidence, "rationale": v.rationale,
+                 "voted_at": v.voted_at.isoformat()}
+                for v in votes
+            ]
+            self._r.set(self._rkey("votes", claim_id), json.dumps(data))
+        except Exception as exc:
+            logger.warning("Redis persist_votes failed: %s", exc)
+
+    def _persist_shared(self, fact: SharedFact) -> None:
+        if self._r is None:
+            return
+        try:
+            data = {
+                "claim_id": fact.claim_id, "content": fact.content,
+                "submitter": fact.submitter, "org_id": fact.org_id,
+                "initial_confidence": fact.initial_confidence,
+                "consensus_count": fact.consensus_count,
+                "agent_contributors": fact.agent_contributors,
+                "promoted_at": fact.promoted_at.isoformat(),
+                "tombstoned": fact.tombstoned,
+                "tombstoned_at": fact.tombstoned_at.isoformat() if fact.tombstoned_at else None,
+                "provenance": fact.provenance,
+            }
+            self._r.set(self._rkey("shared", fact.claim_id), json.dumps(data))
+            if not fact.tombstoned:
+                self._r.sadd(self._rkey("shared_ids"), fact.claim_id)
+            else:
+                self._r.srem(self._rkey("shared_ids"), fact.claim_id)
+        except Exception as exc:
+            logger.warning("Redis persist_shared failed: %s", exc)
+
+    def _persist_receipts(self, agent_id: str, claim_ids: set[str]) -> None:
+        if self._r is None:
+            return
+        try:
+            self._r.set(self._rkey("receipts", agent_id), json.dumps(list(claim_ids)))
+        except Exception as exc:
+            logger.warning("Redis persist_receipts failed: %s", exc)
+
+    def _load_from_redis(self) -> None:
+        """Restore in-memory state from Redis on startup."""
+        if self._r is None:
+            return
+        try:
+            claim_ids = self._r.smembers(self._rkey("claim_ids")) or set()
+            for cid in claim_ids:
+                raw = self._r.get(self._rkey("claim", cid))
+                if not raw:
+                    continue
+                d = json.loads(raw)
+                claim = MemoryClaim(
+                    claim_id=d["claim_id"], content=d["content"],
+                    submitter=d["submitter"], org_id=d["org_id"],
+                    confidence=d["confidence"],
+                    submitted_at=datetime.fromisoformat(d["submitted_at"]),
+                    provenance=d.get("provenance") or {}, status=d["status"],
+                )
+                self._claims[cid] = claim
+                votes_raw = self._r.get(self._rkey("votes", cid))
+                if votes_raw:
+                    self._votes[cid] = [
+                        ClaimVote(
+                            claim_id=v["claim_id"], evaluator=v["evaluator"],
+                            verdict=v["verdict"], confidence=v["confidence"],
+                            rationale=v.get("rationale", ""),
+                            voted_at=datetime.fromisoformat(v["voted_at"]),
+                        )
+                        for v in json.loads(votes_raw)
+                    ]
+                else:
+                    self._votes[cid] = []
+
+            shared_ids = self._r.smembers(self._rkey("shared_ids")) or set()
+            for sid in shared_ids:
+                raw = self._r.get(self._rkey("shared", sid))
+                if not raw:
+                    continue
+                d = json.loads(raw)
+                self._shared[sid] = SharedFact(
+                    claim_id=d["claim_id"], content=d["content"],
+                    submitter=d["submitter"], org_id=d["org_id"],
+                    initial_confidence=d["initial_confidence"],
+                    consensus_count=d["consensus_count"],
+                    agent_contributors=d["agent_contributors"],
+                    promoted_at=datetime.fromisoformat(d["promoted_at"]),
+                    tombstoned=d.get("tombstoned", False),
+                    tombstoned_at=(datetime.fromisoformat(d["tombstoned_at"]) if d.get("tombstoned_at") else None),
+                    provenance=d.get("provenance") or {},
+                )
+
+            # Receipts — scan for all receipt keys
+            for key in self._r.scan_iter(self._rkey("receipts", "*")):
+                agent_id = key.split(":")[-1]
+                raw = self._r.get(key)
+                if raw:
+                    self._receipts[agent_id] = set(json.loads(raw))
+        except Exception as exc:
+            logger.warning("MemoryConsensusService: Redis load failed (%s); starting empty", exc)
 
     # ------------------------------------------------------------------
     # Submission
@@ -144,6 +289,8 @@ class MemoryConsensusService:
         )
         self._claims[cid] = claim
         self._votes[cid] = []
+        self._persist_claim(claim)
+        self._persist_votes(cid, [])
         return claim
 
     # ------------------------------------------------------------------
@@ -198,6 +345,7 @@ class MemoryConsensusService:
             voted_at=datetime.now(timezone.utc),
         )
         self._votes[cid].append(vote)
+        self._persist_votes(cid, self._votes[cid])
 
         return self._decide(cid)
 
@@ -224,6 +372,7 @@ class MemoryConsensusService:
         remaining = max(0, self._quorum_n - total_decisive)
         if contradicts > 0 and (confirms + remaining) < self._quorum_k:
             claim.status = "quarantined"
+            self._persist_claim(claim)
             return {
                 "status": "quarantined",
                 "confirms": confirms,
@@ -235,6 +384,7 @@ class MemoryConsensusService:
         # All N evaluators voted and no quorum — expire
         if total_decisive >= self._quorum_n:
             claim.status = "expired"
+            self._persist_claim(claim)
             return {
                 "status": "expired",
                 "confirms": confirms,
@@ -269,6 +419,8 @@ class MemoryConsensusService:
         )
         self._shared[claim_id] = shared
         claim.status = "promoted"
+        self._persist_claim(claim)
+        self._persist_shared(shared)
         return shared
 
     # ------------------------------------------------------------------
@@ -327,6 +479,7 @@ class MemoryConsensusService:
             raise ValueError(f"Fact {cid} is tombstoned; cannot acknowledge")
         aid = str(agent_id or "")
         self._receipts.setdefault(aid, set()).add(cid)
+        self._persist_receipts(aid, self._receipts[aid])
 
     def contamination_radius(self, claim_id: str) -> dict[str, Any]:
         """Number of agents that acknowledged receipt of this promoted fact."""
@@ -366,6 +519,10 @@ class MemoryConsensusService:
         # Clear receipts so contamination_radius returns 0 post-tombstone
         for aid in affected:
             self._receipts[aid].discard(cid)
+            self._persist_receipts(aid, self._receipts[aid])
+
+        self._persist_claim(self._claims[cid])
+        self._persist_shared(fact)
 
         return {
             "claim_id": cid,

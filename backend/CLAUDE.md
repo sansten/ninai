@@ -241,6 +241,11 @@ tests/
 | 79 | Adversarial Robustness Monitor | Done (AdversarialRobustnessMonitor, 34 tests, 5488 total passing) |
 | 80 | Cognitive State Checkpoint & Restore | Done (CognitiveCheckpointService, CognitiveStateCheckpoint model, 33 tests, 5521 total passing) |
 | 85 | Consensus-Gated Memory Promotion | Done (MemoryConsensusService, 54 tests, 5575 total passing) |
+| 86 | Production Cross-Encoder Reranker | Done (CE_RERANK default on, BENCH_MODE gate removed, 35 tests) |
+| 87 | Redis-Backed Memory Consensus | Done (MemoryConsensusService write-through Redis, 26 tests) |
+| 88 | Real Connector Payloads + Email | Done (ConnectorPayloadBuilder Slack/Jira/GitHub/Notion/Teams, EmailConnectorService SMTP, 56 tests) |
+| 89 | MCP Adapter Wiring | Done (mcp_server.py 6 real backend tools cognitive.decide/plan/read + memory.ingest/search/consensus, 28 tests) |
+| 90 | Tenant Evaluation Metrics | Done (TenantMetricsService 5 tenant types × 3 metrics each, TenantEvaluationReport, 36 tests) |
 
 ## Cognitive OS Vision
 

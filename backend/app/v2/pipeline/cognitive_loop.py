@@ -36,7 +36,7 @@ _LLM_RERANK = os.environ.get("NINAI_LLM_RERANK", "1").lower() in ("1", "true", "
 # Cross-encoder reranker: high-precision relevance ranking of retrieved chunks.
 # When on, it replaces the lossy truncated-snippet LLM pre-filter (falls back to it
 # if the model can't load). Targets the "answer chunk retrieved but not selected" failure.
-_CE_RERANK = os.environ.get("NINAI_CE_RERANK", "0").lower() in ("1", "true", "yes")
+_CE_RERANK = os.environ.get("NINAI_CE_RERANK", "1").lower() in ("1", "true", "yes")
 # Cross-encoder shortlist size — CE trims the pool to this many before the LLM
 # pre-filter makes the final cut (must be > the LLM pre-filter's top_k of 12).
 _CE_SHORTLIST = int(os.environ.get("NINAI_CE_SHORTLIST", "16"))
@@ -505,7 +505,7 @@ class V2CognitiveLoop:
                 # so the reranker can promote answer chunks that vector search ranks
                 # below the default top_k (measured: evidence recall jumps 58%@30 ->
                 # 91%@100, so reranking a 30-pool leaves most of the gain on the table).
-                _pool = _CE_POOL if (_BENCH_MODE and _CE_RERANK) else None
+                _pool = _CE_POOL if _CE_RERANK else None
 
                 # HyDE: generate a short hypothetical answer, average its embedding with
                 # the query embedding. Helps when question phrasing diverges from stored text.
@@ -556,7 +556,7 @@ class V2CognitiveLoop:
         # selection. The CE COMPLEMENTS the LLM pre-filter — it does not replace it —
         # so an ill-fit reranker can reorder/widen candidates but can't drop the answer
         # chunk on its own; the LLM still gets the final say.
-        if (not ingest_only and not _raw_ctx_active and _BENCH_MODE and _CE_RERANK
+        if (not ingest_only and not _raw_ctx_active and _CE_RERANK
                 and read.qdrant_chunks and len(read.qdrant_chunks) > _CE_SHORTLIST):
             try:
                 from app.v2.llm.reranker import cross_encoder_rerank
@@ -576,7 +576,7 @@ class V2CognitiveLoop:
             if read.qdrant_chunks and len(read.qdrant_chunks) > _cap:
                 read.qdrant_chunks = read.qdrant_chunks[:_cap]
 
-        if not ingest_only and not _raw_ctx_active and _BENCH_MODE and _LLM_RERANK and read.qdrant_chunks:
+        if not ingest_only and not _raw_ctx_active and _LLM_RERANK and read.qdrant_chunks:
             try:
                 chunk_texts = []
                 for ch in read.qdrant_chunks:
