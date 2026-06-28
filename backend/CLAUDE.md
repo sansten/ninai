@@ -246,6 +246,11 @@ tests/
 | 88 | Real Connector Payloads + Email | Done (ConnectorPayloadBuilder Slack/Jira/GitHub/Notion/Teams, EmailConnectorService SMTP, 56 tests) |
 | 89 | MCP Adapter Wiring | Done (mcp_server.py 6 real backend tools cognitive.decide/plan/read + memory.ingest/search/consensus, 28 tests) |
 | 90 | Tenant Evaluation Metrics | Done (TenantMetricsService 5 tenant types × 3 metrics each, TenantEvaluationReport, 36 tests) |
+| 91 | Calibrated Autonomy (act vs. ask) | Done (CalibratedAutonomyService, multi-factor composite score, feedback calibration loop, 35 tests) |
+| 92 | Multi-Hop Retrieval | Done (MultiHopRetrievalService, ReAct-style iterative retrieval, LLM + heuristic planning, 29 tests) |
+| 93 | P2P Agent Coordination | Done (P2PCoordinationService, capability manifests, bid/claim/resolve lifecycle, Redis SETNX, 32 tests) |
+| 94 | Agent Contribution Estimator | Done (AgentContributionEstimatorService, Monte Carlo Shapley for 85-agent pipelines, incremental ablation, 32 tests) |
+| 95 | Cold Start Bootstrap | Done (ColdStartBootstrapService, domain detection from tenant profile, 5-domain seed templates, 36 tests) |
 
 ## Cognitive OS Vision
 
