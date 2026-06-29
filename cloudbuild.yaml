@@ -2,6 +2,7 @@ steps:
   - name: 'gcr.io/cloud-builders/docker'
     args:
       - 'build'
+      - '--no-cache'
       - '-t'
       - 'us-central1-docker.pkg.dev/ninai-os/staging-ninai/ninai-enterprise:$TAG_NAME'
       - '-f'
