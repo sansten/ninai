@@ -83,31 +83,35 @@ class EmbeddingService:
 
     @classmethod
     async def _embed_local_backend(cls, text: str) -> list[float]:
-        # Prefer a dedicated CPU endpoint for embeddings so GPU inference
-        # models are not repeatedly evicted during mixed ingest workloads.
+        # Dedicated embedding endpoint (vllm-embed) takes priority so inference
+        # pods are not interrupted during mixed ingest/query workloads.
         base_url = str(
-            getattr(settings, "VLLM_BASE_URL_CPU", None)
-            or getattr(settings, "VLLM_BASE_URL", "http://localhost:11434")
-            or "http://localhost:11434"
+            getattr(settings, "VLLM_EMBEDDING_BASE_URL", None)
+            or getattr(settings, "VLLM_BASE_URL_CPU", None)
+            or getattr(settings, "VLLM_BASE_URL", None)
+            or "http://localhost:8000"
         ).rstrip("/")
-        model = str(getattr(settings, "LOCAL_EMBEDDING_MODEL", None) or "nomic-embed-text")
-        timeout = float(getattr(settings, "VLLM_TIMEOUT_SECONDS", 5.0) or 5.0)
-
-        payload: dict[str, Any] = {"model": model, "input": text}
+        model = str(getattr(settings, "LOCAL_EMBEDDING_MODEL", None) or "BAAI/bge-base-en-v1.5")
+        timeout = float(getattr(settings, "VLLM_TIMEOUT_SECONDS", 30.0) or 30.0)
+        api_fmt = str(getattr(settings, "EMBED_API_FORMAT", "openai") or "openai").lower()
 
         async with cls._backend_semaphore():
             async with httpx.AsyncClient(timeout=timeout) as client:
-                resp = await client.post(f"{base_url}/api/embed", json=payload)
-                resp.raise_for_status()
-                data = resp.json()
+                if api_fmt == "openai":
+                    payload: dict[str, Any] = {"model": model, "input": text}
+                    resp = await client.post(f"{base_url}/v1/embeddings", json=payload)
+                    resp.raise_for_status()
+                    data = resp.json()
+                    emb = data["data"][0]["embedding"]
+                else:
+                    payload = {"model": model, "prompt": text}
+                    resp = await client.post(f"{base_url}/api/embeddings", json=payload)
+                    resp.raise_for_status()
+                    emb = resp.json().get("embedding", [])
 
-        # /api/embed returns {"embeddings": [[...floats...]]} on local runtimes.
-        raw = data.get("embeddings") if isinstance(data, dict) else None
-        emb = raw[0] if isinstance(raw, list) and raw else None
         if not isinstance(emb, list) or not emb:
-            raise ValueError("Embedding response missing 'embeddings' list")
+            raise ValueError("Embedding response missing vector")
 
-        # Normalize to floats.
         return [float(x) for x in emb]
 
     @classmethod

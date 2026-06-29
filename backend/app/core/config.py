@@ -424,13 +424,13 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str | None = None
     ANTHROPIC_API_KEY: str | None = None
     EMBEDDING_MODEL: str = "text-embedding-3-small"
-    EMBEDDING_DIMENSIONS: int = 1536
+    EMBEDDING_DIMENSIONS: int = 768
     EMBEDDING_PROVIDER: str = "auto"
-    # Embedding wire format for the local engine: "native" (Ollama /api/embeddings,
-    # {"prompt": ...}) or "openai" (vLLM/LMDeploy /v1/embeddings, {"input": ...}).
-    EMBED_API_FORMAT: str = "native"
+    # Embedding wire format: "openai" (vLLM /v1/embeddings, {"input": ...})
+    # or "native" (legacy /api/embeddings, {"prompt": ...}).
+    EMBED_API_FORMAT: str = "openai"
     LOCAL_EMBEDDING_MODEL: str = Field(
-        default="nomic-embed-text",
+        default="BAAI/bge-base-en-v1.5",
         validation_alias=AliasChoices(
             "LOCAL_EMBEDDING_MODEL",
             "VLLM_EMBEDDING_MODEL",

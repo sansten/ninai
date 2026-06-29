@@ -37,17 +37,16 @@ def _build_v2_loop() -> V2CognitiveLoop:
     )
     graph_client = V2GraphClient(redis_url=graph_redis_url)
 
-    # Use a separate URL for embeddings when configured (e.g. CPU host serves
-    # nomic-embed-text while GPU hosts handle inference-only models).
+    # Dedicated vllm-embed pod for embeddings; falls back to main inference pod.
     embed_base_url = (
         getattr(settings, "VLLM_EMBEDDING_BASE_URL", None)
         or getattr(settings, "VLLM_BASE_URL_CPU", None)
-        or getattr(settings, "VLLM_BASE_URL", "http://localhost:11434")
+        or getattr(settings, "VLLM_BASE_URL", "http://localhost:8000")
     )
-    _default_base_url = getattr(settings, "VLLM_BASE_URL", "http://localhost:11434")
+    _default_base_url = getattr(settings, "VLLM_BASE_URL", "http://localhost:8000")
     _default_model    = getattr(settings, "VLLM_MODEL", "qwen2.5:7b")
     _timeout          = getattr(settings, "VLLM_TIMEOUT_SECONDS", 45.0)
-    _embed_api        = getattr(settings, "EMBED_API_FORMAT", "native")
+    _embed_api        = getattr(settings, "EMBED_API_FORMAT", "openai")
     extract_base_url  = getattr(settings, "EXTRACT_BASE_URL", None)
     extract_model     = getattr(settings, "EXTRACT_MODEL", None)
 
@@ -55,7 +54,7 @@ def _build_v2_loop() -> V2CognitiveLoop:
     engine = InferenceEngine(
         base_url=_default_base_url,
         model=_default_model,
-        embed_model=getattr(settings, "LOCAL_EMBEDDING_MODEL", "nomic-embed-text"),
+        embed_model=getattr(settings, "LOCAL_EMBEDDING_MODEL", "BAAI/bge-base-en-v1.5"),
         embed_base_url=embed_base_url,
         extract_base_url=extract_base_url,
         extract_model=extract_model,
@@ -79,7 +78,7 @@ def _build_v2_loop() -> V2CognitiveLoop:
         slm_engine = InferenceEngine(
             base_url=_fast_url,
             model=slm_model,
-            embed_model=getattr(settings, "LOCAL_EMBEDDING_MODEL", "nomic-embed-text"),
+            embed_model=getattr(settings, "LOCAL_EMBEDDING_MODEL", "BAAI/bge-base-en-v1.5"),
             embed_base_url=embed_base_url,
             timeout=_timeout,
             embed_api=_embed_api,
@@ -89,7 +88,7 @@ def _build_v2_loop() -> V2CognitiveLoop:
         llm_engine = InferenceEngine(
             base_url=_reasoning_url,
             model=llm_model,
-            embed_model=getattr(settings, "LOCAL_EMBEDDING_MODEL", "nomic-embed-text"),
+            embed_model=getattr(settings, "LOCAL_EMBEDDING_MODEL", "BAAI/bge-base-en-v1.5"),
             embed_base_url=embed_base_url,
             timeout=_timeout,
             embed_api=_embed_api,

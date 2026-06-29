@@ -9,10 +9,9 @@ Produces:
   2. Graph node IDs cited in the reasoning (explainability)
   3. Extracted entities for graph write-back
 
-Embeddings use either a native /api/embeddings endpoint or the
-OpenAI-compatible /v1/embeddings endpoint, configured via embed_api.
-A separate embed_base_url can point to a CPU-only host (e.g. for
-nomic-embed-text) while inference runs on GPU.
+Embeddings use the OpenAI-compatible /v1/embeddings endpoint served by
+vllm-embed (BAAI/bge-base-en-v1.5, 768 dims). A separate embed_base_url
+can point to the dedicated embedding pod while inference runs on the GPU pod.
 """
 
 from __future__ import annotations
@@ -189,20 +188,20 @@ class InferenceEngine:
     Each instance is configured with a base_url pointing to one backend pod —
     instantiate multiple engines to route different query tiers to different pods.
 
-    Embeddings can be served from a separate CPU host via embed_base_url
-    (e.g. nomic-embed-text on CPU while inference runs on GPU).
+    Embeddings are served from a dedicated vllm-embed pod via embed_base_url
+    (bge-base-en-v1.5, separate from the GPU inference pod).
     """
 
     def __init__(
         self,
-        base_url: str = "http://localhost:11434",
+        base_url: str = "http://localhost:8000",
         model: str = "qwen2.5:7b",
-        embed_model: str = "nomic-embed-text",
+        embed_model: str = "BAAI/bge-base-en-v1.5",
         embed_base_url: str | None = None,
         extract_base_url: str | None = None,
         extract_model: str | None = None,
         timeout: float = _DEFAULT_TIMEOUT,
-        embed_api: str = "native",
+        embed_api: str = "openai",
     ) -> None:
         self._base = base_url.rstrip("/")
         self._embed_base = (embed_base_url or base_url).rstrip("/")

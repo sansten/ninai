@@ -5,7 +5,7 @@ Acts as the bridging layer between the Reasoning Engine (LLM backend) and the
 Chronological Knowledge Graph (FalkorDB).
 
 Read Weighting:
-    1. Embed query with local embedding backend (nomic-embed-text)
+    1. Embed query with vllm-embed (BAAI/bge-base-en-v1.5, 768 dims)
   2. Dense search in Qdrant → top-K chunk ids (episodic memory)
   3. FalkorDB subgraph traversal seeded from those ids → contextual nodes
   4. Rank by (weight * recency_score), return top-M nodes as prompt context
