@@ -95,6 +95,25 @@ _METACOG_CONF_THRESH = float(os.environ.get("NINAI_METACOG_CONF_THRESH", "0.35")
 # after, record surprising events for priority consolidation. Off by default.
 _PRED_ERR = os.environ.get("NINAI_PRED_ERR", "0").lower() in ("1", "true", "yes")
 
+# Temporal ordering: "which came first", "before/after", "initially", etc.
+# Used to sort retrieved chunks chronologically so the model reads events in sequence.
+_TEMPORAL_ORDER_RE = re.compile(
+    r"\b(first|earlier|before|initially|originally|earliest|prior\s+to)\b"
+    r"|\bwhich\b.{1,40}\bfirst\b"
+    r"|\bdid\b.{1,50}\b(before|after|first)\b",
+    re.IGNORECASE,
+)
+
+# Preference / knowledge-update: "what do you prefer", "what's my current X", etc.
+# Used to push most-recently-ingested chunks to the top before the LLM pre-filter
+# so current facts win over semantically similar but stale ones.
+_PREF_UPDATE_RE = re.compile(
+    r"\b(prefer(?:ence|red)?|favou?rite|like\s+(?:best|more|most)|"
+    r"currently|now\s+(?:do|is|has|work|live|use)|latest|most\s+recent|"
+    r"still\s+(?:do|is|has|work|live|use)|switch(?:ed)?\s+to|changed?\s+to)\b",
+    re.IGNORECASE,
+)
+
 _MULTIHOP_PATTERNS = (
     r"\bbecause of\b", r"\bafter\b.{1,40}\b(which|that|he|she|they)\b",
     r"\bwhat led\b", r"\bhow did\b.{1,30}\baffect\b", r"\bas a result\b",
@@ -581,6 +600,16 @@ class V2CognitiveLoop:
             if read.qdrant_chunks and len(read.qdrant_chunks) > _cap:
                 read.qdrant_chunks = read.qdrant_chunks[:_cap]
 
+        # Recency sort (Fix 3b): for preference/knowledge-update questions, push the
+        # most-recently-ingested chunks to the top BEFORE the LLM pre-filter selects
+        # its top_k. Without this, the pre-filter picks the most semantically similar
+        # chunk regardless of recency — often an old preference that has been updated.
+        if (not ingest_only and not _raw_ctx_active
+                and read.qdrant_chunks and _PREF_UPDATE_RE.search(user_input)):
+            read.qdrant_chunks.sort(
+                key=lambda c: -(c.get("payload") or {}).get("created_at", 0)
+            )
+
         if not ingest_only and not _raw_ctx_active and _LLM_RERANK and read.qdrant_chunks:
             try:
                 chunk_texts = []
@@ -708,6 +737,17 @@ class V2CognitiveLoop:
                 )
             except Exception as exc:
                 logger.warning("Graph-connectivity boost failed: %s", exc)
+
+        # Temporal ordering sort (Fix 2): for "which came first / before / earlier"
+        # questions, re-sort the final chunk pool into anchor_date ASC order so the
+        # model reads events chronologically and can compare sequence correctly.
+        # ISO-format anchor_date sorts lexicographically = chronologically (safe no-op
+        # for chunks with empty anchor_date — they sort to the front, then model ignores).
+        if (not ingest_only and not _raw_ctx_active
+                and read.qdrant_chunks and _TEMPORAL_ORDER_RE.search(user_input)):
+            read.qdrant_chunks.sort(
+                key=lambda c: (c.get("payload") or {}).get("anchor_date") or ""
+            )
 
         # ---------------------------------------------------------------
         # Phase 2: Inference & Execution

@@ -243,6 +243,9 @@ class DNCMemoryRouter:
         # Pre-compute query signals used across multiple retrieval steps
         _possessor = _extract_possessor(query)
         _is_list = _is_list_question(query)
+        # Pre-compute named entities from the query so the entity scroll (Fix D) can
+        # run inside the Qdrant block without re-scanning the query string.
+        _q_names = _extract_query_names(query)
 
         # 1. Dense retrieval from Qdrant (episodic memory)
         qdrant_chunks: list[dict[str, Any]] = []
@@ -303,6 +306,17 @@ class DNCMemoryRouter:
                         else:
                             matched.append(ch)
                     qdrant_chunks = matched + mismatched
+
+                # Fix D — entity-name scroll: supplement vector search with Qdrant
+                # payload-filter hits for person/entity names in the query. Surfaces
+                # chunks from older sessions that share an entity but have low cosine
+                # similarity to the query surface form (multi-session gap).
+                if _q_names:
+                    entity_hits = await self._entity_scroll(tenant_id, _q_names, limit=24)
+                    for ch in entity_hits:
+                        if ch["id"] not in seen_chunk_ids:
+                            qdrant_chunks.append(ch)
+                            seen_chunk_ids.add(ch["id"])
 
                 # Extract entity/memory ids that appear in Qdrant payload.
                 # v2 writes store entity_ids (list); v1 writes store entity_id/memory_id (scalar).
@@ -483,6 +497,48 @@ class DNCMemoryRouter:
         except Exception as exc:
             logger.warning("Qdrant search error: %s", exc)
             return []
+
+    async def _entity_scroll(
+        self, tenant_id: str, names: list[str], limit: int = 24
+    ) -> list[dict[str, Any]]:
+        """Scroll Qdrant for chunks whose subject or entity_names field contains a query name.
+
+        Complements vector search for multi-session questions where the answer exists
+        in an older session but ranks below the vector cutoff. Searches both the
+        subject field (personal_attribute chunks) and entity_names field (utterance chunks).
+        """
+        if not self._qdrant or not names:
+            return []
+        try:
+            from qdrant_client.http.models import Filter, FieldCondition, MatchValue
+        except ImportError:
+            return []
+        results: list[dict[str, Any]] = []
+        seen: set[str] = set()
+        per_name = max(6, limit // max(len(names[:3]), 1))
+        for name in names[:3]:
+            name_lower = name.lower()
+            for field in ("subject", "entity_names"):
+                try:
+                    scroll_filter = Filter(must=[
+                        FieldCondition(key="organization_id", match=MatchValue(value=tenant_id)),
+                        FieldCondition(key=field, match=MatchValue(value=name_lower)),
+                    ])
+                    hits, _ = await self._qdrant.scroll(
+                        collection_name="memories",
+                        scroll_filter=scroll_filter,
+                        limit=per_name,
+                        with_payload=True,
+                        with_vectors=False,
+                    )
+                    for h in (hits or []):
+                        cid = str(h.id)
+                        if cid not in seen:
+                            results.append({"id": cid, "score": 0.85, "payload": h.payload or {}})
+                            seen.add(cid)
+                except Exception as exc:
+                    logger.warning("Entity scroll (%s=%r): %s", field, name_lower, exc)
+        return results
 
     async def fetch_gists(self, tenant_id: str, limit: int = 20) -> list[dict[str, Any]]:
         """Retrieve all segment_gist chunks for a tenant (filter-only, no vector search)."""
