@@ -21,10 +21,10 @@ from datetime import date as _date
 from typing import Any
 
 _MAX_GRAPH_NODES = 8
-_MAX_QDRANT_CHUNKS = 8
+_MAX_QDRANT_CHUNKS = 14
 # 600 keeps long turns intact (anchor dates / list items past the old 200-char cut
 # were invisible to the answer model even when retrieval found the right chunk).
-# 8 chunks x 600 chars ~= 1.2K tokens; the 14B serves at max-model-len=32768.
+# 14 chunks x 600 chars ~= 2.1K tokens; well within the 32768 max-model-len.
 _MAX_NODE_CONTENT_CHARS = 600
 _QUESTION_NAME_RE = re.compile(r"\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?\b")
 _QUESTION_TERM_RE = re.compile(r"[A-Za-z][A-Za-z'_-]{2,}")
@@ -129,7 +129,8 @@ You are a memory-QA system. Find the answer in context and output it as a SHORT 
     Steps: (1) Find the user's relevant preferences, past experiences, and constraints in the memory record. (2) Describe the ideal response type using those specifics. (3) Describe what they would NOT want.
     BAD: "Italian restaurants, wine bars"   GOOD: "The user would prefer suggestions of Italian restaurants near their neighbourhood, given their enjoyment of Italian cuisine and recent date nights. They might not prefer fast food or restaurants far from their area."
 
-21. COMPARISON / ORDERING QUESTIONS ("which came first", "who did X first, A or B?", "which of X or Y"): BOTH named items must appear in the retrieved context. If only one is present and the question asks you to compare or order both, respond: Not mentioned
+21. COMPARISON / ORDERING QUESTIONS ("which came first", "who did X first, A or B?", "which of X or Y"):
+    BOTH named items must appear in the retrieved context. If only one is present and the question asks you to compare or order both, respond: Not mentioned
     BAD (only one item found): answer with the one you found   GOOD: Not mentioned\
 """
 
@@ -319,24 +320,6 @@ def _compute_query_analysis(
 
     full_text = " ".join(all_texts)
     findings: list[str] = []
-
-    # ── Temporal ordering ──────────────────────────────────────────────────
-    # For "which came first / most recently" questions: sort by anchor_date and
-    # present a clean First/Last conclusion rather than a raw date list (which
-    # caused the LLM to output dates instead of the named item).
-    if _CA_TEMPORAL_ORDER_RE.search(question):
-        dated = [(d, t) for d, t in dated_texts if d and len(d) >= 8]
-        if dated:
-            dated.sort(key=lambda x: x[0])
-            earliest_d, earliest_t = dated[0]
-            latest_d, latest_t = dated[-1]
-            first_snippet = earliest_t[:100].replace("\n", " ")
-            last_snippet = latest_t[:100].replace("\n", " ")
-            findings.append(
-                f"Chronological order (oldest→newest):\n"
-                f"    FIRST [{earliest_d}]: {first_snippet}\n"
-                f"    LAST  [{latest_d}]: {last_snippet}"
-            )
 
     # ── Date arithmetic ────────────────────────────────────────────────────
     # For "how many days between / since / ago" questions: compute from stored
@@ -632,7 +615,7 @@ def build_bench_prompt(
         reverse=True,
     )
 
-    _MAX_GISTS = min(8, len(gist_chunks))
+    _MAX_GISTS = min(4, len(gist_chunks))
     for chunk in gist_chunks[:_MAX_GISTS]:
         payload = chunk.get("payload", {})
         text = str(payload.get("text") or payload.get("content") or "")[:_MAX_NODE_CONTENT_CHARS]
@@ -695,6 +678,7 @@ def build_bench_prompt(
     # finding a different-but-similar item does NOT satisfy the check.
     parts.append("")
     parts.append("══ ENTITY CHECK (final step — overrides the framing above) ══")
+    parts.append("")
     parts.append("A) List every distinct named entity / activity / quantity the question requires")
     parts.append("   (e.g. both 'Hawaii' AND 'Seattle', both 'Tom' AND 'Alex', both 'bus' AND 'taxi',")
     parts.append("   both 'tomatoes' AND 'chili peppers', 'violin', 'uncle's birthday party', etc.).")

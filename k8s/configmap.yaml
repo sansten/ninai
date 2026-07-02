@@ -32,7 +32,7 @@ data:
   NINAI_MULTI_HOP_V2_MAX_HOPS: "2"
 
   # Vector database settings
-  QDRANT_HOST: "qdrant-service"
+  QDRANT_HOST: "qdrant"
   QDRANT_PORT: "6333"
   QDRANT_GRPC_PORT: "6334"
   
