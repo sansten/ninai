@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -12,6 +13,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.org_subscription import OrgSubscription
 from app.models.organization import Organization
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -46,7 +49,12 @@ class TenantOffboardingService:
         self.session = session
 
     async def export_org_data(self, org_id: str, export_dir: str = "/tmp") -> str | None:
-        """Export known org-scoped tables to a JSON file before deletion."""
+        """Export known org-scoped tables to a JSON file before deletion.
+
+        A table that fails to export is recorded in `tables_failed` rather
+        than silently written as an empty list — an empty list must mean
+        "no rows", never "we couldn't tell".
+        """
         path = os.path.join(
             export_dir,
             f"ninai_export_{org_id}_{datetime.now(timezone.utc).strftime('%Y%m%d')}.json",
@@ -55,6 +63,7 @@ class TenantOffboardingService:
             "org_id": org_id,
             "exported_at": datetime.now(timezone.utc).isoformat(),
             "tables": {},
+            "tables_failed": [],
         }
 
         for table in self.TABLES_TO_PURGE:
@@ -64,16 +73,30 @@ class TenantOffboardingService:
                     {"org": org_id},
                 )
                 export["tables"][table] = [dict(r._mapping) for r in result.all()]
-            except Exception:
+            except Exception as exc:
+                logger.error(
+                    "GDPR export failed for table %s (org=%s): %s", table, org_id, exc
+                )
                 export["tables"][table] = []
+                export["tables_failed"].append(table)
 
-        with open(path, "w", encoding="utf-8") as f:
+        # Owner-only permissions: this file contains a full org data export
+        # (memories, audit events, DPA acceptances) as plaintext JSON — it
+        # must not be readable by other local users on a shared host.
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
             json.dump(export, f, default=str)
         return path
 
     async def delete_org_data(self, org_id: str) -> dict[str, int]:
-        """Delete org-scoped data and anonymize related users."""
+        """Delete org-scoped data and anonymize related users.
+
+        Raises RuntimeError if any table's DELETE fails, instead of quietly
+        recording 0 rows deleted — during a GDPR erasure, a failed delete
+        must never be indistinguishable from "there was nothing to delete".
+        """
         counts: dict[str, int] = {}
+        failed_tables: list[str] = []
 
         for table in self.TABLES_TO_PURGE:
             try:
@@ -82,8 +105,17 @@ class TenantOffboardingService:
                     {"org": org_id},
                 )
                 counts[table] = int(result.rowcount or 0)
-            except Exception:
+            except Exception as exc:
+                logger.error(
+                    "GDPR deletion failed for table %s (org=%s): %s", table, org_id, exc
+                )
                 counts[table] = 0
+                failed_tables.append(table)
+
+        if failed_tables:
+            raise RuntimeError(
+                f"GDPR deletion incomplete for org {org_id}: failed tables {failed_tables}"
+            )
 
         anonymize_result = await self.session.execute(
             text(

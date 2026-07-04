@@ -11,7 +11,13 @@ from sqlalchemy import select
 from app.models.mfa import TOTPDevice, SMSDevice, WebAuthnDevice, MFAEnrollment
 from app.models.user import User
 from app.models.organization import Organization
-from app.services.mfa_service import TOTPService, SMSService, WebAuthnService, MFAEnrollmentService
+from app.services.mfa_service import (
+    TOTPService,
+    SMSService,
+    WebAuthnService,
+    MFAEnrollmentService,
+    MFAImplementationUnavailableError,
+)
 
 
 @pytest.fixture
@@ -103,8 +109,8 @@ async def test_sms_setup(db_session: AsyncSession, test_user_id, test_user):
     db_session.info["auto_commit"] = False
     
     phone = "+1234567890"
-    success = await SMSService.setup_sms(db_session, test_user_id, phone)
-    assert success is True
+    with pytest.raises(MFAImplementationUnavailableError):
+        await SMSService.setup_sms(db_session, test_user_id, phone)
     
     # Verify device created
     result = await db_session.execute(
@@ -122,12 +128,14 @@ async def test_sms_update_phone(db_session: AsyncSession, test_user_id, test_use
     db_session.info["auto_commit"] = False
     
     # Initial setup
-    await SMSService.setup_sms(db_session, test_user_id, "+1111111111")
+    with pytest.raises(MFAImplementationUnavailableError):
+        await SMSService.setup_sms(db_session, test_user_id, "+1111111111")
     await db_session.commit()
     
     # Update phone
     new_phone = "+2222222222"
-    await SMSService.setup_sms(db_session, test_user_id, new_phone)
+    with pytest.raises(MFAImplementationUnavailableError):
+        await SMSService.setup_sms(db_session, test_user_id, new_phone)
     await db_session.commit()
     
     # Verify updated
@@ -144,38 +152,39 @@ async def test_sms_send_otp(db_session: AsyncSession, test_user_id, test_user):
     """Test sending SMS OTP."""
     db_session.info["auto_commit"] = False
     
-    await SMSService.setup_sms(db_session, test_user_id, "+1234567890")
+    with pytest.raises(MFAImplementationUnavailableError):
+        await SMSService.setup_sms(db_session, test_user_id, "+1234567890")
     await db_session.commit()
     
-    success = await SMSService.send_sms_otp(db_session, test_user_id)
-    assert success is True
+    with pytest.raises(MFAImplementationUnavailableError):
+        await SMSService.send_sms_otp(db_session, test_user_id)
     
-    # Verify last_sent_at updated
+    # Verify last_sent_at is not updated when delivery is unavailable
     result = await db_session.execute(
         select(SMSDevice).where(SMSDevice.user_id == test_user_id)
     )
     device = result.scalar_one()
-    assert device.last_sent_at is not None
+    assert device.last_sent_at is None
 
 
 @pytest.mark.asyncio
-async def test_sms_verify_otp(db_session: AsyncSession, test_user_id, test_user):
-    """Test SMS OTP verification."""
+async def test_sms_verify_otp_unavailable(db_session: AsyncSession, test_user_id, test_user):
+    """Test SMS OTP verification fails closed when unimplemented."""
     db_session.info["auto_commit"] = False
     
-    await SMSService.setup_sms(db_session, test_user_id, "+1234567890")
+    with pytest.raises(MFAImplementationUnavailableError):
+        await SMSService.setup_sms(db_session, test_user_id, "+1234567890")
     await db_session.commit()
     
-    # In test mode, any 6-digit OTP works
-    success = await SMSService.verify_sms_otp(db_session, test_user_id, "123456")
-    assert success is True
+    with pytest.raises(MFAImplementationUnavailableError):
+        await SMSService.verify_sms_otp(db_session, test_user_id, "123456")
     
-    # Verify device is verified
+    # Verify device is not marked verified
     result = await db_session.execute(
         select(SMSDevice).where(SMSDevice.user_id == test_user_id)
     )
     device = result.scalar_one()
-    assert device.verified is True
+    assert device.verified is False
 
 
 @pytest.mark.asyncio
@@ -183,21 +192,20 @@ async def test_sms_rate_limiting(db_session: AsyncSession, test_user_id, test_us
     """Test SMS rate limiting after failed attempts."""
     db_session.info["auto_commit"] = False
     
-    await SMSService.setup_sms(db_session, test_user_id, "+1234567890")
+    with pytest.raises(MFAImplementationUnavailableError):
+        await SMSService.setup_sms(db_session, test_user_id, "+1234567890")
     await db_session.commit()
     
-    # Simulate 5 failed attempts
-    for _ in range(5):
+    with pytest.raises(MFAImplementationUnavailableError):
         await SMSService.verify_sms_otp(db_session, test_user_id, "invalid")
-        await db_session.commit()
-    
-    # Verify locked
+
+    # Verify unavailable verification does not mutate lockout state
     result = await db_session.execute(
         select(SMSDevice).where(SMSDevice.user_id == test_user_id)
     )
     device = result.scalar_one()
-    assert device.locked_until is not None
-    assert device.locked_until > datetime.utcnow()
+    assert device.locked_until is None
+    assert device.failed_attempts == 0
 
 
 @pytest.mark.asyncio
@@ -243,6 +251,26 @@ async def test_webauthn_get_devices(db_session: AsyncSession, test_user_id, test
 
 
 @pytest.mark.asyncio
+async def test_webauthn_verify_setup_unavailable(db_session: AsyncSession, test_user_id, test_user):
+    """Test WebAuthn setup verification fails closed when unimplemented."""
+    db_session.info["auto_commit"] = False
+
+    await WebAuthnService.register_credential(
+        db_session, test_user_id, b"key-verify", b"pub-verify", "YubiKey Verify"
+    )
+    await db_session.commit()
+
+    with pytest.raises(MFAImplementationUnavailableError):
+        await WebAuthnService.verify_webauthn_setup(db_session, test_user_id)
+
+    result = await db_session.execute(
+        select(WebAuthnDevice).where(WebAuthnDevice.user_id == test_user_id)
+    )
+    device = result.scalar_one()
+    assert device.verified is False
+
+
+@pytest.mark.asyncio
 async def test_mfa_enrollment_creation(db_session: AsyncSession, test_user_id, test_user):
     """Test MFA enrollment record creation."""
     db_session.info["auto_commit"] = False
@@ -283,7 +311,7 @@ async def test_mfa_status_update_totp(db_session: AsyncSession, test_user_id, te
 
 @pytest.mark.asyncio
 async def test_mfa_status_update_multiple_methods(db_session: AsyncSession, test_user_id, test_user):
-    """Test MFA status with multiple methods enabled."""
+    """Test MFA status ignores unavailable SMS and keeps verified TOTP enabled."""
     db_session.info["auto_commit"] = False
     
     # Setup TOTP
@@ -292,8 +320,10 @@ async def test_mfa_status_update_multiple_methods(db_session: AsyncSession, test
     await TOTPService.verify_totp_setup(db_session, test_user_id, token)
     
     # Setup SMS
-    await SMSService.setup_sms(db_session, test_user_id, "+1234567890")
-    await SMSService.verify_sms_otp(db_session, test_user_id, "123456")
+    with pytest.raises(MFAImplementationUnavailableError):
+        await SMSService.setup_sms(db_session, test_user_id, "+1234567890")
+    with pytest.raises(MFAImplementationUnavailableError):
+        await SMSService.verify_sms_otp(db_session, test_user_id, "123456")
     
     await db_session.commit()
     
@@ -301,13 +331,13 @@ async def test_mfa_status_update_multiple_methods(db_session: AsyncSession, test
     await MFAEnrollmentService.update_mfa_status(db_session, test_user_id)
     await db_session.commit()
     
-    # Verify both enabled
+    # Verify only the real verified factor is enabled
     result = await db_session.execute(
         select(MFAEnrollment).where(MFAEnrollment.user_id == test_user_id)
     )
     enrollment = result.scalar_one()
     assert enrollment.totp_enabled is True
-    assert enrollment.sms_enabled is True
+    assert enrollment.sms_enabled is False
 
 
 @pytest.mark.asyncio

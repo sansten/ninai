@@ -94,6 +94,22 @@ _METACOG_CONF_THRESH = float(os.environ.get("NINAI_METACOG_CONF_THRESH", "0.35")
 # Prediction-error learning signal: anticipate answer before LLM call, measure divergence
 # after, record surprising events for priority consolidation. Off by default.
 _PRED_ERR = os.environ.get("NINAI_PRED_ERR", "0").lower() in ("1", "true", "yes")
+# Deterministic temporal arithmetic: for "how many days/weeks/months/years"
+# questions, compute the delta between two evidence-grounded dates in Python
+# and inject it as a computed fact, instead of asking the (often weak) answer
+# model to subtract dates itself. Off by default pending an A/B run.
+_TEMPORAL_MATH = os.environ.get("NINAI_TEMPORAL_MATH", "0").lower() in ("1", "true", "yes")
+# Sequential multi-hop decomposition: for nested nested-clause questions
+# ("Who reported to the person who approved X?"), resolve the embedded
+# clause and the outer question as two independent calls instead of one
+# single-shot call the small model has to hold both hops in. Off by default.
+_MULTIHOP_DECOMPOSE = os.environ.get("NINAI_MULTIHOP_DECOMPOSE", "0").lower() in ("1", "true", "yes")
+# Self-consistency: sample the answer model NINAI_SC_K times for multi-hop
+# and temporal questions (where a single small-model sample is least
+# reliable) and keep the majority answer. Off by default — costs K-1 extra
+# calls per qualifying question.
+_SELF_CONSISTENCY = os.environ.get("NINAI_SELF_CONSISTENCY", "0").lower() in ("1", "true", "yes")
+_SC_K = int(os.environ.get("NINAI_SC_K", "3"))
 
 # Temporal ordering: "which came first", "before/after", "initially", etc.
 # Used to sort retrieved chunks chronologically so the model reads events in sequence.
@@ -146,6 +162,24 @@ def _is_refusal(text: str) -> bool:
 def _is_multihop_query(query: str) -> bool:
     low = query.lower()
     return any(re.search(p, low) for p in _MULTIHOP_PATTERNS)
+
+
+def _normalize_for_vote(s: str) -> str:
+    return re.sub(r"[^\w\s]", "", s.lower()).strip()
+
+
+def _majority_answer(samples: list[str]) -> str | None:
+    """Return the modal answer among samples, or None when there's no majority
+    (every sample is distinct) — caller should keep its original answer then."""
+    if not samples:
+        return None
+    buckets: dict[str, list[str]] = {}
+    for s in samples:
+        buckets.setdefault(_normalize_for_vote(s), []).append(s)
+    best_key = max(buckets, key=lambda k: len(buckets[k]))
+    if len(buckets[best_key]) < 2:
+        return None
+    return buckets[best_key][0]
 
 
 def _extract_caps_from_chunks(chunks: list[dict]) -> list[str]:
@@ -841,6 +875,22 @@ class V2CognitiveLoop:
                             _mc_input = user_input
                             _strategy = "standard"
 
+                        # Deterministic temporal arithmetic (NINAI_TEMPORAL_MATH=1):
+                        # compute date deltas in Python and hand the answer model
+                        # the number instead of asking it to subtract dates itself.
+                        if _TEMPORAL_MATH:
+                            try:
+                                from app.v2.llm.temporal_arithmetic import (
+                                    compute_temporal_arithmetic,
+                                )
+                                _temporal_hint = compute_temporal_arithmetic(
+                                    user_input, _mc_chunks
+                                )
+                                if _temporal_hint:
+                                    _mc_input = f"{_mc_input}\n{_temporal_hint}"
+                            except Exception as exc:
+                                logger.warning("Temporal arithmetic failed: %s", exc)
+
                         prompt = build_bench_prompt(
                             user_input=_mc_input,
                             graph_nodes=other_nodes + session_utts,
@@ -863,6 +913,43 @@ class V2CognitiveLoop:
                             logger.debug("PredErr anticipate failed: %s", _pe_exc)
 
                     infer_result = await active_engine.infer_plain(prompt)
+
+                    # -------------------------------------------------------
+                    # Sequential multi-hop decomposition (NINAI_MULTIHOP_DECOMPOSE=1)
+                    # Nested-clause questions ("Who reported to the person who
+                    # approved X?") ask a small model to hold two hops in one
+                    # call. Resolve the embedded clause and the outer question
+                    # as two independent calls and use that composed answer
+                    # instead, when the split succeeds and neither hop refuses.
+                    # -------------------------------------------------------
+                    # Tracks whether infer_result.response has already been replaced by a
+                    # revision step (decomposition here, gap-fill below) so the self-
+                    # consistency vote at the end doesn't re-sample the ORIGINAL prompt
+                    # and outvote a genuine improvement with two copies of the old answer.
+                    _response_revised = False
+                    if (_MULTIHOP_DECOMPOSE and not _raw_ctx_active
+                            and _is_multihop_query(user_input) and infer_result is not None):
+                        try:
+                            from app.v2.llm.multihop_decompose import (
+                                decompose_and_compose as _decompose,
+                            )
+
+                            def _sub_prompt(sub_q: str, sub_chunks: list[dict]) -> str:
+                                return build_bench_prompt(
+                                    user_input=sub_q,
+                                    graph_nodes=other_nodes + session_utts,
+                                    qdrant_chunks=sub_chunks,
+                                    session_utterances=[],
+                                )
+
+                            _decomposed = await _decompose(
+                                user_input, _mc_chunks, active_engine.infer_plain, _sub_prompt
+                            )
+                            if _decomposed:
+                                infer_result.response = _decomposed
+                                _response_revised = True
+                        except Exception as exc:
+                            logger.warning("Multi-hop decomposition failed: %s", exc)
 
                     # -------------------------------------------------------
                     # Active metacog post-answer: knowledge-gap extraction +
@@ -917,6 +1004,7 @@ class V2CognitiveLoop:
                                                 _gap_result.response,
                                             )
                                             infer_result = _gap_result
+                                            _response_revised = True
                                 elif selected_tier == "fast":
                                     # No actionable gap found: escalate tier.
                                     _esc = await self._llm_engine.infer_plain(prompt)
@@ -925,6 +1013,7 @@ class V2CognitiveLoop:
                                             "MetaCog tier escalate (no gap): fast→reasoning"
                                         )
                                         infer_result = _esc
+                                        _response_revised = True
                         except Exception as _mcog_exc:
                             logger.warning("MetaCog post-answer analysis failed: %s", _mcog_exc)
 
@@ -999,8 +1088,47 @@ class V2CognitiveLoop:
                             _reflect = await active_engine.infer_plain(_reflect_prompt)
                             if _reflect.response and not _is_refusal(_reflect.response):
                                 infer_result.response = _reflect.response
+                                _response_revised = True
                         except Exception as _exc:
                             logger.warning("Self-reflection pass failed: %s", _exc)
+
+                    # -------------------------------------------------------
+                    # Self-consistency majority vote (NINAI_SELF_CONSISTENCY=1)
+                    # Multi-hop and temporal questions are exactly where a
+                    # single small-model sample is least reliable. Sample the
+                    # same prompt NINAI_SC_K times and keep the majority
+                    # answer — a standard, gold-answer-free accuracy lever
+                    # (Wang et al., self-consistency decoding).
+                    #
+                    # Only resamples `prompt` when infer_result.response still
+                    # IS the answer to that exact prompt. Decomposition/gap-fill/
+                    # self-reflection above may have replaced the response with
+                    # an answer to a *different* prompt (sub-questions, a
+                    # rephrased retry, or a revised verification pass); in that
+                    # case resampling the original prompt would add fresh copies
+                    # of the stale answer and could out-vote the improvement, so
+                    # self-consistency is skipped for revised responses.
+                    # -------------------------------------------------------
+                    if (_SELF_CONSISTENCY and not _raw_ctx_active and not _response_revised
+                            and infer_result is not None and infer_result.response
+                            and not _is_refusal(infer_result.response)
+                            and (_is_multihop_query(user_input)
+                                 or _TEMPORAL_RE.search(user_input))):
+                        try:
+                            samples = [infer_result.response]
+                            # Resample with higher temperature (0.5-0.7) so K samples diverge.
+                            # At temp=0.0, all K samples are identical (a bug), so this loop does
+                            # nothing. With temperature override, we get true diversity for majority
+                            # voting. The initial primary answer uses temp=0.0 for reproducibility.
+                            for _ in range(max(0, _SC_K - 1)):
+                                _extra = await active_engine.infer_plain(prompt, temperature=0.6)
+                                if _extra.response:
+                                    samples.append(_extra.response)
+                            _winner = _majority_answer(samples)
+                            if _winner:
+                                infer_result.response = _winner
+                        except Exception as exc:
+                            logger.warning("Self-consistency sampling failed: %s", exc)
 
                 else:
                     prompt = build_inference_prompt(

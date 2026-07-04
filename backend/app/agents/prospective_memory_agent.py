@@ -199,8 +199,13 @@ class ProspectiveMemoryAgent(BaseAgent):
     async def run(self, memory_id: str, context: AgentContext) -> AgentResult:
         started_at = datetime.now(timezone.utc)
         trace_id = (context.get("runtime") or {}).get("job_id")
-        enrichment = (context.get("memory") or {}).get("enrichment") or {}
-        content: str = str(enrichment.get("content") or "")
+        memory = context.get("memory") or {}
+        enrichment = memory.get("enrichment") or {}
+        # No upstream agent ever writes a "content" key into enrichment — the
+        # real memory text lives at memory.content. Reading only
+        # enrichment.get("content") meant this was always "" in production,
+        # so deadline/reminder detection never fired on any real memory.
+        content: str = str(enrichment.get("content") or memory.get("content") or "")
         existing_reminders: list[dict[str, Any]] = list(
             enrichment.get("existing_reminders") or []
         )

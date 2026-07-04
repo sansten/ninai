@@ -39,7 +39,7 @@ class LlmRouterService:
     ) -> LlmCallResult:
         """Route LLM call to org-configured provider, fallback to local backend."""
         cfg = await self.get_config()
-        provider = (cfg.provider if cfg else "local").strip().lower()
+        provider = (cfg.provider if cfg else "vllm").strip().lower()
         model = cfg.model if cfg else (settings.VLLM_MODEL or "qwen2.5:7b")
 
         if provider == "openai":
@@ -47,7 +47,13 @@ class LlmRouterService:
         elif provider == "anthropic":
             return await self._call_anthropic(cfg, prompt, system, max_tokens)
         else:
-            return await self._call_local_backend(model, prompt, system, max_tokens)
+            return await self._call_vllm(model, prompt, system, max_tokens)
+
+    async def _call_vllm(
+        self, model: str, prompt: str, system: str, max_tokens: int
+    ) -> LlmCallResult:
+        """Backward-compatible vLLM caller name used by existing tests/services."""
+        return await self._call_local_backend(model, prompt, system, max_tokens)
 
     async def _call_local_backend(
         self, model: str, prompt: str, system: str, max_tokens: int
@@ -68,14 +74,14 @@ class LlmRouterService:
                 r.raise_for_status()
                 data = r.json()
                 return LlmCallResult(
-                    provider="local",
+                    provider="vllm",
                     model=model,
                     content=data.get("response", ""),
                     tokens_used=data.get("eval_count", 0),
                 )
         except Exception:
             return LlmCallResult(
-                provider="local", model=model, content="", tokens_used=0
+                provider="vllm", model=model, content="", tokens_used=0
             )
 
     async def _call_openai(

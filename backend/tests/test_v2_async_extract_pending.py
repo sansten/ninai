@@ -86,7 +86,7 @@ async def test_status_endpoint_reports_pending(monkeypatch):
     await dnc_router._mark_enrich_pending("T", "u1")
     await dnc_router._mark_enrich_pending("T", "u2")
 
-    resp = await v2_enrichment_status(tenant="T", current_user={})
+    resp = await v2_enrichment_status(tenant="T", current_user={"org_id": "T"})
     assert resp.tenant_id == "T"
     assert resp.pending == 2
     assert resp.enrichment_pending is True
@@ -97,7 +97,9 @@ async def test_status_endpoint_zero_when_idle(monkeypatch):
     fr = FakeRedis()
     _patch_redis(monkeypatch, fr)
 
-    resp = await v2_enrichment_status(tenant="idle-tenant", current_user={})
+    resp = await v2_enrichment_status(
+        tenant="idle-tenant", current_user={"org_id": "idle-tenant"}
+    )
     assert resp.pending == 0
     assert resp.enrichment_pending is False
 

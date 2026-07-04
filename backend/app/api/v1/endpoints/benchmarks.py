@@ -165,13 +165,17 @@ async def get_latest_benchmark_run(
 # ---------------------------------------------------------------------------
 
 def _to_response(run: BenchmarkRun) -> BenchmarkRunResponse:
+    vllm_model = getattr(run, "VLLM_MODEL", None)
+    if vllm_model is None:
+        vllm_model = getattr(run, "vllm_model", None)
+
     return BenchmarkRunResponse(
         id=str(run.id),
         run_at=run.run_at.isoformat(),
         mode=run.mode,
         strategy=run.strategy,
         dataset=run.dataset,
-        VLLM_MODEL=run.VLLM_MODEL,
+        VLLM_MODEL=vllm_model,
         duration_seconds=run.duration_seconds,
         composite_score=run.composite_score,
         results=run.results,

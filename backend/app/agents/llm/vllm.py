@@ -227,6 +227,7 @@ class VLLMClient(LLMClient):
             _add(candidate)
         return ordered
 
+
     async def complete_json(
         self,
         *,
@@ -439,3 +440,8 @@ async def _get_semaphore(max_concurrency: int) -> asyncio.Semaphore:
             sem = asyncio.Semaphore(max_concurrency)
             _semaphores[max_concurrency] = sem
         return sem
+
+
+# Backward-compatible export for legacy imports/tests that still use the
+# older lowercase-leading class name.
+vLLMClient = VLLMClient

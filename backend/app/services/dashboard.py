@@ -200,7 +200,7 @@ class DashboardService:
         ]
     
     @staticmethod
-    def get_service_health(db: AsyncSession) -> List[SystemMetrics]:
+    async def get_service_health(db: AsyncSession) -> List[SystemMetrics]:
         """
         Get health status of system services
         Returns list of SystemMetrics
@@ -270,7 +270,7 @@ class DashboardService:
                 "memories": await DashboardService.get_memory_kpis(db),
                 "system": await DashboardService.get_system_kpis(db),
             },
-            "services": DashboardService.get_service_health(db),
+            "services": await DashboardService.get_service_health(db),
             "recent_activities": await DashboardService.get_recent_activities(db),
             "alerts": [
                 # Would be populated from alert system

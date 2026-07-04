@@ -240,6 +240,25 @@ async def test_webhook_accepts_without_secret():
 
 
 @pytest.mark.asyncio
+async def test_webhook_rejects_missing_signature_header_when_secret_configured():
+    """Regression: `if secret and stripe_signature:` used to skip verification
+    entirely whenever the caller simply omitted the stripe-signature header,
+    even with a secret configured — letting a forged event through unverified."""
+    payload = {"type": "customer.subscription.updated", "data": {"object": {"id": "sub_1"}}}
+
+    async def receive():
+        return {"type": "http.request", "body": json.dumps(payload).encode(), "more_body": False}
+
+    request = Request({"type": "http", "method": "POST", "path": "/billing/webhook", "headers": []}, receive)
+    db = AsyncMock()
+
+    with patch.dict("os.environ", {"STRIPE_WEBHOOK_SECRET": "whsec"}, clear=False):
+        with pytest.raises(HTTPException) as exc:
+            await stripe_webhook(request=request, stripe_signature=None, db=db)
+    assert exc.value.status_code == 400
+
+
+@pytest.mark.asyncio
 async def test_webhook_rejects_bad_signature():
     payload = {"type": "customer.subscription.updated", "data": {"object": {"id": "sub_1"}}}
 

@@ -9,6 +9,7 @@ All access decisions should go through this service.
 from typing import Optional, List, Tuple
 from dataclasses import dataclass
 from datetime import datetime, timezone
+import logging
 
 from sqlalchemy import select, and_, or_
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,6 +19,9 @@ from app.core.redis import RedisClient
 from app.models.user import User, UserRole, Role
 from app.models.team import TeamMember
 from app.models.memory import MemoryMetadata, MemorySharing
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -102,19 +106,26 @@ class PermissionChecker:
         """
         # Check cache first
         cache_key = f"{self.CACHE_PREFIX_PERMISSIONS}:{user_id}:{org_id}"
-        cached = await RedisClient.get_json(cache_key)
-        if cached is not None:
-            return cached
+        try:
+            cached = await RedisClient.get_json(cache_key)
+            if cached is not None:
+                return cached
+        except Exception as exc:
+            # Fail open on cache transport errors: DB remains source of truth.
+            logger.debug("permission cache read failed; falling back to DB: %s", exc)
         
         # Load from database
         permissions = await self._load_permissions_from_db(user_id, org_id)
         
         # Cache result
-        await RedisClient.set_json(
-            cache_key,
-            permissions,
-            ttl=settings.PERMISSION_CACHE_TTL,
-        )
+        try:
+            await RedisClient.set_json(
+                cache_key,
+                permissions,
+                ttl=settings.PERMISSION_CACHE_TTL,
+            )
+        except Exception as exc:
+            logger.debug("permission cache write failed; continuing without cache: %s", exc)
         
         return permissions
     

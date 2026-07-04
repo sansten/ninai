@@ -16,9 +16,13 @@ from app.schemas.organization import OrganizationResponse
 
 class LoginRequest(BaseSchema):
     """Login request with email and password."""
-    
+
     email: EmailStr
     password: str
+    # Optional org selector for users who belong to more than one
+    # organization — without it, login silently picks whichever org the
+    # user's oldest UserRole row belongs to (see /auth/login).
+    org_slug: Optional[str] = None
 
 
 class LoginResponse(BaseSchema):

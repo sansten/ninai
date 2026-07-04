@@ -17,6 +17,7 @@ from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.action_execution_record import ActionExecutionRecord
+from app.models.agent_run import AgentRun
 from app.models.cognitive_session import CognitiveSession
 from app.models.strategy_library import StrategyLibraryEntry
 from app.services.strategy_learning_service import _classify_goal_type
@@ -59,6 +60,12 @@ class EvolutionResult:
 
 def _is_success_status(status: str | None) -> bool:
     return str(status or "").strip().lower() == "success"
+
+
+def _extract_payload_memory_id(payload_summary: Any) -> str | None:
+    payload = payload_summary if isinstance(payload_summary, dict) else {}
+    memory_id = str(payload.get("memory_id") or payload.get("source_memory_id") or "").strip()
+    return memory_id or None
 
 
 def _aggregate_strategy_metrics(outcomes: list[dict[str, Any]]) -> list[StrategyMetric]:
@@ -154,6 +161,45 @@ class OutcomeTrackerService:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
+    async def _load_latest_agent_names_for_memories(
+        self,
+        *,
+        org_id: str,
+        memory_ids: set[str],
+    ) -> dict[str, str]:
+        if not memory_ids:
+            return {}
+
+        stmt = (
+            select(
+                AgentRun.memory_id,
+                AgentRun.agent_name,
+                AgentRun.finished_at,
+            )
+            .where(
+                and_(
+                    AgentRun.organization_id == org_id,
+                    AgentRun.status == "success",
+                    AgentRun.memory_id.in_(list(memory_ids)),
+                )
+            )
+            .order_by(AgentRun.memory_id.asc(), AgentRun.finished_at.desc())
+        )
+        res = await self.session.execute(stmt)
+
+        latest_seen: dict[str, tuple[datetime, str]] = {}
+        for memory_id, agent_name, finished_at in res.all():
+            key = str(memory_id or "").strip()
+            if not key:
+                continue
+            current_agent = str(agent_name or "").strip()
+            current_ts = finished_at if isinstance(finished_at, datetime) else datetime.min
+            previous = latest_seen.get(key)
+            if previous is None or current_ts > previous[0]:
+                latest_seen[key] = (current_ts, current_agent)
+
+        return {memory_id: agent_name for memory_id, (_ts, agent_name) in latest_seen.items()}
+
     async def load_outcomes(
         self,
         *,
@@ -186,12 +232,26 @@ class OutcomeTrackerService:
         res = await self.session.execute(stmt)
         rows = res.all()
 
+        memory_ids = {
+            memory_id
+            for _status, payload_summary, _goal, _context_snapshot in rows
+            if (memory_id := _extract_payload_memory_id(payload_summary))
+        }
+        memory_agent_map = await self._load_latest_agent_names_for_memories(
+            org_id=org_id,
+            memory_ids=memory_ids,
+        )
+
         outcomes: list[dict[str, Any]] = []
         for status, payload_summary, goal, context_snapshot in rows:
             context = context_snapshot or {}
             domain = str(context.get("domain") or "general").strip() or "general"
             goal_type = _classify_goal_type(str(goal or ""))
             payload = payload_summary or {}
+            memory_id = _extract_payload_memory_id(payload)
+            source_agent = str(payload.get("source_agent") or "").strip()
+            if not source_agent and memory_id:
+                source_agent = memory_agent_map.get(memory_id, "")
 
             outcomes.append(
                 {
@@ -199,6 +259,8 @@ class OutcomeTrackerService:
                     "domain": domain,
                     "success": _is_success_status(status),
                     "matched_playbook_id": payload.get("matched_playbook_id"),
+                    "memory_id": memory_id,
+                    "source_agent": source_agent,
                 }
             )
 

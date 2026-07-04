@@ -460,6 +460,10 @@ class Settings(BaseSettings):
     # -------------------------------------------------------------------------
     # Search Ranking
     # -------------------------------------------------------------------------
+    # Backward-compatible feature gate used by some retrieval tests and legacy
+    # code paths. Keep this field present even when heuristics are always-on.
+    SEARCH_HEURISTICS_ENABLED: bool = True
+
     # If enabled, downranks older memories using a half-life decay.
     SEARCH_TEMPORAL_DECAY_ENABLED: bool = True
     # Half-life in days for ranking decay (smaller = more aggressive).

@@ -7,7 +7,8 @@ import hashlib
 import secrets
 
 from fastapi import Depends, HTTPException, status, Request
-from sqlalchemy.orm import Session
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models.user import User
@@ -45,7 +46,7 @@ class AdminUser:
 
 async def get_admin_user(
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ) -> AdminUser:
     """
     Dependency to get authenticated admin user with permissions
@@ -89,26 +90,28 @@ async def get_admin_user(
         )
     
     # Get user from database
-    user = db.query(User).filter(User.id == user_id).first()
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
     if not user or not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User not found or inactive",
         )
-    
+
     # Check if user is admin
     if not user.is_admin:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="User does not have admin privileges",
         )
-    
+
     # Get admin role and permissions
     role = None
     if user.admin_role_id:
-        role = db.query(AdminRole).filter(
-            AdminRole.id == user.admin_role_id
-        ).first()
+        role_result = await db.execute(
+            select(AdminRole).where(AdminRole.id == user.admin_role_id)
+        )
+        role = role_result.scalar_one_or_none()
     
     # Check IP whitelist if enabled
     client_ip = request.client.host if request.client else None
@@ -121,24 +124,28 @@ async def get_admin_user(
     return AdminUser(user, role)
 
 
-async def check_admin_ip_whitelist(ip_address: str, db: Session) -> None:
+async def check_admin_ip_whitelist(ip_address: str, db: AsyncSession) -> None:
     """Check if IP is in admin whitelist (if enabled)"""
     # Get whitelist setting
     from app.models.admin import AdminSetting
-    
-    whitelist_enabled = db.query(AdminSetting).filter(
-        AdminSetting.category == "security",
-        AdminSetting.key == "admin_ip_whitelist_enabled"
-    ).first()
-    
+
+    setting_result = await db.execute(
+        select(AdminSetting).where(
+            AdminSetting.category == "security",
+            AdminSetting.key == "admin_ip_whitelist_enabled",
+        )
+    )
+    whitelist_enabled = setting_result.scalar_one_or_none()
+
     if not whitelist_enabled or not whitelist_enabled.value:
         return
-    
+
     # Check if IP is in whitelist
-    ip_allowed = db.query(AdminIPWhitelist).filter(
-        AdminIPWhitelist.ip_address == ip_address
-    ).first()
-    
+    ip_result = await db.execute(
+        select(AdminIPWhitelist).where(AdminIPWhitelist.ip_address == ip_address)
+    )
+    ip_allowed = ip_result.scalar_one_or_none()
+
     if not ip_allowed:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -150,16 +157,19 @@ async def verify_admin_session(
     user_id: str,
     token: str,
     ip_address: Optional[str],
-    db: Session
+    db: AsyncSession
 ) -> None:
     """Verify admin session is valid"""
     token_hash = hashlib.sha256(token.encode()).hexdigest()
-    
-    session = db.query(AdminSession).filter(
-        AdminSession.admin_id == user_id,
-        AdminSession.token_hash == token_hash
-    ).first()
-    
+
+    result = await db.execute(
+        select(AdminSession).where(
+            AdminSession.admin_id == user_id,
+            AdminSession.token_hash == token_hash,
+        )
+    )
+    session = result.scalar_one_or_none()
+
     if not session:
         # Create new session
         timeout_hours = getattr(settings, "ADMIN_SESSION_TIMEOUT_HOURS", 12)
@@ -171,10 +181,10 @@ async def verify_admin_session(
             expires_at=datetime.utcnow() + timedelta(hours=timeout_hours)
         )
         db.add(session)
-        db.commit()
+        await db.commit()
     elif session.is_expired():
-        db.delete(session)
-        db.commit()
+        await db.delete(session)
+        await db.commit()
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Admin session expired",
@@ -182,7 +192,7 @@ async def verify_admin_session(
     else:
         # Update last activity
         session.last_activity = datetime.utcnow()
-        db.commit()
+        await db.commit()
 
 
 def require_admin_permission(permission: str):

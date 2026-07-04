@@ -1,12 +1,10 @@
 """Admin UI tests"""
 import pytest
-from fastapi.testclient import TestClient
-from sqlalchemy.orm import Session
-from datetime import datetime, timedelta
+import pytest_asyncio
+from httpx import AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import uuid4
 
-from app.main import app
-from app.database import get_db
 from app.models.user import User
 from app.models.admin import AdminRole, AdminSetting, AdminAuditLog
 from app.services.admin import (
@@ -17,8 +15,7 @@ from app.schemas.admin import (
 )
 from app.core.security import create_access_token
 
-
-client = TestClient(app)
+pytestmark = pytest.mark.asyncio
 
 # Fixed org context for test tokens
 ADMIN_TEST_ORG_ID = "00000000-0000-0000-0000-0000000000ad"
@@ -26,17 +23,17 @@ ADMIN_TEST_ORG_ID = "00000000-0000-0000-0000-0000000000ad"
 
 # ==================== FIXTURES ====================
 
-@pytest.fixture
-def db_session(db: Session):
+@pytest_asyncio.fixture
+async def db_session(pg_db_session: AsyncSession):
     """Database session fixture"""
-    yield db
+    yield pg_db_session
 
 
-@pytest.fixture
-def admin_user(db_session: Session) -> User:
+@pytest_asyncio.fixture
+async def admin_user(db_session: AsyncSession) -> User:
     """Create admin user fixture"""
     from app.core.security import get_password_hash
-    
+
     user = User(
         id=str(uuid4()),
         email="admin@test.com",
@@ -46,22 +43,22 @@ def admin_user(db_session: Session) -> User:
         is_admin=True,
     )
     db_session.add(user)
-    db_session.commit()
-    db_session.refresh(user)
+    await db_session.commit()
+    await db_session.refresh(user)
     return user
 
 
-@pytest.fixture
-def admin_token(admin_user: User) -> str:
+@pytest_asyncio.fixture
+async def admin_token(admin_user: User) -> str:
     """Create admin token"""
     return create_access_token(admin_user.id, ADMIN_TEST_ORG_ID)
 
 
-@pytest.fixture
-def regular_user(db_session: Session) -> User:
+@pytest_asyncio.fixture
+async def regular_user(db_session: AsyncSession) -> User:
     """Create regular user fixture"""
     from app.core.security import get_password_hash
-    
+
     user = User(
         id=str(uuid4()),
         email="user@test.com",
@@ -71,13 +68,13 @@ def regular_user(db_session: Session) -> User:
         is_admin=False,
     )
     db_session.add(user)
-    db_session.commit()
-    db_session.refresh(user)
+    await db_session.commit()
+    await db_session.refresh(user)
     return user
 
 
-@pytest.fixture
-def admin_role(db_session: Session, admin_user: User) -> AdminRole:
+@pytest_asyncio.fixture
+async def admin_role(db_session: AsyncSession, admin_user: User) -> AdminRole:
     """Create admin role fixture"""
     role = AdminRole(
         id=str(uuid4()),
@@ -87,8 +84,8 @@ def admin_role(db_session: Session, admin_user: User) -> AdminRole:
         created_by=admin_user.id,
     )
     db_session.add(role)
-    db_session.commit()
-    db_session.refresh(role)
+    await db_session.commit()
+    await db_session.refresh(role)
     return role
 
 
@@ -96,10 +93,10 @@ def admin_role(db_session: Session, admin_user: User) -> AdminRole:
 
 class TestAdminRoles:
     """Test admin role management"""
-    
-    def test_create_role(self, admin_token: str, db_session: Session):
+
+    async def test_create_role(self, pg_client: AsyncClient, admin_token: str, db_session: AsyncSession):
         """Test creating admin role"""
-        response = client.post(
+        response = await pg_client.post(
             "/api/v1/admin/roles",
             headers={"Authorization": f"Bearer {admin_token}"},
             json={
@@ -112,20 +109,20 @@ class TestAdminRoles:
         data = response.json()
         assert data["name"] == "Editor"
         assert "users:read" in data["permissions"]
-    
-    def test_list_roles(self, admin_token: str, admin_role: AdminRole):
+
+    async def test_list_roles(self, pg_client: AsyncClient, admin_token: str, admin_role: AdminRole):
         """Test listing roles"""
-        response = client.get(
+        response = await pg_client.get(
             "/api/v1/admin/roles",
             headers={"Authorization": f"Bearer {admin_token}"},
         )
         assert response.status_code == 200
         data = response.json()
         assert len(data) > 0
-    
-    def test_get_role(self, admin_token: str, admin_role: AdminRole):
+
+    async def test_get_role(self, pg_client: AsyncClient, admin_token: str, admin_role: AdminRole):
         """Test getting specific role"""
-        response = client.get(
+        response = await pg_client.get(
             f"/api/v1/admin/roles/{admin_role.id}",
             headers={"Authorization": f"Bearer {admin_token}"},
         )
@@ -133,10 +130,10 @@ class TestAdminRoles:
         data = response.json()
         assert data["id"] == str(admin_role.id)
         assert data["name"] == admin_role.name
-    
-    def test_update_role(self, admin_token: str, admin_role: AdminRole):
+
+    async def test_update_role(self, pg_client: AsyncClient, admin_token: str, admin_role: AdminRole):
         """Test updating role"""
-        response = client.put(
+        response = await pg_client.put(
             f"/api/v1/admin/roles/{admin_role.id}",
             headers={"Authorization": f"Bearer {admin_token}"},
             json={
@@ -146,8 +143,8 @@ class TestAdminRoles:
         assert response.status_code == 200
         data = response.json()
         assert "settings:write" in data["permissions"]
-    
-    def test_delete_role(self, admin_token: str, db_session: Session, admin_user: User):
+
+    async def test_delete_role(self, pg_client: AsyncClient, admin_token: str, db_session: AsyncSession, admin_user: User):
         """Test deleting role"""
         # Create a role without users
         role = AdminRole(
@@ -157,9 +154,9 @@ class TestAdminRoles:
             created_by=admin_user.id,
         )
         db_session.add(role)
-        db_session.commit()
-        
-        response = client.delete(
+        await db_session.commit()
+
+        response = await pg_client.delete(
             f"/api/v1/admin/roles/{role.id}",
             headers={"Authorization": f"Bearer {admin_token}"},
         )
@@ -170,10 +167,10 @@ class TestAdminRoles:
 
 class TestAdminSettings:
     """Test admin settings management"""
-    
-    def test_create_setting(self, admin_token: str):
+
+    async def test_create_setting(self, pg_client: AsyncClient, admin_token: str):
         """Test creating setting"""
-        response = client.post(
+        response = await pg_client.post(
             "/api/v1/admin/settings",
             headers={"Authorization": f"Bearer {admin_token}"},
             json={
@@ -188,18 +185,18 @@ class TestAdminSettings:
         data = response.json()
         assert data["category"] == "general"
         assert data["key"] == "app_name"
-    
-    def test_list_settings(self, admin_token: str):
+
+    async def test_list_settings(self, pg_client: AsyncClient, admin_token: str):
         """Test listing settings"""
-        response = client.get(
+        response = await pg_client.get(
             "/api/v1/admin/settings",
             headers={"Authorization": f"Bearer {admin_token}"},
         )
         assert response.status_code == 200
         data = response.json()
         assert "items" in data
-    
-    def test_get_setting(self, admin_token: str, db_session: Session, admin_user: User):
+
+    async def test_get_setting(self, pg_client: AsyncClient, admin_token: str, db_session: AsyncSession, admin_user: User):
         """Test getting specific setting"""
         # Create setting
         setting = AdminSetting(
@@ -211,17 +208,17 @@ class TestAdminSettings:
             updated_by=admin_user.id,
         )
         db_session.add(setting)
-        db_session.commit()
-        
-        response = client.get(
+        await db_session.commit()
+
+        response = await pg_client.get(
             f"/api/v1/admin/settings/{setting.id}",
             headers={"Authorization": f"Bearer {admin_token}"},
         )
         assert response.status_code == 200
         data = response.json()
         assert data["id"] == str(setting.id)
-    
-    def test_update_setting(self, admin_token: str, db_session: Session, admin_user: User):
+
+    async def test_update_setting(self, pg_client: AsyncClient, admin_token: str, db_session: AsyncSession, admin_user: User):
         """Test updating setting"""
         setting = AdminSetting(
             id=str(uuid4()),
@@ -231,9 +228,9 @@ class TestAdminSettings:
             updated_by=admin_user.id,
         )
         db_session.add(setting)
-        db_session.commit()
-        
-        response = client.put(
+        await db_session.commit()
+
+        response = await pg_client.put(
             f"/api/v1/admin/settings/{setting.id}",
             headers={"Authorization": f"Bearer {admin_token}"},
             json={"value": "NINAI Updated"}
@@ -247,8 +244,8 @@ class TestAdminSettings:
 
 class TestAdminAuditLogs:
     """Test audit log management"""
-    
-    def test_list_audit_logs(self, admin_token: str, db_session: Session, admin_user: User):
+
+    async def test_list_audit_logs(self, pg_client: AsyncClient, admin_token: str, db_session: AsyncSession, admin_user: User):
         """Test listing audit logs"""
         # Create audit log
         log = AdminAuditLog(
@@ -260,17 +257,17 @@ class TestAdminAuditLogs:
             new_values={"email": "test@test.com"},
         )
         db_session.add(log)
-        db_session.commit()
-        
-        response = client.get(
+        await db_session.commit()
+
+        response = await pg_client.get(
             "/api/v1/admin/audit-logs",
             headers={"Authorization": f"Bearer {admin_token}"},
         )
         assert response.status_code == 200
         data = response.json()
         assert "items" in data
-    
-    def test_get_audit_log(self, admin_token: str, db_session: Session, admin_user: User):
+
+    async def test_get_audit_log(self, pg_client: AsyncClient, admin_token: str, db_session: AsyncSession, admin_user: User):
         """Test getting specific audit log"""
         log = AdminAuditLog(
             id=str(uuid4()),
@@ -279,9 +276,9 @@ class TestAdminAuditLogs:
             resource_type="user",
         )
         db_session.add(log)
-        db_session.commit()
-        
-        response = client.get(
+        await db_session.commit()
+
+        response = await pg_client.get(
             f"/api/v1/admin/audit-logs/{log.id}",
             headers={"Authorization": f"Bearer {admin_token}"},
         )
@@ -294,10 +291,10 @@ class TestAdminAuditLogs:
 
 class TestAdminPermissions:
     """Test permission checking"""
-    
-    def test_get_permissions(self, admin_token: str):
+
+    async def test_get_permissions(self, pg_client: AsyncClient, admin_token: str):
         """Test getting available permissions"""
-        response = client.get(
+        response = await pg_client.get(
             "/api/v1/admin/permissions",
             headers={"Authorization": f"Bearer {admin_token}"},
         )
@@ -305,11 +302,11 @@ class TestAdminPermissions:
         data = response.json()
         assert "permissions" in data
         assert len(data["permissions"]) > 0
-    
-    def test_permission_denied_without_permission(self, regular_user: User):
+
+    async def test_permission_denied_without_permission(self, pg_client: AsyncClient, regular_user: User):
         """Test permission denied for non-admin"""
         token = create_access_token(regular_user.id, ADMIN_TEST_ORG_ID)
-        response = client.get(
+        response = await pg_client.get(
             "/api/v1/admin/roles",
             headers={"Authorization": f"Bearer {token}"},
         )
@@ -320,31 +317,31 @@ class TestAdminPermissions:
 
 class TestAdminServices:
     """Test admin services"""
-    
-    def test_create_role_service(self, db_session: Session, admin_user: User):
+
+    async def test_create_role_service(self, db_session: AsyncSession, admin_user: User):
         """Test AdminRoleService.create_role"""
         role_create = AdminRoleCreate(
             name="Test Role",
             permissions=["users:read"],
         )
-        role = AdminRoleService.create_role(db_session, role_create, admin_user.id)
+        role = await AdminRoleService.create_role(db_session, role_create, admin_user.id)
         assert role.name == "Test Role"
         assert "users:read" in role.permissions
-    
-    def test_create_setting_service(self, db_session: Session, admin_user: User):
+
+    async def test_create_setting_service(self, db_session: AsyncSession, admin_user: User):
         """Test AdminSettingService.create_setting"""
         setting_create = AdminSettingCreate(
             category="test",
             key="test_key",
             value="test_value",
         )
-        setting = AdminSettingService.create_setting(db_session, setting_create, admin_user.id)
+        setting = await AdminSettingService.create_setting(db_session, setting_create, admin_user.id)
         assert setting.category == "test"
         assert setting.key == "test_key"
-    
-    def test_log_action_service(self, db_session: Session, admin_user: User):
+
+    async def test_log_action_service(self, db_session: AsyncSession, admin_user: User):
         """Test AdminAuditService.log_action"""
-        log = AdminAuditService.log_action(
+        log = await AdminAuditService.log_action(
             db_session,
             admin_id=admin_user.id,
             action="create",
@@ -353,23 +350,19 @@ class TestAdminServices:
         )
         assert log.action == "create"
         assert log.resource_type == "user"
-    
-    def test_list_audit_logs_service(self, db_session: Session, admin_user: User):
+
+    async def test_list_audit_logs_service(self, db_session: AsyncSession, admin_user: User):
         """Test AdminAuditService.list_audit_logs"""
         # Create multiple logs
         for i in range(5):
-            AdminAuditService.log_action(
+            await AdminAuditService.log_action(
                 db_session,
                 admin_id=admin_user.id,
                 action="update",
                 resource_type="role",
             )
-        
-        logs, total = AdminAuditService.list_audit_logs(
+
+        logs, total = await AdminAuditService.list_audit_logs(
             db_session, AdminAuditLogFilter()
         )
         assert total >= 5
-
-
-if __name__ == "__main__":
-    pytest.main([__file__, "-v"])

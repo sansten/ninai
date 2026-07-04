@@ -15,6 +15,10 @@ from app.models.mfa import TOTPDevice, SMSDevice, WebAuthnDevice, MFAEnrollment
 from app.models.user import User
 
 
+class MFAImplementationUnavailableError(RuntimeError):
+    """Raised when an MFA factor is exposed but lacks a real verifier/sender."""
+
+
 class TOTPService:
     @staticmethod
     def generate_secret() -> str:
@@ -138,12 +142,13 @@ class SMSService:
 
     @staticmethod
     async def send_otp(db: AsyncSession, user_id: UUID | str, phone_number: str) -> bool:
-        """Send OTP via SMS (stub - implement with Twilio)"""
-        user_id = str(user_id)
-        # TODO: Implement with Twilio or other SMS provider
-        otp = SMSService.generate_otp()
-        # In production: send_sms(phone_number, f"Your NinaiOS OTP: {otp}")
-        return True
+        """Send OTP via SMS.
+
+        Fail closed until a real SMS provider and OTP storage backend exist.
+        """
+        raise MFAImplementationUnavailableError(
+            "SMS MFA is unavailable: OTP delivery is not implemented"
+        )
 
     @staticmethod
     async def setup_sms(db: AsyncSession, user_id: UUID | str, phone_number: str) -> bool:
@@ -187,46 +192,21 @@ class SMSService:
         if device.locked_until and device.locked_until > datetime.utcnow():
             raise ValueError("SMS device is locked due to failed attempts")
 
-        # Update last_sent_at timestamp
-        device.last_sent_at = datetime.utcnow()
-        await db.commit()
-
-        return await SMSService.send_otp(db, user_id, device.phone_number)
+        success = await SMSService.send_otp(db, user_id, device.phone_number)
+        if success:
+            device.last_sent_at = datetime.utcnow()
+            await db.commit()
+        return success
 
     @staticmethod
     async def verify_sms_otp(db: AsyncSession, user_id: UUID | str, otp: str) -> bool:
-        """Verify SMS OTP (stub - implement with SMS service)"""
-        user_id = str(user_id)
-        result = await db.execute(
-            select(SMSDevice).where(SMSDevice.user_id == user_id)
+        """Verify SMS OTP.
+
+        Fail closed until a real SMS delivery and OTP verification backend exist.
+        """
+        raise MFAImplementationUnavailableError(
+            "SMS MFA is unavailable: OTP verification is not implemented"
         )
-        device = result.scalar_one_or_none()
-
-        if not device:
-            return False
-
-        if device.locked_until and device.locked_until > datetime.utcnow():
-            return False
-
-        # TODO: Verify against stored OTP in cache/Redis
-        # For now, in test mode any 6-digit OTP is valid
-        is_valid = len(otp) == 6 and otp.isdigit()
-        
-        if is_valid:
-            device.verified = True
-            device.failed_attempts = 0
-            device.last_sent_at = datetime.utcnow()
-            await db.commit()
-            return True
-        else:
-            # Invalid OTP - increment failed attempts
-            device.failed_attempts += 1
-            
-            if device.failed_attempts >= 5:
-                device.locked_until = datetime.utcnow() + timedelta(minutes=30)
-            
-            await db.commit()
-            return False
 
 
 class WebAuthnService:
@@ -253,24 +233,13 @@ class WebAuthnService:
 
     @staticmethod
     async def verify_webauthn_setup(db: AsyncSession, user_id: UUID | str) -> bool:
-        """Verify WebAuthn setup"""
-        user_id = str(user_id)
-        result = await db.execute(
-            select(WebAuthnDevice).where(
-                WebAuthnDevice.user_id == user_id,
-                WebAuthnDevice.verified == False
-            )
+        """Verify WebAuthn setup.
+
+        Fail closed until actual WebAuthn challenge verification is implemented.
+        """
+        raise MFAImplementationUnavailableError(
+            "WebAuthn MFA is unavailable: setup verification is not implemented"
         )
-        device = result.scalar_one_or_none()
-
-        if not device:
-            return False
-
-        # TODO: Implement actual WebAuthn verification
-        device.verified = True
-        device.updated_at = datetime.utcnow()
-        await db.commit()
-        return True
 
     @staticmethod
     async def get_user_devices(db: AsyncSession, user_id: UUID) -> List[WebAuthnDevice]:

@@ -117,14 +117,31 @@ class DebateEnsembleAgent(BaseAgent):
     async def run(self, memory_id: str, context: AgentContext) -> AgentResult:
         started = datetime.now(timezone.utc)
         runtime = context.get("runtime") if isinstance(context, dict) else {}
+
+        # Legacy direct-invocation shape (context["debate"] = {...}) takes
+        # precedence when a caller supplies it. Nothing in this codebase
+        # currently does — the only real caller is OrchestrationBusAgent,
+        # which populates the standard context["memory"] location every
+        # other agent reads from. Previously the absence of context["debate"]
+        # meant this always fell through to hardcoded defaults (content="",
+        # decision="investigate", enrichment={}), fabricating a plausible-
+        # looking debate transcript with zero grounding in the actual memory.
         inputs = context.get("debate") if isinstance(context, dict) else {}
         inputs = inputs if isinstance(inputs, dict) else {}
 
+        memory = context.get("memory") if isinstance(context, dict) else {}
+        memory = memory if isinstance(memory, dict) else {}
+
+        content = str(inputs.get("content") or memory.get("content") or "")
+        decision = str(inputs.get("decision") or "investigate")
+        confidence = float(inputs.get("confidence") or 0.7)
+        enrichment = dict(inputs.get("enrichment") or memory.get("enrichment") or {})
+
         result = self.generate_transcript(
-            content=str(inputs.get("content") or ""),
-            decision=str(inputs.get("decision") or "investigate"),
-            confidence=float(inputs.get("confidence") or 0.7),
-            enrichment=dict(inputs.get("enrichment") or {}),
+            content=content,
+            decision=decision,
+            confidence=confidence,
+            enrichment=enrichment,
         )
 
         finished = datetime.now(timezone.utc)

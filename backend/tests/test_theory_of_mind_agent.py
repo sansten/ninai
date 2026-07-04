@@ -345,27 +345,38 @@ def test_infer_intent_most_common_domain():
     assert _infer_intent(interactions, {}) == "finance"
 
 
+def _attention_signal(topic: str, relevance: float = 0.8) -> dict:
+    """OrgAttentionAgent's real output shape, not the {focus_domain: ...}
+    dict this test file previously (incorrectly) assumed."""
+    return {"team": topic, "topic": topic, "entity_type": "topic", "relevance": relevance}
+
+
 def test_infer_intent_no_interactions_uses_attention():
-    assert _infer_intent([], {"focus_domain": "legal"}) == "legal"
+    assert _infer_intent([], [_attention_signal("legal")]) == "legal"
 
 
 def test_infer_intent_no_signals_returns_general():
-    assert _infer_intent([], {}) == "general"
+    assert _infer_intent([], []) == "general"
 
 
 def test_infer_intent_interactions_override_attention():
     interactions = [_interaction(domain="ops")]
-    assert _infer_intent(interactions, {"focus_domain": "finance"}) == "ops"
+    assert _infer_intent(interactions, [_attention_signal("finance")]) == "ops"
 
 
 def test_infer_intent_unknown_domain_skipped():
     interactions = [_interaction(domain="unknown")]
-    assert _infer_intent(interactions, {"focus_domain": "legal"}) == "legal"
+    assert _infer_intent(interactions, [_attention_signal("legal")]) == "legal"
 
 
 def test_infer_intent_empty_domain_skipped():
     interactions = [{"query": "help", "domain": ""}]
-    assert _infer_intent(interactions, {"focus_domain": "hr"}) == "hr"
+    assert _infer_intent(interactions, [_attention_signal("hr")]) == "hr"
+
+
+def test_infer_intent_picks_highest_relevance_signal():
+    signals = [_attention_signal("hr", relevance=0.3), _attention_signal("legal", relevance=0.9)]
+    assert _infer_intent([], signals) == "legal"
 
 
 def test_infer_intent_single_valid_domain():
@@ -551,7 +562,7 @@ async def test_heuristic_intent_from_interactions():
 
 @pytest.mark.asyncio
 async def test_heuristic_intent_from_attention():
-    result = await run_heuristic_async([], [], {}, {"focus_domain": "ops"})
+    result = await run_heuristic_async([], [], {}, [_attention_signal("ops")])
     assert result["inferred_intent"] == "ops"
 
 

@@ -325,7 +325,7 @@ class InferenceEngine:
     # Plain-text inference — bench QA mode with CoT + FINAL ANSWER parsing
     # ------------------------------------------------------------------
 
-    async def infer_plain(self, prompt: str, model: str | None = None) -> InferenceResult:
+    async def infer_plain(self, prompt: str, model: str | None = None, temperature: float | None = None) -> InferenceResult:
         """
         Plain-text inference for benchmarking. Uses FINAL ANSWER: parsing.
 
@@ -337,6 +337,11 @@ class InferenceEngine:
         Non-thinking backends (qwen2.5:*, llama*, etc.):
           - System prompt: FINAL ANSWER directly, no thinking guidance
           - max_tokens=700
+        
+        Args:
+            temperature: Override temperature for this call. If None, defaults to 0.0
+                         for deterministic answers. Use 0.5-0.7 for self-consistency
+                         resampling to get divergent answers.
         """
         result = InferenceResult()
         _active_model = model or self._model
@@ -369,6 +374,9 @@ class InferenceEngine:
         else:
             _max_tokens = 700
 
+        # Use provided temperature or default to 0.0 for reproducibility
+        _temperature = temperature if temperature is not None else 0.0
+
         try:
             async def _chat_once(
                 system_prompt: str,
@@ -382,7 +390,7 @@ class InferenceEngine:
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": user_prompt},
                     ],
-                    "temperature": 0.0,
+                    "temperature": _temperature,
                     "max_tokens": max_tokens,
                     "stream": False,
                 }

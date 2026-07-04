@@ -210,6 +210,15 @@ class V2GraphClient:
     # Edges
     # ------------------------------------------------------------------
 
+    # Relationship types are Cypher identifiers, not string literals, so
+    # `_esc()` (which escapes for quoted-string interpolation) can't protect
+    # this position — MERGE (a)-[r:{rel_type}]->(b) interpolates rel_type
+    # directly into the query. Every current caller passes a hardcoded
+    # literal ("RESPONDED_TO", "FOLLOWED_BY"), but nothing stopped a future
+    # caller from passing an LLM-extracted or user-derived string here, which
+    # would let arbitrary Cypher run. Whitelist the shape instead.
+    _REL_TYPE_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
     async def upsert_edge(
         self,
         tenant_id: str,
@@ -218,6 +227,8 @@ class V2GraphClient:
         rel_type: str,
         reinforce: bool = True,
     ) -> bool:
+        if not self._REL_TYPE_RE.match(rel_type or ""):
+            raise ValueError(f"invalid relationship type: {rel_type!r}")
         now = _MS()
         delta = WEIGHT_REINFORCE_DELTA if reinforce else 0.0
         cypher = (

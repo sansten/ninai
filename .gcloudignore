@@ -1,0 +1,11 @@
+# Upload only the backend build context + cloudbuild config.
+/*
+!/backend
+!/cloudbuild.yaml
+
+# Trim non-runtime weight from the backend context.
+backend/notebooks/
+backend/kaggle_data/
+backend/tests/
+**/__pycache__/
+**/*.pyc

@@ -353,3 +353,54 @@ def test_registry_get_agent():
     agent = get_agent("error_remediation")
     assert agent is not None
     assert isinstance(agent, ErrorRemediationAgent)
+
+
+# ---------------------------------------------------------------------------
+# Regression: correctness review findings (bus-shared-enrichment collisions)
+# ---------------------------------------------------------------------------
+
+def test_non_numeric_playbook_confidence_override_does_not_crash():
+    """Regression: playbook_confidence is a generic-sounding enrichment key
+    another agent in the same bus run could also write with an incompatible
+    value (e.g. a status string). float(override_confidence) used to be
+    unguarded — a non-numeric override must fall back to the heuristically
+    computed confidence instead of raising."""
+    result = run_heuristic({
+        "error_source": "sentry",
+        "severity": "critical",
+        "playbook_candidates": [_candidate("pb-1", 0.8)],
+        "playbook_confidence": "not-a-number",
+    })
+    assert result["action"] == "dispatch"
+    assert result["playbook_confidence"] == 0.8
+
+
+def test_validate_outputs_skips_non_success_results():
+    from app.agents.types import AgentResult
+    from datetime import datetime, timezone
+
+    now = datetime.now(timezone.utc)
+    agent = ErrorRemediationAgent()
+    failed = AgentResult(
+        agent_name=agent.name, agent_version=agent.version, memory_id="mem-1",
+        status="failed", confidence=0.0, outputs={}, warnings=[], errors=["boom"],
+        started_at=now, finished_at=now,
+    )
+    agent.validate_outputs(failed)  # must not raise
+
+
+def test_validate_outputs_rejects_bad_action():
+    from app.agents.types import AgentResult
+    from datetime import datetime, timezone
+
+    now = datetime.now(timezone.utc)
+    agent = ErrorRemediationAgent()
+    bad = AgentResult(
+        agent_name=agent.name, agent_version=agent.version, memory_id="mem-1",
+        status="success", confidence=0.5,
+        outputs={"action": "nonsense", "error_source": "sentry", "severity": "critical", "confidence": 0.5},
+        warnings=[], errors=[], started_at=now, finished_at=now,
+    )
+    with pytest.raises(ValueError):
+        agent.validate_outputs(bad)
+    assert isinstance(agent, ErrorRemediationAgent)

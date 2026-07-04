@@ -100,13 +100,28 @@ class DatabaseBackupService:
         try:
             timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
             backup_file = self.backup_dir / f"backup_full_{timestamp}.sql.gz"
-            
-            # Execute pg_dump
-            cmd = f"pg_dump -h localhost -U postgres -d {db_name} | gzip > {backup_file}"
-            result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
-            
-            if result.returncode != 0:
-                logger.error(f"pg_dump failed: {result.stderr}")
+
+            # pg_dump | gzip, run without a shell — db_name is passed as an
+            # argv element, never interpolated into a shell command string,
+            # so it can't be used for command injection regardless of where
+            # a future caller sources it from.
+            with open(backup_file, "wb") as out:
+                dump_proc = subprocess.Popen(
+                    ["pg_dump", "-h", "localhost", "-U", "postgres", "-d", db_name],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                )
+                gzip_result = subprocess.run(
+                    ["gzip"], stdin=dump_proc.stdout, stdout=out, stderr=subprocess.PIPE
+                )
+                dump_proc.stdout.close()
+                _, dump_stderr = dump_proc.communicate()
+
+            if dump_proc.returncode != 0 or gzip_result.returncode != 0:
+                logger.error(
+                    f"pg_dump/gzip failed: pg_dump rc={dump_proc.returncode} "
+                    f"({dump_stderr.decode(errors='replace')}), gzip rc={gzip_result.returncode}"
+                )
                 return None
             
             # Calculate checksum
@@ -202,17 +217,31 @@ class DatabaseBackupService:
             db.commit()
             
             start_time = datetime.utcnow()
-            
-            # Execute restore
-            cmd = f"gunzip < {backup_file} | psql -h localhost -U postgres -d {db_name}"
-            result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
-            
+
+            # gunzip | psql, run without a shell — same injection-avoidance
+            # rationale as create_full_backup above.
+            with open(backup_file, "rb") as inp:
+                gunzip_proc = subprocess.Popen(
+                    ["gunzip"], stdin=inp, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+                )
+                result = subprocess.run(
+                    ["psql", "-h", "localhost", "-U", "postgres", "-d", db_name],
+                    stdin=gunzip_proc.stdout,
+                    capture_output=True,
+                    text=True,
+                )
+                gunzip_proc.stdout.close()
+                _, gunzip_stderr = gunzip_proc.communicate()
+
             duration = (datetime.utcnow() - start_time).total_seconds()
-            
-            if result.returncode != 0:
+
+            if result.returncode != 0 or gunzip_proc.returncode != 0:
                 restore.status = "failed"
-                restore.error_message = result.stderr
-                logger.error(f"Restore failed: {result.stderr}")
+                restore.error_message = result.stderr or gunzip_stderr.decode(errors="replace")
+                logger.error(
+                    f"Restore failed: psql rc={result.returncode} ({result.stderr}), "
+                    f"gunzip rc={gunzip_proc.returncode}"
+                )
             else:
                 restore.status = "completed"
                 restore.duration_seconds = int(duration)

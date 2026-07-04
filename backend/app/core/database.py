@@ -135,7 +135,13 @@ async def get_tenant_session(
             await session.execute(text(f"SET LOCAL app.current_user_id = '{escape(user_id)}'"))
             await session.execute(text(f"SET LOCAL app.current_org_id = '{escape(org_id)}'"))
             await session.execute(text(f"SET LOCAL app.current_roles = '{escape(roles)}'"))
-            await session.execute(text(f"SET LOCAL app.current_clearance_level = '{clearance_level}'"))
+            # int(...) enforces the documented int contract at runtime — every
+            # other SET LOCAL value above goes through escape(); this is the
+            # equivalent guard for a numeric field (raises instead of
+            # interpolating anything non-numeric into the SQL string).
+            await session.execute(
+                text(f"SET LOCAL app.current_clearance_level = '{int(clearance_level or 0)}'")
+            )
             await session.execute(text(f"SET LOCAL app.current_justification = '{escape(justification)}'"))
             
             # Attach ORM-level criteria for defense-in-depth
@@ -191,7 +197,12 @@ async def set_tenant_context(
     await session.execute(text(f"SET LOCAL app.current_user_id = '{escape(user_id)}'"))
     await session.execute(text(f"SET LOCAL app.current_org_id = '{escape(org_id or '')}'"))
     await session.execute(text(f"SET LOCAL app.current_roles = '{escape(roles)}'"))
-    await session.execute(text(f"SET LOCAL app.current_clearance_level = '{clearance_level}'"))
+    # int(...) enforces the documented int contract at runtime — every other
+    # SET LOCAL value above goes through escape(); this is the equivalent
+    # guard for a numeric field.
+    await session.execute(
+        text(f"SET LOCAL app.current_clearance_level = '{int(clearance_level or 0)}'")
+    )
     await session.execute(text(f"SET LOCAL app.current_justification = '{escape(justification)}'"))
     
     # Attach ORM-level criteria for defense-in-depth

@@ -346,9 +346,16 @@ class CompositionalGeneralizationAgent(BaseAgent):
                 "- confidence: float 0..1\n"
                 "- rationale: brief explanation"
             )
+            if hasattr(settings, "get_llm_model"):
+                model_name = settings.get_llm_model("agents")
+            elif hasattr(settings, "get_vllm_model"):
+                model_name = settings.get_vllm_model("agents")
+            else:
+                model_name = getattr(settings, "VLLM_MODEL", "llama3.1:8b")
+
             client = create_llm_client(
                 base_url=str(getattr(settings, "VLLM_BASE_URL", "http://localhost:11434")),
-                model=str(settings.get_llm_model("agents")),
+                model=str(model_name),
                 timeout_seconds=float(getattr(settings, "VLLM_TIMEOUT_SECONDS", 5.0)),
                 max_concurrency=int(getattr(settings, "VLLM_MAX_CONCURRENCY", 2)),
             )

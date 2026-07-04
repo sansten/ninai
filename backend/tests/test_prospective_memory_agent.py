@@ -176,6 +176,28 @@ async def test_deploy_by_friday_detected(mock_settings):
 
 @pytest.mark.asyncio
 @patch("app.agents.prospective_memory_agent.settings")
+async def test_deadline_detected_from_memory_content_when_no_enrichment_content(mock_settings):
+    """Regression: no upstream agent ever writes a "content" key into
+    enrichment — real dispatch (OrchestrationBusAgent) only populates
+    memory.content. Reading only enrichment.get("content") meant this was
+    always "" in production, so deadline detection never fired."""
+    mock_settings.AGENT_STRATEGY = "heuristic"
+    agent = ProspectiveMemoryAgent()
+    ctx = {
+        "memory": {
+            "content": "Deploy by Friday.",
+            "enrichment": {"current_time": _ANCHOR},
+        },
+        "runtime": {"job_id": "trace-real-dispatch"},
+    }
+    result = await agent.run("m1", ctx)
+    assert result.status == "success"
+    assert result.outputs["deadline_detected"] is True
+    assert len(result.outputs["deadline_tokens"]) >= 1
+
+
+@pytest.mark.asyncio
+@patch("app.agents.prospective_memory_agent.settings")
 async def test_within_2_hours_high_urgency(mock_settings):
     mock_settings.AGENT_STRATEGY = "heuristic"
     agent = ProspectiveMemoryAgent()

@@ -112,6 +112,26 @@ async def test_gateway_write_succeeds_with_expired_context_id():
                 "app.api.v1.endpoints.cognitive_gateway.save_gateway_context",
             ),
             patch(
+                "app.api.v1.endpoints.cognitive_gateway.set_tenant_context",
+                AsyncMock(return_value=None),
+            ),
+            patch(
+                "app.api.v1.endpoints.cognitive_gateway.CognitiveIngestionService.build_gateway_memory_create",
+                return_value=MagicMock(),
+            ),
+            patch(
+                "app.api.v1.endpoints.cognitive_gateway.CognitiveIngestionService.ingest_memory",
+                AsyncMock(return_value=MagicMock(memory=MagicMock(id=str(uuid.uuid4())), storage="long_term")),
+            ),
+            patch(
+                "app.api.v1.endpoints.cognitive_gateway._context_working_set_summary",
+                AsyncMock(return_value={}),
+            ),
+            patch(
+                "app.api.v1.endpoints.cognitive_gateway.MemoryResponse.model_validate",
+                return_value=MagicMock(model_dump=lambda mode="python": {}),
+            ),
+            patch(
                 "app.api.v1.endpoints.cognitive_gateway._get_gateway",
                 return_value=mock_gateway,
             ),

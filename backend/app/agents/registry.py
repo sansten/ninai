@@ -445,6 +445,29 @@ WRITE_TIME_AGENT_SPECS: tuple[AgentExecutionSpec, ...] = tuple(
             aliases=("feedback", "feedbacklearning", "feedbacklearningagent"),
             description="Applies late-stage feedback updates after core enrichment has landed.",
         ) if FeedbackLearningAgent is not None else None,
+        # Tier 3: runs after core enrichment has landed and dynamically resolves
+        # + executes a content-driven subset of the wider agent pipeline
+        # (ContextAmplifierAgent, SiloPropagationAgent, OrgAttentionAgent,
+        # ProactiveMemoryPushAgent, ConflictDetectionAgent, GoalDecompositionAgent,
+        # NarrativeSynthesisAgent, and more — see orchestration_bus_agent.py's
+        # _DEFAULT_AGENTS/_heuristic_agent_names). Previously registered and
+        # unit-tested but never invoked outside its own test file, so none of
+        # the agents it composes ever ran in production.
+        _make_execution_spec(
+            key="orchestration_bus",
+            agent_name="orchestration_bus",
+            class_name="OrchestrationBusAgent",
+            queue="q.agent_reasoning",
+            tier=3,
+            # Depend on the unconditionally-registered tail of the tier-1/2
+            # chain (not the enterprise-gated agents like feedback_learning,
+            # which don't exist as specs in an unlicensed deployment and
+            # would otherwise leave this with no real ordering constraint).
+            depends_on=("episodic_grouping", "pattern_detection", "logseq_export"),
+            trigger_types=("memory_write", "memory_reenrich"),
+            aliases=("orchestrationbus", "orchestrationbusagent"),
+            description="Dynamically composes and runs a content-driven subset of the wider agent pipeline.",
+        ),
     )
     if spec is not None
 )

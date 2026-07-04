@@ -15,6 +15,7 @@ Endpoints:
 from __future__ import annotations
 
 import logging
+import os
 
 from fastapi import APIRouter, Depends, HTTPException
 
@@ -39,10 +40,16 @@ logger = logging.getLogger(__name__)
 v2_router = APIRouter(prefix="/v2", tags=["v2-engine"])
 
 
-def _resolve_tenant(request_tenant: str | None, current_user) -> str:
-    """Resolve tenant_id from request or fall back to the user's org."""
-    if request_tenant:
-        return request_tenant
+# Benchmark harnesses (LongMemEval/LoCoMo) legitimately create thousands of
+# synthetic per-question tenants under a single demo account and pass
+# tenant_id explicitly to route each question into its own isolated
+# namespace — see evaluation/_runner/longmemeval_run.py. Only bench-mode
+# deployments trust a caller-supplied tenant override outright; everywhere
+# else it must match the caller's own org unless they're a superuser.
+_BENCH_MODE = os.environ.get("NINAI_BENCH_MODE", "0").lower() in ("1", "true", "yes")
+
+
+def _own_org(current_user) -> str:
     # current_user is a User model or dict depending on the auth dependency
     if hasattr(current_user, "organization_id"):
         return str(current_user.organization_id or "unknown")
@@ -55,6 +62,27 @@ def _resolve_tenant(request_tenant: str | None, current_user) -> str:
     return "unknown"
 
 
+def _resolve_tenant(request_tenant: str | None, current_user) -> str:
+    """Resolve tenant_id from request, enforcing it matches the caller's own org.
+
+    A caller-supplied tenant_id that differs from the authenticated user's org
+    is only honored for bench-mode deployments (synthetic per-question
+    tenants) or superusers — otherwise a regular user could read/write any
+    other organization's memory graph simply by naming its tenant_id.
+    """
+    own_org = _own_org(current_user)
+    if not request_tenant:
+        return own_org
+    if request_tenant == own_org:
+        return request_tenant
+    if _BENCH_MODE or getattr(current_user, "is_superuser", False):
+        return request_tenant
+    raise HTTPException(
+        status_code=403,
+        detail="tenant_id does not match the authenticated organization",
+    )
+
+
 # ---------------------------------------------------------------------------
 # Auth dependency — re-use v1 get_tenant_context (same JWT, lighter weight)
 # ---------------------------------------------------------------------------
@@ -62,7 +90,19 @@ try:
     from app.api.v1.endpoints.auth import get_current_user as _auth_dep
     _AUTH = Depends(_auth_dep)
 except ImportError:
-    _AUTH = None  # type: ignore[assignment]
+    # Fail CLOSED, not open: a bare `_AUTH = None` here used to make every v2
+    # endpoint's `current_user=_AUTH` default to None with no dependency at
+    # all — i.e. fully unauthenticated — if this import ever broke (circular
+    # import, refactor, missing module). Refuse every request instead.
+    logger.critical(
+        "v2 auth dependency failed to import; all /v2 endpoints will return "
+        "503 until this is fixed."
+    )
+
+    async def _auth_unavailable():
+        raise HTTPException(status_code=503, detail="v2 authentication is unavailable")
+
+    _AUTH = Depends(_auth_unavailable)
 
 
 # ---------------------------------------------------------------------------
