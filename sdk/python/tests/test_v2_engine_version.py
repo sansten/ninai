@@ -79,7 +79,7 @@ _V2_GRAPH_INSPECT_RESPONSE = {
 _V2_HEALTH_RESPONSE = {
     "engine_version": "v2",
     "graph_available": True,
-    "ollama_available": True,
+    "llm_available": True,
     "message": "all systems operational",
 }
 
@@ -308,7 +308,7 @@ class TestV2EngineResource:
         assert path == "/v2/health"
         assert isinstance(result, V2HealthResult)
         assert result.graph_available is True
-        assert result.ollama_available is True
+        assert result.llm_available is True
 
 
 # ---------------------------------------------------------------------------

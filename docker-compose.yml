@@ -53,18 +53,18 @@ services:
       # Optional OCR sidecar (enabled in this compose)
       - OCR_SERVICE_URL=http://ocr:8000
       - OCR_SERVICE_TIMEOUT_SECONDS=5
-      # Local-first LLM (Ollama).
-      # Default: host Ollama (run `ollama serve` on your machine).
-      # To use Docker Ollama instead: start with --profile ollama and set
-      # OLLAMA_BASE_URL=http://ollama:11434
-      - OLLAMA_BASE_URL=http://host.docker.internal:11434
-      - OLLAMA_MODEL=qwen2.5:7b
-      - OLLAMA_MODEL_FAST=qwen2.5:0.5b
-      - OLLAMA_MODEL_PLANNING=qwen2.5:7b
-      - OLLAMA_MODEL_DISTILLATION=qwen2.5:7b
-      - OLLAMA_MODEL_BOUNDARY=qwen2.5:0.5b
-      - OLLAMA_MODEL_UNCERTAINTY=qwen2.5:0.5b
-      - OLLAMA_MODEL_AGENTS=qwen2.5:7b
+      # Local-first LLM (vLLM).
+      # Default: host vLLM (run `vllm serve` on your machine).
+      # To use Docker vLLM instead: start with --profile vllm and set
+      # VLLM_BASE_URL=http://vllm:11434
+      - VLLM_BASE_URL=http://host.docker.internal:11434
+      - VLLM_MODEL=qwen2.5:7b
+      - VLLM_MODEL_FAST=qwen2.5:0.5b
+      - VLLM_MODEL_PLANNING=qwen2.5:7b
+      - VLLM_MODEL_DISTILLATION=qwen2.5:7b
+      - VLLM_MODEL_BOUNDARY=qwen2.5:0.5b
+      - VLLM_MODEL_UNCERTAINTY=qwen2.5:0.5b
+      - VLLM_MODEL_AGENTS=qwen2.5:7b
     depends_on:
       postgres:
         condition: service_healthy
@@ -225,14 +225,14 @@ services:
       - POSTGRES_HOST=postgres
       - REDIS_HOST=redis
       - QDRANT_HOST=qdrant
-      - OLLAMA_BASE_URL=http://host.docker.internal:11434
-      - OLLAMA_MODEL=qwen2.5:7b
-      - OLLAMA_MODEL_FAST=qwen2.5:0.5b
-      - OLLAMA_MODEL_PLANNING=qwen2.5:7b
-      - OLLAMA_MODEL_DISTILLATION=qwen2.5:7b
-      - OLLAMA_MODEL_BOUNDARY=qwen2.5:0.5b
-      - OLLAMA_MODEL_UNCERTAINTY=qwen2.5:0.5b
-      - OLLAMA_MODEL_AGENTS=qwen2.5:7b
+      - VLLM_BASE_URL=http://host.docker.internal:11434
+      - VLLM_MODEL=qwen2.5:7b
+      - VLLM_MODEL_FAST=qwen2.5:0.5b
+      - VLLM_MODEL_PLANNING=qwen2.5:7b
+      - VLLM_MODEL_DISTILLATION=qwen2.5:7b
+      - VLLM_MODEL_BOUNDARY=qwen2.5:0.5b
+      - VLLM_MODEL_UNCERTAINTY=qwen2.5:0.5b
+      - VLLM_MODEL_AGENTS=qwen2.5:7b
     depends_on:
       - redis
       - postgres
@@ -253,36 +253,36 @@ services:
     environment:
       - CELERY_BROKER_URL=redis://redis:6379/1
       - CELERY_RESULT_BACKEND=redis://redis:6379/2
-      - OLLAMA_BASE_URL=http://host.docker.internal:11434
-      - OLLAMA_MODEL=qwen2.5:7b
-      - OLLAMA_MODEL_FAST=qwen2.5:0.5b
-      - OLLAMA_MODEL_PLANNING=qwen2.5:7b
-      - OLLAMA_MODEL_DISTILLATION=qwen2.5:7b
-      - OLLAMA_MODEL_BOUNDARY=qwen2.5:0.5b
-      - OLLAMA_MODEL_UNCERTAINTY=qwen2.5:0.5b
-      - OLLAMA_MODEL_AGENTS=qwen2.5:7b
+      - VLLM_BASE_URL=http://host.docker.internal:11434
+      - VLLM_MODEL=qwen2.5:7b
+      - VLLM_MODEL_FAST=qwen2.5:0.5b
+      - VLLM_MODEL_PLANNING=qwen2.5:7b
+      - VLLM_MODEL_DISTILLATION=qwen2.5:7b
+      - VLLM_MODEL_BOUNDARY=qwen2.5:0.5b
+      - VLLM_MODEL_UNCERTAINTY=qwen2.5:0.5b
+      - VLLM_MODEL_AGENTS=qwen2.5:7b
     depends_on:
       - redis
     networks:
       - ninai-network
 
   # ---------------------------------------------------------------------------
-  # Ollama (LLM for Summarization)
-  # Opt-in: docker-compose --profile ollama up -d
-  # Default behaviour: backend points to host Ollama (http://host.docker.internal:11434).
-  # Use this profile only when you want Ollama managed inside Docker.
+  # vLLM (LLM for Summarization)
+  # Opt-in: docker-compose --profile vllm up -d
+  # Default behaviour: backend points to host vLLM (http://host.docker.internal:11434).
+  # Use this profile only when you want vLLM managed inside Docker.
   # ---------------------------------------------------------------------------
-  ollama:
-    image: ollama/ollama:latest
-    container_name: ollama
+  vllm:
+    image: vllm/vllm:latest
+    container_name: vllm
     profiles:
-      - ollama
+      - vllm
     ports:
       - "11434:11434"
     volumes:
-      - ollama_data:/root/.ollama
+      - vllm_data:/root/.vllm
     environment:
-      - OLLAMA_MODELS=qwen2.5:7b
+      - VLLM_MODELS=qwen2.5:7b
     restart: unless-stopped
     networks:
       - ninai-network
@@ -431,7 +431,7 @@ volumes:
   redis_data:
   qdrant_data:
   elasticsearch_data:
-  ollama_data:
+  vllm_data:
   prometheus_data:
   grafana_data:
   alertmanager_data:

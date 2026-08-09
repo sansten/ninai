@@ -137,6 +137,7 @@ def attach_org_filter(session: AsyncSession, org_id: str, user_id: str) -> None:
     # Build loader criteria for each tenant model
     # with_loader_criteria automatically appends WHERE clause to all queries for that model
     loader_criteria = {}
+    failed_models: list[str] = []
     for model_class, org_column in TENANT_MODELS.items():
         try:
             loader_criteria[model_class] = with_loader_criteria(
@@ -145,23 +146,34 @@ def attach_org_filter(session: AsyncSession, org_id: str, user_id: str) -> None:
                 include_aliases=True,
             )
         except Exception as e:
-            logger.error(f"Failed to attach criteria for {model_class.__name__}: {e}")
-    
+            failed_models.append(model_class.__name__)
+            logger.critical(
+                f"ORM defense-in-depth filter failed to attach for {model_class.__name__} "
+                f"(org={org_id}); this model has NO ORM-level org isolation for this "
+                f"session — Postgres RLS is the only remaining guard: {e}"
+            )
+
     # Store criteria in session info for access by query execution
     if loader_criteria:
         session.info['org_filter_criteria'] = loader_criteria
         session.info['org_filter_active'] = True
         session.info['org_id'] = org_id
         session.info['user_id'] = user_id
+        # Surfaced by get_org_filter_status() so a caller can distinguish
+        # "fully covered" from "partially degraded" instead of reading
+        # org_filter_active=True as a blanket guarantee.
+        session.info['org_filter_failed_models'] = failed_models
         logger.debug(f"Attached ORM filters for org {org_id} ({len(loader_criteria)} models)")
 
 
 def get_org_filter_status(session: AsyncSession) -> Optional[Dict[str, Any]]:
     """
     Check if org filter is active and return filter metadata.
-    
+
     Returns:
-        Dict with org_id, user_id, and active status, or None if not set
+        Dict with org_id, user_id, active status, model_count, and
+        failed_models (tenant models with NO ORM-level org isolation for
+        this session — empty when coverage is complete), or None if not set
     """
     if session.info.get('org_filter_active'):
         return {
@@ -169,6 +181,7 @@ def get_org_filter_status(session: AsyncSession) -> Optional[Dict[str, Any]]:
             'user_id': session.info.get('user_id'),
             'active': True,
             'model_count': len(session.info.get('org_filter_criteria', {})),
+            'failed_models': session.info.get('org_filter_failed_models', []),
         }
     return None
 

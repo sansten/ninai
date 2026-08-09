@@ -26,6 +26,7 @@ Per-tenant capability gating:
 
 from __future__ import annotations
 
+import asyncio
 import dataclasses
 import json
 import logging
@@ -36,7 +37,7 @@ from typing import Any, Callable
 
 from app.agents.anomaly_detection_agent import run_heuristic as _anomaly_detect
 from app.agents.debate_ensemble_agent import DebateEnsembleAgent
-from app.agents.llm.ollama_breaker import create_ollama_client
+from app.agents.llm.llm_breaker import create_llm_client
 from app.agents.memory_tier_manager_agent import MemoryTierManagerAgent
 from app.agents.query_intelligence_agent import run_heuristic as _query_intelligence_detect
 from app.core.config import settings
@@ -151,6 +152,8 @@ class GatewayAnswerResult:
     used_llm: bool
     answer_source: str
     llm_error: str | None = None
+    llm_failure_mode: str | None = None
+    llm_endpoint: str | None = None
 
 
 @dataclass
@@ -219,6 +222,134 @@ def _normalise_tokens(text: str) -> set[str]:
     return {t for t in _PUNCT_RE.sub(" ", text.lower()).split() if t}
 
 
+def _classify_llm_failure(error_text: str | None) -> str | None:
+    value = str(error_text or "").strip().lower()
+    if not value:
+        return None
+    if "empty_response" in value:
+        return "empty_response"
+    if "circuit_breaker_open" in value:
+        return "circuit_breaker_open"
+    if "404" in value and "not found" in value:
+        return "model_not_available"
+    if any(token in value for token in ("401", "403", "unauthorized", "forbidden")):
+        return "auth_error"
+    if any(token in value for token in ("429", "too many requests")):
+        return "rate_limited"
+    if any(token in value for token in ("502", "503", "504", "bad gateway", "gateway timeout")):
+        return "upstream_unavailable"
+    if any(token in value for token in ("timeout", "timed out", "readtimeout", "connecttimeout")):
+        return "timeout"
+    if "http" in value or "transport" in value or "connection" in value:
+        return "transport_error"
+    return "llm_error"
+
+
+def _effective_llm_num_ctx(requested_num_ctx: int, *, task: str) -> int:
+    requested = max(256, int(requested_num_ctx or 0) or 2048)
+    if task == "judge":
+        configured = int(getattr(settings, "VLLM_MAX_NUM_CTX_JUDGE", 1024) or 1024)
+        default_cap = 1024
+    else:
+        configured = int(getattr(settings, "VLLM_MAX_NUM_CTX_ANSWER", 2048) or 2048)
+        default_cap = 2048
+    cap = max(512, min(configured, default_cap))
+    return max(512, min(requested, cap))
+
+
+def _effective_llm_max_concurrency(*, task: str) -> int:
+    configured = max(1, int(getattr(settings, "VLLM_MAX_CONCURRENCY", 2) or 2))
+    if task == "judge":
+        return max(1, min(configured, 2))
+    return max(1, min(configured, 2))
+
+
+def _build_compact_answer_prompt(question: str, memories: list[dict]) -> tuple[str, list[str]]:
+    fact_lines: list[str] = []
+    seen_facts: set[tuple[str, str, str]] = set()
+    for memory in memories[:24]:
+        extra = dict(memory.get("extra_metadata") or {})
+        support_candidates: list[dict[str, Any]] = []
+        fact_support = extra.get("fact_support")
+        if isinstance(fact_support, dict):
+            support_candidates.append(fact_support)
+        for item in list(extra.get("fact_supporting_facts") or []):
+            if isinstance(item, dict):
+                support_candidates.append(item)
+        for item in support_candidates:
+            subject = str(item.get("subject") or "").strip()
+            predicate = str(item.get("predicate") or "").strip()
+            obj = str(item.get("object") or "").strip()
+            if not (subject and predicate and obj):
+                continue
+            key = (subject.lower(), predicate.lower(), obj.lower())
+            if key in seen_facts:
+                continue
+            seen_facts.add(key)
+            fact_lines.append(f"- FACT: {subject} | {predicate} | {obj}")
+            if len(fact_lines) >= 4:
+                break
+        if len(fact_lines) >= 4:
+            break
+
+    context_lines: list[str] = []
+    total_chars = 0
+    max_chars = max(900, int(getattr(settings, "VLLM_MAX_PROMPT_CHARS_ANSWER", 1600) or 1600))
+    reserved_chars = sum(len(line) + 1 for line in fact_lines)
+    conversation_budget = max(700, max_chars - reserved_chars - 280)
+    for memory in memories[:24]:
+        line = _answer_context_line(memory)
+        if not line:
+            continue
+        projected = total_chars + len(line) + 1
+        if context_lines and projected > conversation_budget:
+            break
+        context_lines.append(line)
+        total_chars = projected
+    context_text = "\n".join(context_lines)
+    fact_text = "\n".join(fact_lines)
+    evidence_block = []
+    if fact_text:
+        evidence_block.extend(["Facts:", fact_text, ""])
+    evidence_block.extend(["Conversation:", context_text])
+    evidence_text = "\n".join(evidence_block)
+    prompt = (
+        "Answer the question using only the evidence below.\n"
+        "Prefer FACT lines over conversation when they directly answer the question.\n"
+        "Answer about the primary subject named in the question, not a distractor.\n"
+        "Output ONLY the answer - a name, place, date, or short phrase (1-20 words).\n"
+        "Use EXACT words from the evidence for named entities.\n"
+        "Do not paraphrase or describe - copy the specific name/fact.\n\n"
+        f"{evidence_text}\n\n"
+        f"Question: {question}\nAnswer:"
+    )
+    return prompt, context_lines
+
+
+def _resolve_answer_prompt(question: str, memories: list[dict], prompt_override: str | None) -> tuple[str, list[str]]:
+    if not prompt_override:
+        return _build_compact_answer_prompt(question, memories)
+
+    override = str(prompt_override or "")
+    if not memories:
+        return override, []
+
+    override_lines = override.count("\n") + 1
+    override_chars = len(override)
+    oversized = override_chars > 3500 or override_lines > 60
+    embedded_context = ("conversation:" in override.lower()) or ("context:" in override.lower())
+    if oversized or embedded_context:
+        logger.info(
+            "gateway.answer compacting prompt_override question=%r chars=%s lines=%s",
+            question[:120],
+            override_chars,
+            override_lines,
+        )
+        return _build_compact_answer_prompt(question, memories)
+
+    return override, []
+
+
 def _assemble_read_context(
     memories: list[dict],
     query: str,
@@ -284,6 +415,104 @@ def _extract_question_subject(query: str) -> "str | None":
     return None
 
 
+def _extract_question_entities(query: str) -> list[str]:
+    entities: list[str] = []
+    seen: set[str] = set()
+    for token in re.findall(r"\b([A-Z][a-z]{2,})\b", str(query or "")):
+        lowered = token.lower()
+        if lowered in _CGS_SKIP_WORDS or lowered in seen:
+            continue
+        seen.add(lowered)
+        entities.append(token)
+    return entities
+
+
+def _memory_mentions_entity(memory: dict[str, Any], entity: str) -> bool:
+    target = str(entity or "").strip().lower()
+    if not target:
+        return False
+
+    text_parts = [
+        str(memory.get("title") or ""),
+        str(memory.get("content_preview") or ""),
+        str(memory.get("content") or ""),
+    ]
+    entities = memory.get("entities") or {}
+    if isinstance(entities, dict):
+        for value in entities.values():
+            if isinstance(value, list):
+                text_parts.extend(str(item or "") for item in value)
+            else:
+                text_parts.append(str(value or ""))
+
+    extra = dict(memory.get("extra_metadata") or {})
+    fact_support = dict(extra.get("fact_support") or {})
+    text_parts.extend(str(fact_support.get(key) or "") for key in ("subject", "predicate", "object"))
+    for fact in extra.get("fact_supporting_facts") or []:
+        if isinstance(fact, dict):
+            text_parts.extend(str(fact.get(key) or "") for key in ("subject", "predicate", "object"))
+
+    combined = " ".join(part.strip().lower() for part in text_parts if str(part).strip())
+    if not combined:
+        return False
+    return target in combined
+
+
+def _memory_is_about_entity(memory: dict[str, Any], entity: str) -> bool:
+    target = str(entity or "").strip()
+    if not target:
+        return False
+
+    preview = " ".join(
+        str(memory.get(key) or "").strip()
+        for key in ("title", "content_preview", "content")
+    )
+    if not preview:
+        return False
+
+    lowered = preview.lower()
+    subject = target.lower()
+    if not _memory_mentions_entity(memory, target):
+        return False
+
+    patterns = (
+        rf"\b{re.escape(subject)}['’]s\b",
+        rf"\b{re.escape(subject)}\s+(?:is|was|will|would|did|does|has|have|had|realized|planned|plans|wants|wanted|needs|needed|likes|liked|loves|loved|researched|researching|moved|move|went|goes|attended|supports|chose|chooses)\b",
+        rf"\babout\s+{re.escape(subject)}\b",
+        rf"\bfor\s+{re.escape(subject)}\b",
+    )
+    if any(re.search(pattern, lowered) for pattern in patterns):
+        return True
+
+    extra = dict(memory.get("extra_metadata") or {})
+    fact_support = dict(extra.get("fact_support") or {})
+    if str(fact_support.get("subject") or "").strip().lower() == subject:
+        return True
+    for fact in extra.get("fact_supporting_facts") or []:
+        if isinstance(fact, dict) and str(fact.get("subject") or "").strip().lower() == subject:
+            return True
+    return False
+
+
+def _subject_relevance(memory: dict[str, Any], subject: str | None, distractors: list[str]) -> float:
+    if not subject:
+        return 0.0
+
+    score = 0.0
+    preview = str(memory.get("content_preview") or memory.get("content") or "").strip()
+    speaker_match = _CGS_SPEAKER_RE.match(preview)
+    if speaker_match and speaker_match.group(1).lower() == subject.lower():
+        score += 1.1
+    if _memory_mentions_entity(memory, subject):
+        score += 1.4
+
+    lower_distractors = [item.lower() for item in distractors if item and item.lower() != subject.lower()]
+    if lower_distractors and not _memory_mentions_entity(memory, subject):
+        distractor_hits = sum(1 for item in lower_distractors if _memory_mentions_entity(memory, item))
+        score -= min(0.75, distractor_hits * 0.3)
+    return score
+
+
 def _detect_speaker_mismatch(query: str, memories: list[dict], top_n: int = 3) -> bool:
     """Return True when all top retrieved memories are from a speaker other than the query subject.
 
@@ -298,6 +527,11 @@ def _detect_speaker_mismatch(query: str, memories: list[dict], top_n: int = 3) -
 
     candidates = memories[:top_n]
     if not candidates:
+        return False
+
+    # If the evidence is clearly about the requested subject, do not discard it
+    # just because someone else is the speaker for that turn.
+    if any(_memory_is_about_entity(memory, subject) for memory in candidates):
         return False
 
     mismatch_count = 0
@@ -331,18 +565,21 @@ def _prepare_read_candidates(
         return []
 
     window = max(int(limit or 0), min(len(memories), max(10, int(limit or 0) * 3)))
-    scored_candidates: list[tuple[int, float, dict[str, Any]]] = []
+    query_entities = _extract_question_entities(query)
+    query_subject = query_entities[0] if query_entities else None
+    distractors = query_entities[1:]
+    scored_candidates: list[tuple[int, float, float, dict[str, Any]]] = []
     for idx, memory in enumerate(memories):
         existing = _coerce_rank_score(memory.get("_retrieval_score", memory.get("score")))
         if existing is None:
             continue
         enriched = dict(memory)
         enriched["_retrieval_score"] = existing
-        scored_candidates.append((idx, existing, enriched))
+        scored_candidates.append((idx, existing, _subject_relevance(enriched, query_subject, distractors), enriched))
 
     if scored_candidates:
-        scored_candidates.sort(key=lambda item: (-item[1], item[0]))
-        return [item[2] for item in scored_candidates[:window]]
+        scored_candidates.sort(key=lambda item: (-(item[1] + item[2]), -item[1], item[0]))
+        return [item[3] for item in scored_candidates[:window]]
 
     return _assemble_read_context(memories, query, requester)[:window]
 
@@ -859,22 +1096,6 @@ def _answer_context_line(memory: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def _heuristic_answer(question: str, memories: list[dict]) -> str:
-    """Best-effort keyword-overlap answer extraction when Ollama is unavailable."""
-    q_tokens = _normalise_tokens(question)
-    best_score = -1
-    best_snippet = ""
-    for m in memories:
-        content = str(m.get("content") or "")
-        tokens = _normalise_tokens(content)
-        score = len(q_tokens & tokens)
-        if score > best_score:
-            best_score = score
-            # Return first sentence of best-matching memory
-            best_snippet = content.split(".")[0].strip()
-    return best_snippet or "Not mentioned"
-
-
 # ---------------------------------------------------------------------------
 # Gateway context chain (stateful multi-call sessions via Redis)
 # ---------------------------------------------------------------------------
@@ -1369,21 +1590,32 @@ class CognitiveGatewayService:
     ) -> GatewayAnswerResult:
         """Generate an answer to a question using retrieved memory context.
 
-        Calls the server-side Ollama instance so LLM inference stays in-cluster.
-        Falls back to keyword-overlap extraction if Ollama is unavailable.
+        Calls the server-side vLLM instance so LLM inference stays in-cluster.
+        Does not fall back to heuristic extraction when vLLM is unavailable.
 
-        If prompt_override is provided it is sent to Ollama directly, bypassing
+        If prompt_override is provided it is sent to vLLM directly, bypassing
         the default context-assembly and prompt template.
 
-        timeout_seconds: override the default OLLAMA_TIMEOUT_SECONDS config.
-          Benchmark callers pass 200s+ to avoid 30s hard-timeout fallbacks on
+        timeout_seconds: override the default VLLM_TIMEOUT_SECONDS config.
+          Benchmark callers pass 200s+ to avoid 30s hard-timeout failures on
           large models (qwen2.5:32b on CPU takes 60-120s including model load).
         keep_alive: seconds to keep the model loaded (-1 = forever). Pass -1
           during long benchmark runs to prevent model eviction between calls.
         """
         self._check("answer")
 
+        effective_num_ctx = _effective_llm_num_ctx(num_ctx, task="answer")
+        resolved_prompt: str | None = None
+        resolved_context_lines: list[str] | None = None
         if prompt_override:
+            resolved_prompt, resolved_context_lines = _resolve_answer_prompt(question, memories, prompt_override)
+            if resolved_prompt != str(prompt_override or "") or resolved_context_lines:
+                prompt_override = None
+
+        if prompt_override is None and resolved_prompt is not None:
+            prompt = resolved_prompt
+            context_lines = list(resolved_context_lines or [])
+        elif prompt_override:
             prompt = prompt_override
             context_lines: list[str] = []
         else:
@@ -1402,10 +1634,10 @@ class CognitiveGatewayService:
                 f"Question: {question}\nAnswer:"
             )
 
-        _model = model or str(settings.get_ollama_model("agents"))
+        _model = model or str(settings.get_llm_model("agents"))
         # Use caller-provided timeout when available; the config default (30s) is too short
         # for large models that need 60-120s to load+infer on first call after idle.
-        _default_timeout = float(getattr(settings, "OLLAMA_TIMEOUT_SECONDS", 30.0))
+        _default_timeout = float(getattr(settings, "VLLM_TIMEOUT_SECONDS", 30.0))
         _timeout = float(timeout_seconds) if timeout_seconds is not None else _default_timeout
         # Clamp: minimum 30s, maximum 300s to avoid unbounded waits
         _timeout = max(30.0, min(300.0, _timeout))
@@ -1413,46 +1645,58 @@ class CognitiveGatewayService:
         used_llm = False
         answer_source = "gateway_empty"
         llm_error: str | None = None
+        llm_failure_mode: str | None = None
         answer_text = ""
+        model_used = _model
+        llm_endpoint: str | None = None
 
         try:
-            client = create_ollama_client(
-                base_url=str(getattr(settings, "OLLAMA_BASE_URL", "http://localhost:11434")),
+            client = create_llm_client(
+                base_url=str(getattr(settings, "VLLM_BASE_URL", "http://localhost:11434")),
                 model=_model,
                 timeout_seconds=_timeout,
-                max_concurrency=8,
+                max_concurrency=_effective_llm_max_concurrency(task="answer"),
             )
-            # keep_alive is handled by the base OllamaClient (hardcoded to -1 = never evict).
+            # keep_alive is handled by the base client (hardcoded to -1 = never evict).
             # The caller's keep_alive hint is noted for logging but not forwarded as a kwarg.
             _ = keep_alive  # acknowledged; base client always uses keep_alive=-1
-            answer_text = await client.complete_text(prompt=prompt, num_ctx=num_ctx)
+            # Guard against transport/client edge cases where the underlying
+            # call can stall longer than configured HTTP timeouts.
+            answer_text = await asyncio.wait_for(
+                client.complete_text(prompt=prompt, num_ctx=effective_num_ctx),
+                timeout=_timeout + 5.0,
+            )
             used_llm = bool(answer_text)
+            model_used = str(getattr(client, "last_model_used", "") or _model)
+            llm_endpoint = str(getattr(client, "last_endpoint_used", "") or "") or None
             if used_llm:
                 answer_source = "gateway"
             else:
                 llm_error = str(getattr(client, "last_error", "") or "empty_response")
+                llm_failure_mode = _classify_llm_failure(llm_error)
+                if llm_failure_mode and llm_failure_mode != "empty_response":
+                    answer_source = "gateway_error"
         except Exception as exc:
             llm_error = repr(exc)
+            llm_failure_mode = _classify_llm_failure(llm_error)
+            answer_source = "gateway_error"
             logger.warning(
-                "ollama answer fallback: model=%s timeout=%s exc=%s: %s",
+                "vllm answer fallback: model=%s timeout=%s exc=%s: %s",
                 _model,
                 _timeout,
                 type(exc).__name__,
                 exc,
             )
 
-        if not answer_text:
-            answer_text = _heuristic_answer(question, memories)
-            _model = "heuristic"
-            answer_source = "heuristic"
-
         return GatewayAnswerResult(
             answer=answer_text,
-            model=_model,
+            model=model_used,
             context_turns=len(context_lines),
             used_llm=used_llm,
             answer_source=answer_source,
             llm_error=llm_error,
+            llm_failure_mode=llm_failure_mode,
+            llm_endpoint=llm_endpoint,
         )
 
     # ------------------------------------------------------------------
@@ -1481,17 +1725,18 @@ class CognitiveGatewayService:
             "Reply with only \"yes\" or \"no\". No explanation.\nAnswer:"
         )
 
-        _model = model or str(settings.get_ollama_model("agents"))
+        _model = model or str(settings.get_llm_model("agents"))
         raw = ""
 
         try:
-            client = create_ollama_client(
-                base_url=str(getattr(settings, "OLLAMA_BASE_URL", "http://localhost:11434")),
+            client = create_llm_client(
+                base_url=str(getattr(settings, "VLLM_BASE_URL", "http://localhost:11434")),
                 model=_model,
                 timeout_seconds=60.0,
-                max_concurrency=8,
+                max_concurrency=_effective_llm_max_concurrency(task="judge"),
             )
             raw = await client.complete_text(prompt=prompt, num_ctx=512, temperature=0.0)
+            _model = str(getattr(client, "last_model_used", "") or _model)
         except Exception:
             pass
 

@@ -176,6 +176,28 @@ async def test_deploy_by_friday_detected(mock_settings):
 
 @pytest.mark.asyncio
 @patch("app.agents.prospective_memory_agent.settings")
+async def test_deadline_detected_from_memory_content_when_no_enrichment_content(mock_settings):
+    """Regression: no upstream agent ever writes a "content" key into
+    enrichment — real dispatch (OrchestrationBusAgent) only populates
+    memory.content. Reading only enrichment.get("content") meant this was
+    always "" in production, so deadline detection never fired."""
+    mock_settings.AGENT_STRATEGY = "heuristic"
+    agent = ProspectiveMemoryAgent()
+    ctx = {
+        "memory": {
+            "content": "Deploy by Friday.",
+            "enrichment": {"current_time": _ANCHOR},
+        },
+        "runtime": {"job_id": "trace-real-dispatch"},
+    }
+    result = await agent.run("m1", ctx)
+    assert result.status == "success"
+    assert result.outputs["deadline_detected"] is True
+    assert len(result.outputs["deadline_tokens"]) >= 1
+
+
+@pytest.mark.asyncio
+@patch("app.agents.prospective_memory_agent.settings")
 async def test_within_2_hours_high_urgency(mock_settings):
     mock_settings.AGENT_STRATEGY = "heuristic"
     agent = ProspectiveMemoryAgent()
@@ -377,10 +399,10 @@ def test_validate_outputs_skipped_on_error_status():
 
 @pytest.mark.asyncio
 @patch("app.agents.prospective_memory_agent.settings")
-@patch("app.agents.prospective_memory_agent.create_ollama_client")
+@patch("app.agents.prospective_memory_agent.create_llm_client")
 async def test_llm_path_success(mock_client_factory, mock_settings):
     mock_settings.AGENT_STRATEGY = "llm"
-    mock_settings.OLLAMA_MODEL = "qwen2.5:7b"
+    mock_settings.VLLM_MODEL = "qwen2.5:7b"
 
     llm_response = {
         "reminders_suggested": [
@@ -414,10 +436,10 @@ async def test_llm_path_success(mock_client_factory, mock_settings):
 
 @pytest.mark.asyncio
 @patch("app.agents.prospective_memory_agent.settings")
-@patch("app.agents.prospective_memory_agent.create_ollama_client")
+@patch("app.agents.prospective_memory_agent.create_llm_client")
 async def test_llm_falls_back_on_invalid_response(mock_client_factory, mock_settings):
     mock_settings.AGENT_STRATEGY = "llm"
-    mock_settings.OLLAMA_MODEL = "qwen2.5:7b"
+    mock_settings.VLLM_MODEL = "qwen2.5:7b"
 
     mock_client = AsyncMock()
     mock_client.generate = AsyncMock(return_value={"response": "not json"})
@@ -433,10 +455,10 @@ async def test_llm_falls_back_on_invalid_response(mock_client_factory, mock_sett
 
 @pytest.mark.asyncio
 @patch("app.agents.prospective_memory_agent.settings")
-@patch("app.agents.prospective_memory_agent.create_ollama_client")
+@patch("app.agents.prospective_memory_agent.create_llm_client")
 async def test_llm_falls_back_on_exception(mock_client_factory, mock_settings):
     mock_settings.AGENT_STRATEGY = "llm"
-    mock_settings.OLLAMA_MODEL = "qwen2.5:7b"
+    mock_settings.VLLM_MODEL = "qwen2.5:7b"
 
     mock_client = AsyncMock()
     mock_client.generate = AsyncMock(side_effect=ConnectionError("LLM down"))

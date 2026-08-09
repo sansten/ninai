@@ -39,6 +39,11 @@ from app.tasks.self_model import self_model_recompute_task
 from app.services.goal_service import GoalService
 from app.tasks.goals import goal_progress_recompute_task
 from app.services.cognitive_autonomy_control_service import get_cognitive_autonomy_control_service
+from app.services.adaptive_strategy_service import AdaptiveStrategyService
+from app.services.strategy_learning_service import StrategyLearningService
+from app.services.meta_cognitive_service import MetaCognitiveService
+from app.services.intrinsic_motivation_service import IntrinsicMotivationService
+from app.services.cognitive_context_aggregator import CognitiveContextAggregator
 
 
 logger = get_task_logger(__name__)
@@ -113,6 +118,14 @@ def cognitive_loop_task(
 
                     simulator = SimulationService()
                     simulation_reports = SimulationReportService(db)
+                    adaptive_strategy = AdaptiveStrategyService(session=db)
+                    strategy_learning = StrategyLearningService(session=db)
+                    meta_cognitive = MetaCognitiveService(session=db, org_id=org_id)
+                    intrinsic_motivation = IntrinsicMotivationService(db)
+                    context_aggregator = CognitiveContextAggregator(
+                        meta_cognitive=meta_cognitive,
+                        intrinsic_motivation=intrinsic_motivation,
+                    )
 
                     # SelfModel summary influences planning/evidence. Fail-closed to defaults.
                     self_model_summary: dict = {}
@@ -138,9 +151,9 @@ def cognitive_loop_task(
                         critic=CriticAgent(),
                         available_tools=["memory.search"],
                         self_model_summary=self_model_summary,
-                        adaptive_strategy=None,
-                        strategy_learning=None,
-                        context_aggregator=None,
+                        adaptive_strategy=adaptive_strategy,
+                        strategy_learning=strategy_learning,
+                        context_aggregator=context_aggregator,
                         config=OrchestratorConfig(max_iterations=int(max_iterations or 3)),
                     )
 

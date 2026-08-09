@@ -254,7 +254,7 @@ class RetrievalService:
         # Embed query
         query_vec = await self.embedding_svc.get_embedding(
             text=query,
-            model=settings.OLLAMA_EMBEDDING_MODEL,
+            model=settings.LOCAL_EMBEDDING_MODEL,
         )
         if not query_vec or not any(v != 0 for v in query_vec):
             logger.warning("Empty query embedding – returning empty results")

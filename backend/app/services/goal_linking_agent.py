@@ -15,7 +15,7 @@ from typing import Any
 from pydantic import ValidationError
 
 from app.agents.llm.base import LLMClient
-from app.agents.llm.ollama import OllamaClient
+from app.agents.llm.vllm import VLLMClient
 from app.core.config import settings
 from app.schemas.goal_agents import GoalLinkingAgentOutput
 from app.services.cognitive_loop.prompt_loader import load_prompt_text
@@ -30,11 +30,11 @@ class GoalLinkingAgent:
         self.llm_client = llm_client
 
     def _default_llm(self) -> LLMClient:
-        return OllamaClient(
-            base_url=str(getattr(settings, "OLLAMA_BASE_URL", "http://localhost:11434")),
-            model=str(settings.get_ollama_model("planning")),
-            timeout_seconds=float(getattr(settings, "OLLAMA_TIMEOUT_SECONDS", 5.0)),
-            max_concurrency=int(getattr(settings, "OLLAMA_MAX_CONCURRENCY", 2)),
+        return VLLMClient(
+            base_url=str(getattr(settings, "VLLM_BASE_URL", "http://localhost:11434")),
+            model=str(settings.get_llm_model("planning")),
+            timeout_seconds=float(getattr(settings, "VLLM_TIMEOUT_SECONDS", 5.0)),
+            max_concurrency=int(getattr(settings, "VLLM_MAX_CONCURRENCY", 2)),
         )
 
     def _fail_closed(self) -> GoalLinkingAgentOutput:

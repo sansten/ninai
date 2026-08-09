@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import stat
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -44,6 +46,59 @@ async def test_export_org_data_creates_json_file(tmp_path):
     parsed = json.loads(Path(output).read_text(encoding="utf-8"))
     assert parsed["org_id"] == "org-1"
     assert "tables" in parsed
+
+
+@pytest.mark.asyncio
+async def test_export_org_data_records_failed_tables_not_silent_empty(tmp_path):
+    """Regression: a table SELECT failure used to be indistinguishable from
+    "no rows found" — both produced an empty list. Failures must now be
+    visible in tables_failed."""
+    db = _mk_db()
+
+    async def _execute(*args, **kwargs):
+        raise RuntimeError("relation does not exist")
+
+    db.execute = AsyncMock(side_effect=_execute)
+
+    svc = TenantOffboardingService(db)
+    output = await svc.export_org_data("org-1", export_dir=str(tmp_path))
+
+    parsed = json.loads(Path(output).read_text(encoding="utf-8"))
+    assert set(parsed["tables_failed"]) == set(TenantOffboardingService.TABLES_TO_PURGE)
+    for table in TenantOffboardingService.TABLES_TO_PURGE:
+        assert parsed["tables"][table] == []
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX file permission bits")
+@pytest.mark.asyncio
+async def test_export_org_data_file_is_owner_only(tmp_path):
+    db = _mk_db()
+    result = MagicMock()
+    result.all.return_value = []
+    db.execute.return_value = result
+
+    svc = TenantOffboardingService(db)
+    output = await svc.export_org_data("org-1", export_dir=str(tmp_path))
+
+    mode = stat.S_IMODE(Path(output).stat().st_mode)
+    assert mode == 0o600
+
+
+@pytest.mark.asyncio
+async def test_delete_org_data_raises_on_table_failure_instead_of_silent_zero():
+    """Regression: a failed DELETE used to be recorded as counts[table] = 0,
+    identical to "there was nothing to delete" — a compliance-facing silent
+    failure. It must now raise so the caller knows erasure is incomplete."""
+    db = _mk_db()
+
+    async def _execute(*args, **kwargs):
+        raise RuntimeError("lock timeout")
+
+    db.execute = AsyncMock(side_effect=_execute)
+
+    svc = TenantOffboardingService(db)
+    with pytest.raises(RuntimeError):
+        await svc.delete_org_data("org-1")
 
 
 @pytest.mark.asyncio

@@ -53,11 +53,13 @@ class MemorySyscallAPI:
             organization_id=token.organization_id,
             resource_type="memory",
             resource_id=audit_resource_id,
-            success=True,
+            success=False,
             details={
                 "token_id": token.token_id,
                 "session_id": token.session_id,
                 "agent_id": token.agent_id,
+                "status": "not_implemented",
+                "message": "Memory syscall API is a placeholder — actual implementation pending",
             },
         )
 
@@ -86,12 +88,14 @@ class MemorySyscallAPI:
             organization_id=token.organization_id,
             resource_type="memory",
             resource_id=audit_resource_id,
-            success=True,
+            success=False,
             details={
                 "token_id": token.token_id,
                 "session_id": token.session_id,
                 "agent_id": token.agent_id,
                 "content_keys": list(content.keys()),
+                "status": "not_implemented",
+                "message": "Memory syscall API is a placeholder — actual implementation pending",
             },
         )
 
@@ -114,13 +118,15 @@ class MemorySyscallAPI:
             organization_id=token.organization_id,
             resource_type="memory",
             resource_id=token.organization_id,
-            success=True,
+            success=False,
             details={
                 "token_id": token.token_id,
                 "session_id": token.session_id,
                 "agent_id": token.agent_id,
                 "query_length": len(query),
                 "limit": limit,
+                "status": "not_implemented",
+                "message": "Memory syscall API is a placeholder — actual implementation pending",
             },
         )
 
@@ -146,12 +152,14 @@ class MemorySyscallAPI:
             organization_id=token.organization_id,
             resource_type="memory",
             resource_id=audit_resource_id,
-            success=True,
+            success=False,
             details={
                 "token_id": token.token_id,
                 "session_id": token.session_id,
                 "agent_id": token.agent_id,
                 "is_insert": memory_id is None,
+                "status": "not_implemented",
+                "message": "Memory syscall API is a placeholder — actual implementation pending",
             },
         )
 
@@ -175,11 +183,13 @@ class MemorySyscallAPI:
             organization_id=token.organization_id,
             resource_type="memory",
             resource_id=audit_resource_id,
-            success=True,
+            success=False,
             details={
                 "token_id": token.token_id,
                 "session_id": token.session_id,
                 "agent_id": token.agent_id,
+                "status": "not_implemented",
+                "message": "Memory syscall API is a placeholder — actual implementation pending",
             },
         )
 
@@ -205,12 +215,14 @@ class MemorySyscallAPI:
             organization_id=token.organization_id,
             resource_type="memory",
             resource_id=audit_resource_id,
-            success=True,
+            success=False,
             details={
                 "token_id": token.token_id,
                 "session_id": token.session_id,
                 "agent_id": token.agent_id,
                 "feedback_type": feedback_type,
+                "status": "not_implemented",
+                "message": "Memory syscall API is a placeholder — actual implementation pending",
             },
         )
 

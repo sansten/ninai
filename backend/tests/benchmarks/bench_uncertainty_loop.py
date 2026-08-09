@@ -7,7 +7,7 @@ next step (top_question). The loop is closed when:
   2. knowledge_gaps list is non-empty
   3. top_question (the next step) is non-None
 
-Both agents are called in heuristic mode — no Ollama or database required.
+Both agents are called in heuristic mode — no vLLM or database required.
 """
 from __future__ import annotations
 

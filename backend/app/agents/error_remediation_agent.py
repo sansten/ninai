@@ -97,7 +97,14 @@ def run_heuristic(enrichment: dict) -> dict[str, Any]:
     # Step 2: look up best playbook
     playbook_id, playbook_conf = _best_playbook(candidates)
     if override_confidence is not None:
-        playbook_conf = float(override_confidence)
+        try:
+            playbook_conf = float(override_confidence)
+        except (TypeError, ValueError):
+            # A non-numeric override (e.g. a different agent's unrelated
+            # value landing under the same enrichment key) must not crash
+            # remediation for a high-severity error — keep the
+            # heuristically-computed confidence instead.
+            pass
 
     # Step 3: decide dispatch vs. review
     if playbook_id and playbook_conf >= _DISPATCH_CONFIDENCE_THRESHOLD:
@@ -142,10 +149,20 @@ class ErrorRemediationAgent(BaseAgent):
         return ["PlaybookAgent", "AutonomousActionAgent", "HumanReviewQueueAgent"]
 
     def validate_outputs(self, result: AgentResult) -> None:
-        assert result.outputs.get("action") in {"dispatch", "review", "ignore"}
-        assert isinstance(result.outputs.get("error_source"), str)
-        assert isinstance(result.outputs.get("severity"), str)
-        assert 0.0 <= result.outputs.get("confidence", 0) <= 1.0
+        if result.status != "success":
+            return
+        outputs = result.outputs or {}
+
+        if outputs.get("action") not in {"dispatch", "review", "ignore"}:
+            raise ValueError("action must be one of dispatch/review/ignore")
+        if not isinstance(outputs.get("error_source"), str):
+            raise ValueError("error_source must be a str")
+        if not isinstance(outputs.get("severity"), str):
+            raise ValueError("severity must be a str")
+
+        confidence = outputs.get("confidence", 0)
+        if not isinstance(confidence, (int, float)) or not (0.0 <= confidence <= 1.0):
+            raise ValueError("confidence must be a float in [0, 1]")
 
     async def run(self, memory_id: str, context: AgentContext) -> AgentResult:
         started_at = datetime.now(timezone.utc)

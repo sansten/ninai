@@ -27,8 +27,8 @@ class BenchmarkRun(Base, UUIDMixin):
     mode: Mapped[str] = mapped_column(String(64), nullable=False)
     strategy: Mapped[str] = mapped_column(String(64), nullable=False)
     dataset: Mapped[str] = mapped_column(String(64), nullable=False)
-    ollama_model: Mapped[Optional[str]] = mapped_column(
-        String(128), nullable=True, doc="Ollama model tag used, null for heuristic runs"
+    VLLM_MODEL: Mapped[Optional[str]] = mapped_column(
+        String(128), nullable=True, doc="vLLM model tag used, null for heuristic runs"
     )
     duration_seconds: Mapped[float] = mapped_column(Float, nullable=False)
     composite_score: Mapped[float] = mapped_column(

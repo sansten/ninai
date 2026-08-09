@@ -178,6 +178,7 @@ async def test_cognitive_evidence_package_aggregates_layers(monkeypatch):
     assert package["facts"][0]["object"] == "db migrations"
     assert package["temporal_anchors"][0]["memory_id"] == "m1"
     assert package["topics"][0]["label"] == "deployments"
+    assert package["entity_context"]["primary_subject"] is None
 
 
 @pytest.mark.asyncio
@@ -253,3 +254,180 @@ async def test_cognitive_evidence_package_merges_duplicate_episode_sources(monke
     assert set(episode["tags"]) == {"case", "durable"}
     assert episode["entities"]["owner"] == "alice"
     assert episode["entities"]["system"] == "database"
+
+
+@pytest.mark.asyncio
+async def test_cognitive_evidence_package_merges_inline_state_facts(monkeypatch):
+    svc = CognitiveEvidenceService(AsyncMock(), org_id="org-1")
+
+    async def _episodes(memory_ids):
+        return {}
+
+    async def _semantic(memory_ids, episode_ids):
+        return []
+
+    async def _topics(topic_ids):
+        return []
+
+    async def _graph(episodes, semantic_nodes, topics):
+        return []
+
+    async def _facts(memory_ids):
+        return {"facts": [], "contradictions": []}
+
+    async def _goal_context():
+        return {
+            "active_goals": [],
+            "knowledge_gaps": [],
+            "suggested_goals": [],
+            "world_state": {"recent_changes": [], "highlighted_entities": []},
+            "loop_health": {},
+        }
+
+    monkeypatch.setattr(svc, "_load_unified_episodes", _episodes)
+    monkeypatch.setattr(svc, "_load_semantic_nodes", _semantic)
+    monkeypatch.setattr(svc, "_load_topics", _topics)
+    monkeypatch.setattr(svc, "_load_graph_neighbors", _graph)
+    monkeypatch.setattr(svc, "_load_fact_layers", _facts)
+    monkeypatch.setattr(svc.goal_loop_service, "build_context", _goal_context)
+
+    package = await svc.build_package(
+        query="What does the release depend on?",
+        memories=[
+            {
+                "id": "state::entity::release_train::0",
+                "title": "State entity:release train",
+                "content_preview": "[State] Release train depends_on: DB migrations",
+                "score": 0.98,
+                "extra_metadata": {
+                    "fact_support": {
+                        "subject": "Release train",
+                        "predicate": "depends_on",
+                        "object": "DB migrations",
+                        "confidence": 0.97,
+                        "status": "active",
+                    },
+                    "fact_supporting_facts": [
+                        {
+                            "subject": "Release train",
+                            "predicate": "owner",
+                            "object": "Platform team",
+                            "confidence": 0.81,
+                            "status": "active",
+                        }
+                    ],
+                },
+            }
+        ],
+    )
+
+    assert len(package["facts"]) == 2
+    assert package["facts"][0]["source_type"] == "state_space"
+    assert package["facts"][0]["object"] == "DB migrations"
+
+
+@pytest.mark.asyncio
+async def test_cognitive_evidence_package_builds_entity_resolution_context(monkeypatch):
+    svc = CognitiveEvidenceService(AsyncMock(), org_id="org-1")
+
+    async def _episodes(memory_ids):
+        return {}
+
+    async def _semantic(memory_ids, episode_ids):
+        return []
+
+    async def _topics(topic_ids):
+        return []
+
+    async def _graph(episodes, semantic_nodes, topics):
+        return []
+
+    async def _facts(memory_ids):
+        return {
+            "facts": [
+                {
+                    "fact_id": "fact-1",
+                    "subject": "Caroline",
+                    "predicate": "friend",
+                    "object": "Melanie",
+                    "confidence": 0.92,
+                    "status": "active",
+                    "source_memory_id": "m1",
+                }
+            ],
+            "contradictions": [],
+        }
+
+    async def _goal_context():
+        return {
+            "active_goals": [],
+            "knowledge_gaps": [],
+            "suggested_goals": [],
+            "world_state": {"recent_changes": [], "highlighted_entities": []},
+            "loop_health": {},
+        }
+
+    snapshot = SimpleNamespace(
+        scope_key="caroline",
+        state_version=4,
+        symbolic_state={
+            "aliases": ["Caroline", "Carrie"],
+            "facts": [
+                {
+                    "subject": "Caroline",
+                    "predicate": "friend",
+                    "object": "Melanie",
+                    "confidence": 0.92,
+                    "status": "active",
+                    "source_memory_id": "m1",
+                },
+                {
+                    "subject": "Caroline",
+                    "predicate": "summer_plan",
+                    "object": "charity race training",
+                    "confidence": 0.88,
+                    "status": "active",
+                    "source_memory_id": "m2",
+                },
+            ],
+            "recent_memories": [
+                {
+                    "memory_id": "m1",
+                    "title": "Chat",
+                    "content_preview": "Caroline told Melanie about the charity race.",
+                }
+            ],
+        },
+    )
+
+    execute_result = SimpleNamespace(scalars=lambda: SimpleNamespace(all=lambda: [snapshot]))
+    session = AsyncMock()
+    session.execute = AsyncMock(return_value=execute_result)
+    svc = CognitiveEvidenceService(session, org_id="org-1")
+
+    monkeypatch.setattr(svc, "_load_unified_episodes", _episodes)
+    monkeypatch.setattr(svc, "_load_semantic_nodes", _semantic)
+    monkeypatch.setattr(svc, "_load_topics", _topics)
+    monkeypatch.setattr(svc, "_load_graph_neighbors", _graph)
+    monkeypatch.setattr(svc, "_load_fact_layers", _facts)
+    monkeypatch.setattr(svc.goal_loop_service, "build_context", _goal_context)
+
+    package = await svc.build_package(
+        query="What did Caroline tell Melanie?",
+        memories=[
+            {
+                "id": "m1",
+                "title": "Chat",
+                "content_preview": "Caroline told Melanie about the charity race.",
+                "entities": {"people": ["Caroline", "Melanie"]},
+            }
+        ],
+        query_intelligence={"extracted_entities": ["Caroline", "Melanie"]},
+        planner_context={"question_frame": {"primary_subject": "Caroline", "secondary_entities": ["Melanie"]}},
+    )
+
+    entity_context = package["entity_context"]
+    assert entity_context["primary_subject"] == "Caroline"
+    assert entity_context["entities"][0]["canonical_name"] == "Caroline"
+    assert "Carrie" in entity_context["entities"][0]["aliases"]
+    assert entity_context["entities"][0]["entity_links"][0]["entity"] == "Melanie"

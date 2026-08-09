@@ -39,6 +39,7 @@ from app.services.audit_service import AuditService
 from app.services.feedback_learning_config_service import FeedbackLearningConfigService
 from app.services.graph_edge_service import GraphEdgeService
 from app.services.logseq_export_persistence_service import LogseqExportPersistenceService
+from app.services.state_space_service import StateSpaceService
 from app.services.short_term_memory import ShortTermMemoryService
 from app.services.topic_service import TopicService
 from app.services.pattern_service import PatternService
@@ -48,6 +49,68 @@ _TOOL_EVENT_SINK_VAR: contextvars.ContextVar[ToolEventSink | None] = contextvars
     "agent_runner_tool_event_sink",
     default=None,
 )
+
+
+# Legacy agents whose entire outputs dict is nested under one enrichment key,
+# preserved for backward compatibility with existing consumers of that shape.
+_NESTED_ENRICHMENT_PROJECTIONS: dict[str, str] = {
+    "ClassificationAgent": "classification",
+    "MetadataExtractionAgent": "metadata",
+    "TopicModelingAgent": "topics",
+    "PatternDetectionAgent": "patterns",
+}
+
+# Flat-field projections: agent_name -> {enrichment_key: output_key}. Lets a
+# downstream agent's enrichment.get("propagation_signals") etc. actually
+# resolve once the upstream agent has run, instead of always falling back to
+# an empty default because _load_prior_enrichment never surfaced it.
+_FLAT_ENRICHMENT_PROJECTIONS: dict[str, dict[str, str]] = {
+    "SemanticNormalizationAgent": {
+        "business_domain": "business_domain",
+        "intent": "intent",
+    },
+    "EntityResolutionAgent": {
+        "resolved_entities": "resolved_entities",
+        "unresolved_entities": "unresolved_entities",
+    },
+    "ContextAmplifierAgent": {
+        "context_bundle": "context_bundle",
+    },
+    "SiloPropagationAgent": {
+        "propagation_signals": "propagation_signals",
+    },
+    "OrgAttentionAgent": {
+        "attention_signals": "attention_signals",
+        "overlap_alerts": "overlap_alerts",
+    },
+}
+
+
+def project_agent_outputs(enrichment: dict, agent_name: str, outputs: dict) -> None:
+    """Merge one agent's outputs into the shared enrichment dict in place.
+
+    Pure function (no I/O) so it can be unit tested directly against
+    AgentRun.outputs shapes without a database.
+    """
+    nested_key = _NESTED_ENRICHMENT_PROJECTIONS.get(agent_name)
+    if nested_key:
+        enrichment[nested_key] = outputs or {}
+
+    for enrichment_key, output_key in _FLAT_ENRICHMENT_PROJECTIONS.get(agent_name, {}).items():
+        if output_key in (outputs or {}):
+            enrichment[enrichment_key] = outputs[output_key]
+
+    # Derived projection: OrgAttentionAgent/ProactiveMemoryPushAgent expect a
+    # flat list[str] of entity names under "entities", but EntityResolutionAgent
+    # emits list[dict] with a "canonical" field under "resolved_entities".
+    if agent_name == "EntityResolutionAgent":
+        resolved = (outputs or {}).get("resolved_entities") or []
+        names = [
+            e.get("canonical") for e in resolved
+            if isinstance(e, dict) and e.get("canonical")
+        ]
+        if names:
+            enrichment["entities"] = names
 
 
 async def _emit_tool_event(*, event_type: str, summary_text: str, payload: dict) -> None:
@@ -104,7 +167,7 @@ class AgentRunner:
         return v if v in {"llm", "heuristic"} else "llm"
 
     def _cache_model(self) -> str:
-        m = str(settings.get_ollama_model("agents") or "").strip()
+        m = str(settings.get_llm_model("agents") or "").strip()
         return m or "default"
 
     @staticmethod
@@ -581,6 +644,16 @@ class AgentRunner:
                         "audit_service": audit,
                     },
                     "tool_event_sink": tool_event_sink,
+                    # OrchestrationBusAgent reads config.agent_strategy to pick its
+                    # sub-agent selection method. Force "heuristic" so a write-time
+                    # run is fast and deterministic (no per-write LLM planning call
+                    # chain, no dependency on an LLM backend being reachable) —
+                    # operators can still override via ORCHESTRATION_BUS_STRATEGY.
+                    "config": {
+                        "agent_strategy": str(
+                            getattr(settings, "ORCHESTRATION_BUS_STRATEGY", "") or "heuristic"
+                        )
+                    },
                 }
 
                 try:
@@ -1102,21 +1175,70 @@ class AgentRunner:
         if entities:
             mem.entities = entities
 
-        # Write derived [Fact] memories for personal attributes so semantic search
-        # can retrieve structured facts directly without vocabulary gap.
+        # Write derived [Fact] memories for both LLM-extracted structured facts and
+        # backward-compatible personal attributes so retrieval can surface concise,
+        # reusable fact statements across domains.
         personal_attrs = [
             e for e in resolved
             if isinstance(e, dict) and e.get("entity_type") == "personal_attribute"
         ]
+        structured_facts = [
+            fact for fact in (outputs.get("structured_facts") or [])
+            if isinstance(fact, dict)
+        ]
         derived_count = 0
+
+        fact_rows: list[dict[str, str]] = []
+        seen_fact_keys: set[tuple[str, str, str]] = set()
+
+        def _append_fact(subject: str, predicate: str, obj: str, *, fact_type: str) -> None:
+            subject_s = str(subject or "").strip()
+            predicate_s = str(predicate or "").strip().lower().replace(" ", "_")
+            object_s = str(obj or "").strip()
+            if not (subject_s and predicate_s and object_s):
+                return
+            key = (subject_s.lower(), predicate_s, object_s.lower())
+            if key in seen_fact_keys:
+                return
+            seen_fact_keys.add(key)
+            fact_rows.append(
+                {
+                    "subject": subject_s,
+                    "predicate": predicate_s,
+                    "object": object_s,
+                    "fact_type": fact_type,
+                }
+            )
+
         for attr in personal_attrs:
-            subject = attr.get("subject", "")
-            attribute = attr.get("attribute", "")
-            value = attr.get("value", "")
-            if not (subject and attribute and value):
-                continue
-            fact_content = f"[Fact] {subject} {attribute}: {value}"
+            _append_fact(
+                attr.get("subject", ""),
+                attr.get("attribute", ""),
+                attr.get("value", ""),
+                fact_type="personal_attribute",
+            )
+
+        for fact in structured_facts:
+            _append_fact(
+                fact.get("subject", ""),
+                fact.get("predicate", ""),
+                fact.get("object", ""),
+                fact_type="structured_fact",
+            )
+
+        for fact_row in fact_rows:
+            subject = fact_row["subject"]
+            predicate = fact_row["predicate"]
+            obj = fact_row["object"]
+            fact_type = fact_row["fact_type"]
+            fact_content = f"[Fact] {subject} {predicate}: {obj}"
             content_hash = hashlib.sha256(fact_content.encode()).hexdigest()
+            tag_list = ["derived_fact", predicate]
+            if fact_type == "personal_attribute":
+                tag_list.append("personal_attribute")
+            elif fact_type == "structured_fact":
+                tag_list.append("structured_fact")
+
             try:
                 dup = await session.execute(
                     select(MemoryMetadata).where(
@@ -1131,6 +1253,7 @@ class AgentRunner:
                     continue
             except Exception:
                 continue
+
             try:
                 from app.tasks.embed_task import enqueue_embed_and_index
                 derived_id = str(uuid.uuid4())
@@ -1146,14 +1269,15 @@ class AgentRunner:
                     required_clearance=mem.required_clearance,
                     content_preview=fact_content[:2000],
                     content_hash=content_hash,
-                    tags=["derived_fact", "personal_attribute", attribute],
+                    tags=tag_list,
                     entities={},
                     extra_metadata={
                         "derived_from": memory_id,
                         "derived_by": "EntityResolutionAgent",
-                        "attribute": attribute,
+                        "predicate": predicate,
                         "subject": subject,
-                        "value": value,
+                        "object": obj,
+                        "fact_type": fact_type,
                     },
                     source_type="derived",
                     source_id=memory_id,
@@ -1173,7 +1297,27 @@ class AgentRunner:
             except Exception:
                 pass
 
-        return {"updated": True, "entity_count": len(entities), "derived_facts": derived_count}
+        state_result: dict[str, object] = {}
+        if fact_rows:
+            try:
+                state_result = await StateSpaceService(
+                    session,
+                    org_id=str(mem.organization_id),
+                ).apply_memory_write_state(
+                    memory=mem,
+                    fact_rows=fact_rows,
+                    resolved_entities=resolved,
+                )
+            except Exception:
+                state_result = {}
+
+        return {
+            "updated": True,
+            "entity_count": len(entities),
+            "derived_facts": derived_count,
+            "state_scopes_updated": int(state_result.get("updated_scopes") or 0),
+            "state_stream_events": int(state_result.get("stream_events") or 0),
+        }
 
     async def _apply_semantic_normalization(
         self,
@@ -1346,7 +1490,16 @@ class AgentRunner:
         return memory.content_preview or "", memory.classification, memory.scope or "personal", memory.scope_id
 
     async def _load_prior_enrichment(self, session: AsyncSession, org_id: str, memory_id: str) -> dict:
-        """Load prior successful agent outputs to feed downstream agents."""
+        """Load prior successful agent outputs to feed downstream agents.
+
+        Queries ALL successful prior runs for this memory, not a fixed
+        whitelist — several agents (OrgAttentionAgent, ProactiveMemoryPushAgent,
+        OrchestrationBusAgent's internal pipeline, ...) declare a dependency on
+        another agent's output (e.g. propagation_signals, context_bundle,
+        attention_signals) that a hardcoded 4-agent whitelist never surfaced,
+        so those downstream agents silently fell back to empty defaults even
+        when the upstream agent had actually run and produced real output.
+        """
 
         await _emit_tool_event(
             event_type="tool_call",
@@ -1359,14 +1512,6 @@ class AgentRunner:
             AgentRun.organization_id == org_id,
             AgentRun.memory_id == memory_id,
             AgentRun.status == "success",
-            AgentRun.agent_name.in_(
-                [
-                    "ClassificationAgent",
-                    "MetadataExtractionAgent",
-                    "TopicModelingAgent",
-                    "PatternDetectionAgent",
-                ]
-            ),
         )
         try:
             res = await session.execute(stmt)
@@ -1399,14 +1544,7 @@ class AgentRunner:
 
         out: dict = {}
         for r in rows:
-            if r.agent_name == "ClassificationAgent":
-                out["classification"] = r.outputs or {}
-            elif r.agent_name == "MetadataExtractionAgent":
-                out["metadata"] = r.outputs or {}
-            if r.agent_name == "TopicModelingAgent":
-                out["topics"] = r.outputs or {}
-            if r.agent_name == "PatternDetectionAgent":
-                out["patterns"] = r.outputs or {}
+            project_agent_outputs(out, r.agent_name, r.outputs or {})
 
         return out
 
@@ -1539,6 +1677,106 @@ class AgentRunner:
             created_at=result.finished_at,
         )
 
+        # For OrchestrationBusAgent, also write AgentRun rows for each agent it executed.
+        # This makes bus-dispatched agents visible to enrichment/learning loops.
+        if row.agent_name == "OrchestrationBusAgent" and result.status == "success":
+            try:
+                await self._persist_orchestration_bus_agents(
+                    session=session,
+                    org_id=row.organization_id,
+                    memory_id=row.memory_id,
+                    execution_plan=result.outputs.get("execution_plan", []),
+                    bus_started_at=result.started_at,
+                    trace_id=result.trace_id,
+                )
+            except Exception:
+                # Failure to persist bus agent runs should not fail the bus itself
+                pass
+
+    async def _persist_orchestration_bus_agents(
+        self,
+        *,
+        session: AsyncSession,
+        org_id: str,
+        memory_id: str,
+        execution_plan: list[dict],
+        bus_started_at: datetime,
+        trace_id: Optional[str],
+    ) -> None:
+        """Persist individual AgentRun rows for each agent executed by the orchestration bus.
+
+        The bus executes multiple agents and collects their results in execution_plan.
+        This method writes each result as a separate AgentRun row so they're visible
+        to enrichment/learning loops that query the AgentRun table.
+        """
+        for plan_entry in execution_plan:
+            try:
+                agent_name = plan_entry.get("agent_name", "")
+                if not agent_name:
+                    continue
+
+                status = plan_entry.get("status", "failed")
+                latency_ms = plan_entry.get("latency_ms", 0.0)
+                outputs = plan_entry.get("outputs", {})
+
+                # Compute inputs_hash for this agent's execution
+                inputs_hash = compute_inputs_hash(
+                    [
+                        agent_name,
+                        "1.0",  # bus agents inherit bus version
+                        org_id,
+                        memory_id,
+                        str(status),
+                    ]
+                )
+
+                # Get or create the AgentRun row
+                stmt = select(AgentRun).where(
+                    AgentRun.organization_id == org_id,
+                    AgentRun.memory_id == memory_id,
+                    AgentRun.agent_name == agent_name,
+                )
+                res = await session.execute(stmt)
+                run_row = res.scalar_one_or_none()
+
+                if run_row is None:
+                    # Create new AgentRun row for this bus-executed agent
+                    run_row = AgentRun(
+                        organization_id=org_id,
+                        memory_id=memory_id,
+                        agent_name=agent_name,
+                        agent_version="1.0",
+                        inputs_hash=inputs_hash,
+                        status=status,
+                        confidence=1.0 if status == "success" else 0.0,
+                        outputs=outputs or {},
+                        warnings=[],
+                        errors=(
+                            [plan_entry.get("reason", "Unknown error")]
+                            if status in ("failed", "skipped")
+                            else []
+                        ),
+                        started_at=self._as_db_timestamp(bus_started_at),
+                        finished_at=self._as_db_timestamp(
+                            bus_started_at.replace(microsecond=0)
+                            if latency_ms == 0
+                            else bus_started_at
+                        ),
+                        trace_id=trace_id,
+                    )
+                    session.add(run_row)
+                else:
+                    # Update existing row if this is a retry
+                    run_row.status = status
+                    run_row.outputs = outputs or {}
+                    run_row.confidence = 1.0 if status == "success" else 0.0
+                    run_row.inputs_hash = inputs_hash
+                    run_row.trace_id = trace_id
+
+                await session.flush()
+            except Exception:
+                # Failure to persist one bus agent run should not fail others
+                continue
 
     async def _append_trajectory_event(
         self,

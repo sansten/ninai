@@ -27,7 +27,7 @@ class _FakeBenchmarkRun:
     mode: str
     strategy: str
     dataset: str
-    ollama_model: str | None
+    vllm_model: str | None
     duration_seconds: float
     composite_score: float
     results: list[dict[str, Any]]
@@ -78,7 +78,7 @@ async def test_create_benchmark_run():
         "mode": "unit",
         "strategy": "heuristic",
         "dataset": "kaggle",
-        "ollama_model": None,
+        "vllm_model": None,
         "duration_seconds": 3.2,
         "composite_score": 0.76,
         "results": [{"benchmark": "goal", "accuracy": 0.8}],
@@ -107,7 +107,7 @@ async def test_list_and_latest_benchmark_runs():
         mode="unit",
         strategy="heuristic",
         dataset="kaggle",
-        ollama_model=None,
+        vllm_model=None,
         duration_seconds=4.0,
         composite_score=0.72,
         results=[{"benchmark": "goal", "accuracy": 0.74}],
@@ -118,7 +118,7 @@ async def test_list_and_latest_benchmark_runs():
         mode="unit",
         strategy="llm",
         dataset="kaggle",
-        ollama_model="qwen2.5:7b",
+        vllm_model="qwen2.5:7b",
         duration_seconds=5.5,
         composite_score=0.81,
         results=[{"benchmark": "goal", "accuracy": 0.84}],

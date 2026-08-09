@@ -20,8 +20,8 @@ async def run(*, mode: str, strategy: str, dataset: str = "synthetic") -> dict[s
     scored_correct = 0
     scored_samples = 0
     for content, truth in data:
-        before_calls = len([e for e in tool_events if (e.get("payload") or {}).get("tool") == "ollama.generate"])
-        before_success = len([e for e in tool_events if (e.get("payload") or {}).get("tool") == "ollama.generate" and (e.get("payload") or {}).get("ok") is True])
+        before_calls = len([e for e in tool_events if (e.get("payload") or {}).get("tool") == "vllm.generate"])
+        before_success = len([e for e in tool_events if (e.get("payload") or {}).get("tool") == "vllm.generate" and (e.get("payload") or {}).get("ok") is True])
 
         ctx = {
             "tenant": {"org_id": str(uuid4()), "org_slug": None},
@@ -34,8 +34,8 @@ async def run(*, mode: str, strategy: str, dataset: str = "synthetic") -> dict[s
         if predicted == truth:
             correct += 1
 
-        after_calls = len([e for e in tool_events if (e.get("payload") or {}).get("tool") == "ollama.generate"])
-        after_success = len([e for e in tool_events if (e.get("payload") or {}).get("tool") == "ollama.generate" and (e.get("payload") or {}).get("ok") is True])
+        after_calls = len([e for e in tool_events if (e.get("payload") or {}).get("tool") == "vllm.generate"])
+        after_success = len([e for e in tool_events if (e.get("payload") or {}).get("tool") == "vllm.generate" and (e.get("payload") or {}).get("ok") is True])
         llm_attempted = after_calls > before_calls
         llm_succeeded = after_success > before_success
 
@@ -53,13 +53,13 @@ async def run(*, mode: str, strategy: str, dataset: str = "synthetic") -> dict[s
     llm_success_calls = 0
     for event in tool_events:
         payload = event.get("payload") or {}
-        if payload.get("tool") == "ollama.generate":
+        if payload.get("tool") == "vllm.generate":
             llm_tool_calls += 1
             if payload.get("ok") is True:
                 llm_success_calls += 1
 
     if strategy == "llm" and llm_success_calls == 0:
-        raise RuntimeError("llm strategy selected but no successful ollama.generate events observed")
+        raise RuntimeError("llm strategy selected but no successful vllm.generate events observed")
 
     llm_success_rate = (llm_success_calls / llm_tool_calls) if llm_tool_calls else 0.0
     fallback_rate = 1.0 - llm_success_rate if strategy == "llm" else 0.0

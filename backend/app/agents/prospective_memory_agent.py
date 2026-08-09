@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from app.agents.base import BaseAgent
-from app.agents.llm.ollama_breaker import create_ollama_client
+from app.agents.llm.llm_breaker import create_llm_client
 from app.agents.types import AgentContext, AgentResult
 from app.core.config import settings
 
@@ -199,8 +199,13 @@ class ProspectiveMemoryAgent(BaseAgent):
     async def run(self, memory_id: str, context: AgentContext) -> AgentResult:
         started_at = datetime.now(timezone.utc)
         trace_id = (context.get("runtime") or {}).get("job_id")
-        enrichment = (context.get("memory") or {}).get("enrichment") or {}
-        content: str = str(enrichment.get("content") or "")
+        memory = context.get("memory") or {}
+        enrichment = memory.get("enrichment") or {}
+        # No upstream agent ever writes a "content" key into enrichment — the
+        # real memory text lives at memory.content. Reading only
+        # enrichment.get("content") meant this was always "" in production,
+        # so deadline/reminder detection never fired on any real memory.
+        content: str = str(enrichment.get("content") or memory.get("content") or "")
         existing_reminders: list[dict[str, Any]] = list(
             enrichment.get("existing_reminders") or []
         )
@@ -236,7 +241,7 @@ class ProspectiveMemoryAgent(BaseAgent):
 
         # LLM path
         try:
-            client = create_ollama_client()
+            client = create_llm_client()
             prompt = (
                 "You are a deadline-detection assistant. Given a text snippet, "
                 "identify any deadline phrases and estimate offset hours.\n\n"
@@ -245,7 +250,7 @@ class ProspectiveMemoryAgent(BaseAgent):
                 "{trigger_type, trigger_at_offset_hours, reminder_content, urgency}), "
                 "deadline_detected (bool), deadline_tokens (list[str]), confidence (float)."
             )
-            resp = await client.generate(model=settings.OLLAMA_MODEL, prompt=prompt)
+            resp = await client.generate(model=settings.VLLM_MODEL, prompt=prompt)
             import json
 
             parsed = json.loads(resp.get("response", "{}"))

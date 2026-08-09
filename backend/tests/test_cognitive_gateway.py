@@ -8,6 +8,7 @@ semantic-ranking hook in read().
 
 from __future__ import annotations
 
+import asyncio
 import pytest
 import app.services.cognitive_gateway_service as gateway_module
 
@@ -715,13 +716,22 @@ class TestGatewayExplain:
 class TestGatewayAnswer:
     @pytest.mark.asyncio
     async def test_gateway_answer_reports_gateway_source(self, monkeypatch):
+        captured: dict[str, object] = {}
+        client_kwargs: dict[str, object] = {}
+
         class _FakeClient:
             last_error = ""
+            last_endpoint_used = "http://vllm-primary:11434"
 
             async def complete_text(self, **kwargs):
+                captured.update(kwargs)
                 return "Stockholm"
 
-        monkeypatch.setattr(gateway_module, "create_ollama_client", lambda **kwargs: _FakeClient())
+        monkeypatch.setattr(
+            gateway_module,
+            "create_llm_client",
+            lambda **kwargs: client_kwargs.update(kwargs) or _FakeClient(),
+        )
         gw = _full_gateway()
         result = await gw.answer(question="Where?", memories=[{"content": "They moved to Stockholm."}])
         assert isinstance(result, GatewayAnswerResult)
@@ -729,26 +739,62 @@ class TestGatewayAnswer:
         assert result.used_llm is True
         assert result.answer_source == "gateway"
         assert result.llm_error is None
+        assert result.llm_failure_mode is None
+        assert result.llm_endpoint == "http://vllm-primary:11434"
+        assert captured["num_ctx"] == 2048
+        assert client_kwargs["max_concurrency"] == 2
 
     @pytest.mark.asyncio
-    async def test_gateway_answer_reports_heuristic_fallback_reason(self, monkeypatch):
+    async def test_gateway_answer_reports_empty_gateway_result_when_llm_returns_nothing(self, monkeypatch):
         class _FakeClient:
             last_error = "HTTPError(404, 'model not found')"
+            last_endpoint_used = "http://vllm-primary:11434"
 
             async def complete_text(self, **kwargs):
                 return ""
 
-        monkeypatch.setattr(gateway_module, "create_ollama_client", lambda **kwargs: _FakeClient())
+        monkeypatch.setattr(gateway_module, "create_llm_client", lambda **kwargs: _FakeClient())
         gw = _full_gateway()
         result = await gw.answer(
             question="Where did they move?",
             memories=[{"content": "They moved to Stockholm last year."}],
         )
         assert result.used_llm is False
-        assert result.model == "heuristic"
-        assert result.answer_source == "heuristic"
+        assert result.model == gateway_module.settings.get_llm_model("agents")
+        assert result.answer_source == "gateway_error"
         assert result.llm_error == "HTTPError(404, 'model not found')"
-        assert result.answer
+        assert result.llm_failure_mode == "model_not_available"
+        assert result.llm_endpoint == "http://vllm-primary:11434"
+        assert result.answer == ""
+
+    @pytest.mark.asyncio
+    async def test_gateway_answer_compacts_oversized_prompt_override(self, monkeypatch):
+        captured: dict[str, object] = {}
+
+        class _FakeClient:
+            last_error = ""
+            last_endpoint_used = "http://vllm-primary:11434"
+
+            async def complete_text(self, **kwargs):
+                captured.update(kwargs)
+                return "Stockholm"
+
+        monkeypatch.setattr(gateway_module, "create_llm_client", lambda **kwargs: _FakeClient())
+        gw = _full_gateway()
+        large_override = "Conversation:\n" + ("Turn 1: filler line.\n" * 120) + "\nQuestion: Where did they move?\nAnswer:"
+
+        result = await gw.answer(
+            question="Where did they move?",
+            memories=[{"content": "They moved to Stockholm last year."}],
+            prompt_override=large_override,
+        )
+
+        assert result.answer == "Stockholm"
+        prompt = str(captured["prompt"])
+        assert prompt.startswith("Answer the question using only the evidence below.")
+        assert "Conversation:" in prompt
+        assert "Stockholm" in str(captured["prompt"])
+        assert str(captured["prompt"]) != large_override
 
     @pytest.mark.asyncio
     async def test_gateway_answer_logs_llm_fallback_exception(self, monkeypatch, caplog):
@@ -756,7 +802,7 @@ class TestGatewayAnswer:
             async def complete_text(self, **kwargs):
                 raise RuntimeError("model unavailable")
 
-        monkeypatch.setattr(gateway_module, "create_ollama_client", lambda **kwargs: _FakeClient())
+        monkeypatch.setattr(gateway_module, "create_llm_client", lambda **kwargs: _FakeClient())
         gw = _full_gateway()
 
         with caplog.at_level("WARNING"):
@@ -766,6 +812,37 @@ class TestGatewayAnswer:
             )
 
         assert result.used_llm is False
-        assert result.model == "heuristic"
-        assert "ollama answer fallback" in caplog.text
+        assert result.model == gateway_module.settings.get_llm_model("agents")
+        assert result.answer_source == "gateway_error"
+        assert result.answer == ""
+        assert result.llm_failure_mode == "llm_error"
+        assert "vllm answer fallback" in caplog.text
         assert "RuntimeError" in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_gateway_answer_reports_timeout_when_completion_stalls(self, monkeypatch):
+        class _FakeClient:
+            last_error = ""
+            last_endpoint_used = "http://vllm-primary:11434"
+
+            async def complete_text(self, **kwargs):
+                return "never"
+
+        async def _timeout_wait_for(_coro, timeout=None):
+            _coro.close()
+            raise asyncio.TimeoutError("timed out waiting for llm completion")
+
+        monkeypatch.setattr(gateway_module, "create_llm_client", lambda **kwargs: _FakeClient())
+        monkeypatch.setattr(gateway_module.asyncio, "wait_for", _timeout_wait_for)
+
+        gw = _full_gateway()
+        result = await gw.answer(
+            question="Where did they move?",
+            memories=[{"content": "They moved to Stockholm last year."}],
+        )
+
+        assert result.used_llm is False
+        assert result.answer == ""
+        assert result.answer_source == "gateway_error"
+        assert result.llm_failure_mode == "timeout"
+        assert "TimeoutError" in str(result.llm_error or "")

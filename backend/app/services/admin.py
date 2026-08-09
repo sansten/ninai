@@ -3,8 +3,8 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime
 from uuid import uuid4
 
-from sqlalchemy import and_, desc
-from sqlalchemy.orm import Session
+from sqlalchemy import and_, desc, func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import User
 from app.models.admin import (
@@ -18,10 +18,10 @@ from app.schemas.admin import (
 
 class AdminRoleService:
     """Service for managing admin roles"""
-    
+
     @staticmethod
-    def create_role(
-        db: Session,
+    async def create_role(
+        db: AsyncSession,
         role_create: AdminRoleCreate,
         created_by: str
     ) -> AdminRole:
@@ -34,68 +34,75 @@ class AdminRoleService:
             created_by=created_by
         )
         db.add(role)
-        db.commit()
-        db.refresh(role)
+        await db.commit()
+        await db.refresh(role)
         return role
-    
+
     @staticmethod
-    def get_role(db: Session, role_id: str) -> Optional[AdminRole]:
+    async def get_role(db: AsyncSession, role_id: str) -> Optional[AdminRole]:
         """Get role by ID"""
-        return db.query(AdminRole).filter(AdminRole.id == role_id).first()
-    
+        result = await db.execute(select(AdminRole).where(AdminRole.id == role_id))
+        return result.scalar_one_or_none()
+
     @staticmethod
-    def list_roles(db: Session, skip: int = 0, limit: int = 50) -> tuple[List[AdminRole], int]:
+    async def list_roles(db: AsyncSession, skip: int = 0, limit: int = 50) -> tuple[List[AdminRole], int]:
         """List all roles"""
-        query = db.query(AdminRole).order_by(AdminRole.created_at)
-        total = query.count()
-        roles = query.offset(skip).limit(limit).all()
+        total = (await db.execute(select(func.count()).select_from(AdminRole))).scalar_one()
+        result = await db.execute(
+            select(AdminRole).order_by(AdminRole.created_at).offset(skip).limit(limit)
+        )
+        roles = list(result.scalars().all())
         return roles, total
-    
+
     @staticmethod
-    def update_role(
-        db: Session,
+    async def update_role(
+        db: AsyncSession,
         role_id: str,
         role_update: AdminRoleUpdate
     ) -> Optional[AdminRole]:
         """Update admin role"""
-        role = AdminRoleService.get_role(db, role_id)
+        role = await AdminRoleService.get_role(db, role_id)
         if not role:
             return None
-        
+
         if role_update.name:
             role.name = role_update.name
         if role_update.description is not None:
             role.description = role_update.description
         if role_update.permissions is not None:
             role.permissions = role_update.permissions
-        
-        db.commit()
-        db.refresh(role)
+
+        await db.commit()
+        await db.refresh(role)
         return role
-    
+
     @staticmethod
-    def delete_role(db: Session, role_id: str) -> bool:
+    async def delete_role(db: AsyncSession, role_id: str) -> bool:
         """Delete admin role"""
-        role = AdminRoleService.get_role(db, role_id)
+        role = await AdminRoleService.get_role(db, role_id)
         if not role:
             return False
-        
+
         # Check if role is assigned to users
-        user_count = db.query(User).filter(User.admin_role_id == role_id).count()
+        user_count = (
+            await db.execute(
+                select(func.count()).select_from(User).where(User.admin_role_id == role_id)
+            )
+        ).scalar_one()
         if user_count > 0:
             raise ValueError(f"Role is assigned to {user_count} users")
-        
-        db.delete(role)
-        db.commit()
+
+        await db.delete(role)
+        await db.commit()
         return True
 
 
 class AdminSettingService:
     """Service for managing admin settings"""
-    
+
     @staticmethod
-    def create_setting(
-        db: Session,
+    async def create_setting(
+        db: AsyncSession,
         setting_create: AdminSettingCreate,
         updated_by: str
     ) -> AdminSetting:
@@ -111,97 +118,105 @@ class AdminSettingService:
             updated_by=updated_by
         )
         db.add(setting)
-        db.commit()
-        db.refresh(setting)
+        await db.commit()
+        await db.refresh(setting)
         return setting
-    
+
     @staticmethod
-    def get_setting(db: Session, category: str, key: str) -> Optional[AdminSetting]:
+    async def get_setting(db: AsyncSession, category: str, key: str) -> Optional[AdminSetting]:
         """Get setting by category and key"""
-        return db.query(AdminSetting).filter(
-            and_(
-                AdminSetting.category == category,
-                AdminSetting.key == key
+        result = await db.execute(
+            select(AdminSetting).where(
+                and_(
+                    AdminSetting.category == category,
+                    AdminSetting.key == key
+                )
             )
-        ).first()
-    
+        )
+        return result.scalar_one_or_none()
+
     @staticmethod
-    def get_setting_by_id(db: Session, setting_id: str) -> Optional[AdminSetting]:
+    async def get_setting_by_id(db: AsyncSession, setting_id: str) -> Optional[AdminSetting]:
         """Get setting by ID"""
-        return db.query(AdminSetting).filter(AdminSetting.id == setting_id).first()
-    
+        result = await db.execute(select(AdminSetting).where(AdminSetting.id == setting_id))
+        return result.scalar_one_or_none()
+
     @staticmethod
-    def list_settings(
-        db: Session,
+    async def list_settings(
+        db: AsyncSession,
         category: Optional[str] = None,
         skip: int = 0,
         limit: int = 50
     ) -> tuple[List[AdminSetting], int]:
         """List settings"""
-        query = db.query(AdminSetting)
-        
+        base = select(AdminSetting)
+        count_base = select(func.count()).select_from(AdminSetting)
+
         if category:
-            query = query.filter(AdminSetting.category == category)
-        
-        total = query.count()
-        settings = query.offset(skip).limit(limit).all()
+            base = base.where(AdminSetting.category == category)
+            count_base = count_base.where(AdminSetting.category == category)
+
+        total = (await db.execute(count_base)).scalar_one()
+        result = await db.execute(base.offset(skip).limit(limit))
+        settings = list(result.scalars().all())
         return settings, total
-    
+
     @staticmethod
-    def update_setting(
-        db: Session,
+    async def update_setting(
+        db: AsyncSession,
         setting_id: str,
         setting_update: AdminSettingUpdate,
         updated_by: str
     ) -> Optional[AdminSetting]:
         """Update setting"""
-        setting = AdminSettingService.get_setting_by_id(db, setting_id)
+        setting = await AdminSettingService.get_setting_by_id(db, setting_id)
         if not setting:
             return None
-        
+
         if setting_update.value is not None:
             setting.value = setting_update.value
         if setting_update.description is not None:
             setting.description = setting_update.description
         if setting_update.is_secret is not None:
             setting.is_secret = setting_update.is_secret
-        
+
         setting.updated_by = updated_by
-        db.commit()
-        db.refresh(setting)
+        await db.commit()
+        await db.refresh(setting)
         return setting
-    
+
     @staticmethod
-    def delete_setting(db: Session, setting_id: str) -> bool:
+    async def delete_setting(db: AsyncSession, setting_id: str) -> bool:
         """Delete setting"""
-        setting = AdminSettingService.get_setting_by_id(db, setting_id)
+        setting = await AdminSettingService.get_setting_by_id(db, setting_id)
         if not setting:
             return False
-        
-        db.delete(setting)
-        db.commit()
+
+        await db.delete(setting)
+        await db.commit()
         return True
-    
+
     @staticmethod
-    def get_category_settings(db: Session, category: str) -> Dict[str, Any]:
+    async def get_category_settings(db: AsyncSession, category: str) -> Dict[str, Any]:
         """Get all settings in a category as dict"""
-        settings = db.query(AdminSetting).filter(
-            AdminSetting.category == category
-        ).all()
-        
-        result = {}
+        result = await db.execute(
+            select(AdminSetting).where(AdminSetting.category == category)
+        )
+        settings = result.scalars().all()
+
+        result_dict = {}
         for setting in settings:
             value = "***REDACTED***" if setting.is_secret else setting.value
-            result[setting.key] = value
-        return result
+            result_dict[setting.key] = value
+        return result_dict
 
 
 class AdminAuditService:
     """Service for admin audit logging"""
-    
+
     @staticmethod
-    def log_action(
-        db: Session,
+    async def log_action(
+        db: AsyncSession,
         admin_id: str,
         action: str,
         resource_type: str,
@@ -224,145 +239,160 @@ class AdminAuditService:
             user_agent=user_agent,
         )
         db.add(audit)
-        db.commit()
-        db.refresh(audit)
+        await db.commit()
+        await db.refresh(audit)
         return audit
-    
+
     @staticmethod
-    def get_audit_log(db: Session, log_id: str) -> Optional[AdminAuditLog]:
+    async def get_audit_log(db: AsyncSession, log_id: str) -> Optional[AdminAuditLog]:
         """Get audit log by ID"""
-        return db.query(AdminAuditLog).filter(AdminAuditLog.id == log_id).first()
-    
+        result = await db.execute(select(AdminAuditLog).where(AdminAuditLog.id == log_id))
+        return result.scalar_one_or_none()
+
     @staticmethod
-    def list_audit_logs(
-        db: Session,
+    async def list_audit_logs(
+        db: AsyncSession,
         filter_params: AdminAuditLogFilter,
         skip: int = 0,
         limit: int = 50,
     ) -> tuple[List[AdminAuditLog], int]:
         """List audit logs with filtering"""
-        query = db.query(AdminAuditLog)
-        
-        if filter_params.admin_id:
-            query = query.filter(AdminAuditLog.admin_id == filter_params.admin_id)
-        
-        if filter_params.action:
-            query = query.filter(AdminAuditLog.action == filter_params.action)
-        
-        if filter_params.resource_type:
-            query = query.filter(AdminAuditLog.resource_type == filter_params.resource_type)
-        
-        if filter_params.resource_id:
-            query = query.filter(AdminAuditLog.resource_id == filter_params.resource_id)
-        
-        if filter_params.start_date:
-            query = query.filter(AdminAuditLog.created_at >= filter_params.start_date)
-        
-        if filter_params.end_date:
-            query = query.filter(AdminAuditLog.created_at <= filter_params.end_date)
-        
-        total = query.count()
-        logs = query.order_by(desc(AdminAuditLog.created_at)).offset(skip).limit(limit).all()
+        base = select(AdminAuditLog)
+        count_base = select(func.count()).select_from(AdminAuditLog)
+
+        def _apply(stmt):
+            if filter_params.admin_id:
+                stmt = stmt.where(AdminAuditLog.admin_id == filter_params.admin_id)
+            if filter_params.action:
+                stmt = stmt.where(AdminAuditLog.action == filter_params.action)
+            if filter_params.resource_type:
+                stmt = stmt.where(AdminAuditLog.resource_type == filter_params.resource_type)
+            if filter_params.resource_id:
+                stmt = stmt.where(AdminAuditLog.resource_id == filter_params.resource_id)
+            if filter_params.start_date:
+                stmt = stmt.where(AdminAuditLog.created_at >= filter_params.start_date)
+            if filter_params.end_date:
+                stmt = stmt.where(AdminAuditLog.created_at <= filter_params.end_date)
+            return stmt
+
+        total = (await db.execute(_apply(count_base))).scalar_one()
+        result = await db.execute(
+            _apply(base).order_by(desc(AdminAuditLog.created_at)).offset(skip).limit(limit)
+        )
+        logs = list(result.scalars().all())
         return logs, total
-    
+
     @staticmethod
-    def get_user_audit_logs(
-        db: Session,
+    async def get_user_audit_logs(
+        db: AsyncSession,
         user_id: str,
         skip: int = 0,
         limit: int = 50,
     ) -> tuple[List[AdminAuditLog], int]:
         """Get audit logs for specific user"""
-        query = db.query(AdminAuditLog).filter(
+        conditions = (
             AdminAuditLog.resource_type == "user",
-            AdminAuditLog.resource_id == user_id
+            AdminAuditLog.resource_id == user_id,
         )
-        total = query.count()
-        logs = query.order_by(desc(AdminAuditLog.created_at)).offset(skip).limit(limit).all()
+        total = (
+            await db.execute(select(func.count()).select_from(AdminAuditLog).where(*conditions))
+        ).scalar_one()
+        result = await db.execute(
+            select(AdminAuditLog)
+            .where(*conditions)
+            .order_by(desc(AdminAuditLog.created_at))
+            .offset(skip)
+            .limit(limit)
+        )
+        logs = list(result.scalars().all())
         return logs, total
 
 
 class AdminUserService:
     """Service for managing users by admins"""
-    
+
     @staticmethod
-    def get_user(db: Session, user_id: str) -> Optional[User]:
+    async def get_user(db: AsyncSession, user_id: str) -> Optional[User]:
         """Get user by ID"""
-        return db.query(User).filter(User.id == user_id).first()
-    
+        result = await db.execute(select(User).where(User.id == user_id))
+        return result.scalar_one_or_none()
+
     @staticmethod
-    def list_users(
-        db: Session,
+    async def list_users(
+        db: AsyncSession,
         search: Optional[str] = None,
         role_id: Optional[str] = None,
         skip: int = 0,
         limit: int = 50,
     ) -> tuple[List[User], int]:
         """List users"""
-        query = db.query(User)
-        
+        base = select(User)
+        count_base = select(func.count()).select_from(User)
+
         if search:
             search_term = f"%{search}%"
-            query = query.filter(
-                (User.email.ilike(search_term)) |
-                (User.full_name.ilike(search_term))
-            )
-        
+            cond = (User.email.ilike(search_term)) | (User.full_name.ilike(search_term))
+            base = base.where(cond)
+            count_base = count_base.where(cond)
+
         if role_id:
-            query = query.filter(User.admin_role_id == role_id)
-        
-        total = query.count()
-        users = query.order_by(User.created_at).offset(skip).limit(limit).all()
+            base = base.where(User.admin_role_id == role_id)
+            count_base = count_base.where(User.admin_role_id == role_id)
+
+        total = (await db.execute(count_base)).scalar_one()
+        result = await db.execute(base.order_by(User.created_at).offset(skip).limit(limit))
+        users = list(result.scalars().all())
         return users, total
-    
+
     @staticmethod
-    def disable_user(db: Session, user_id: str) -> Optional[User]:
+    async def disable_user(db: AsyncSession, user_id: str) -> Optional[User]:
         """Disable user account"""
-        user = AdminUserService.get_user(db, user_id)
+        user = await AdminUserService.get_user(db, user_id)
         if not user:
             return None
-        
+
         user.is_active = False
-        db.commit()
-        db.refresh(user)
+        await db.commit()
+        await db.refresh(user)
         return user
-    
+
     @staticmethod
-    def enable_user(db: Session, user_id: str) -> Optional[User]:
+    async def enable_user(db: AsyncSession, user_id: str) -> Optional[User]:
         """Enable user account"""
-        user = AdminUserService.get_user(db, user_id)
+        user = await AdminUserService.get_user(db, user_id)
         if not user:
             return None
-        
+
         user.is_active = True
-        db.commit()
-        db.refresh(user)
+        await db.commit()
+        await db.refresh(user)
         return user
-    
+
     @staticmethod
-    def assign_role(db: Session, user_id: str, role_id: str) -> Optional[User]:
+    async def assign_role(db: AsyncSession, user_id: str, role_id: str) -> Optional[User]:
         """Assign role to user"""
-        user = AdminUserService.get_user(db, user_id)
+        user = await AdminUserService.get_user(db, user_id)
         if not user:
             return None
-        
+
         # Verify role exists
-        role = db.query(AdminRole).filter(AdminRole.id == role_id).first()
+        role_result = await db.execute(select(AdminRole).where(AdminRole.id == role_id))
+        role = role_result.scalar_one_or_none()
         if not role:
             raise ValueError(f"Role {role_id} not found")
-        
+
         user.admin_role_id = role_id
-        db.commit()
-        db.refresh(user)
+        await db.commit()
+        await db.refresh(user)
         return user
 
 
 class AdminIPWhitelistService:
     """Service for IP whitelist management"""
-    
+
     @staticmethod
-    def add_ip(
-        db: Session,
+    async def add_ip(
+        db: AsyncSession,
         ip_address: str,
         created_by: str,
         description: Optional[str] = None,
@@ -375,33 +405,37 @@ class AdminIPWhitelistService:
             created_by=created_by,
         )
         db.add(ip_entry)
-        db.commit()
-        db.refresh(ip_entry)
+        await db.commit()
+        await db.refresh(ip_entry)
         return ip_entry
-    
+
     @staticmethod
-    def remove_ip(db: Session, ip_address: str) -> bool:
+    async def remove_ip(db: AsyncSession, ip_address: str) -> bool:
         """Remove IP from whitelist"""
-        entry = db.query(AdminIPWhitelist).filter(
-            AdminIPWhitelist.ip_address == ip_address
-        ).first()
-        
+        result = await db.execute(
+            select(AdminIPWhitelist).where(AdminIPWhitelist.ip_address == ip_address)
+        )
+        entry = result.scalar_one_or_none()
+
         if not entry:
             return False
-        
-        db.delete(entry)
-        db.commit()
+
+        await db.delete(entry)
+        await db.commit()
         return True
-    
+
     @staticmethod
-    def list_ips(db: Session) -> List[AdminIPWhitelist]:
+    async def list_ips(db: AsyncSession) -> List[AdminIPWhitelist]:
         """List all whitelisted IPs"""
-        return db.query(AdminIPWhitelist).order_by(AdminIPWhitelist.created_at).all()
-    
+        result = await db.execute(
+            select(AdminIPWhitelist).order_by(AdminIPWhitelist.created_at)
+        )
+        return list(result.scalars().all())
+
     @staticmethod
-    def is_ip_whitelisted(db: Session, ip_address: str) -> bool:
+    async def is_ip_whitelisted(db: AsyncSession, ip_address: str) -> bool:
         """Check if IP is whitelisted"""
-        entry = db.query(AdminIPWhitelist).filter(
-            AdminIPWhitelist.ip_address == ip_address
-        ).first()
-        return entry is not None
+        result = await db.execute(
+            select(AdminIPWhitelist).where(AdminIPWhitelist.ip_address == ip_address)
+        )
+        return result.scalar_one_or_none() is not None

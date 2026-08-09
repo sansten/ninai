@@ -304,13 +304,13 @@ class TestSemanticNormalizationAgentLLM:
         mock_client.complete_json = AsyncMock(return_value=mock_resp)
 
         with patch("app.agents.semantic_normalization_agent.settings") as mock_settings, \
-             patch("app.agents.semantic_normalization_agent.create_ollama_client", return_value=mock_client):
+             patch("app.agents.semantic_normalization_agent.create_llm_client", return_value=mock_client):
             mock_settings.AGENT_STRATEGY = "llm"
             mock_settings.SEMANTIC_NORMALIZATION_STRATEGY = None
-            mock_settings.OLLAMA_BASE_URL = "http://localhost:11434"
-            mock_settings.OLLAMA_MODEL = "llama3.1:8b"
-            mock_settings.OLLAMA_TIMEOUT_SECONDS = 5.0
-            mock_settings.OLLAMA_MAX_CONCURRENCY = 2
+            mock_settings.VLLM_BASE_URL = "http://localhost:11434"
+            mock_settings.VLLM_MODEL = "llama3.1:8b"
+            mock_settings.VLLM_TIMEOUT_SECONDS = 5.0
+            mock_settings.VLLM_MAX_CONCURRENCY = 2
             result = await agent.run("mem-1", _make_context("Sprint retro findings for product roadmap."))
 
         assert result.outputs["intent"] == "share_learning"
@@ -324,13 +324,13 @@ class TestSemanticNormalizationAgentLLM:
         mock_client.complete_json = AsyncMock(return_value={"bad": "response"})
 
         with patch("app.agents.semantic_normalization_agent.settings") as mock_settings, \
-             patch("app.agents.semantic_normalization_agent.create_ollama_client", return_value=mock_client):
+             patch("app.agents.semantic_normalization_agent.create_llm_client", return_value=mock_client):
             mock_settings.AGENT_STRATEGY = "llm"
             mock_settings.SEMANTIC_NORMALIZATION_STRATEGY = None
-            mock_settings.OLLAMA_BASE_URL = "http://localhost:11434"
-            mock_settings.OLLAMA_MODEL = "llama3.1:8b"
-            mock_settings.OLLAMA_TIMEOUT_SECONDS = 5.0
-            mock_settings.OLLAMA_MAX_CONCURRENCY = 2
+            mock_settings.VLLM_BASE_URL = "http://localhost:11434"
+            mock_settings.VLLM_MODEL = "llama3.1:8b"
+            mock_settings.VLLM_TIMEOUT_SECONDS = 5.0
+            mock_settings.VLLM_MAX_CONCURRENCY = 2
             result = await agent.run("mem-1", _make_context("Budget invoice expense report."))
 
         # Falls back to heuristic — should detect finance domain
@@ -350,13 +350,13 @@ class TestSemanticNormalizationAgentLLM:
         })
 
         with patch("app.agents.semantic_normalization_agent.settings") as mock_settings, \
-             patch("app.agents.semantic_normalization_agent.create_ollama_client", return_value=mock_client):
+             patch("app.agents.semantic_normalization_agent.create_llm_client", return_value=mock_client):
             mock_settings.AGENT_STRATEGY = "llm"
             mock_settings.SEMANTIC_NORMALIZATION_STRATEGY = None
-            mock_settings.OLLAMA_BASE_URL = "http://localhost:11434"
-            mock_settings.OLLAMA_MODEL = "llama3.1:8b"
-            mock_settings.OLLAMA_TIMEOUT_SECONDS = 5.0
-            mock_settings.OLLAMA_MAX_CONCURRENCY = 2
+            mock_settings.VLLM_BASE_URL = "http://localhost:11434"
+            mock_settings.VLLM_MODEL = "llama3.1:8b"
+            mock_settings.VLLM_TIMEOUT_SECONDS = 5.0
+            mock_settings.VLLM_MAX_CONCURRENCY = 2
             result = await agent.run("mem-1", _make_context("Bug fix deployed."))
 
         assert result.outputs["rationale"] == "heuristic"

@@ -290,5 +290,5 @@ class V2GraphInspectResult(BaseModel):
 class V2HealthResult(BaseModel):
     engine_version: str = "v2"
     graph_available: bool = False
-    ollama_available: bool = False
+    llm_available: bool = False
     message: str = ""

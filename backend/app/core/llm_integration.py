@@ -18,9 +18,9 @@ logger = logging.getLogger(__name__)
 class LLMCircuitBreakerConfig:
     """Standard circuit breaker configs for different LLM providers."""
     
-    # Ollama - local LLM; retry logic in transport handles transient errors,
+    # Local backend; retry logic in transport handles transient errors,
     # so the breaker trips only on sustained outages.
-    OLLAMA = CircuitBreakerConfig(
+    LOCAL_BACKEND = CircuitBreakerConfig(
         failure_threshold=5,  # Open after 5 failures
         recovery_timeout_seconds=30,  # Try recovery every 30s
         success_threshold=1,  # One success to close
@@ -60,7 +60,7 @@ async def call_llm_with_breaker(
     Call LLM API with circuit breaker protection.
     
     Args:
-        provider: LLM provider name (openai, anthropic, local)
+        provider: LLM provider name (openai, anthropic, local/vllm)
         func: Async function to call
         *args: Function arguments
         **kwargs: Function keyword arguments
@@ -81,8 +81,8 @@ async def call_llm_with_breaker(
         config = LLMCircuitBreakerConfig.OPENAI
     elif provider_lower == "anthropic":
         config = LLMCircuitBreakerConfig.ANTHROPIC
-    elif provider_lower == "ollama":
-        config = LLMCircuitBreakerConfig.OLLAMA
+    elif provider_lower in {"local", "vllm"}:
+        config = LLMCircuitBreakerConfig.LOCAL_BACKEND
     else:
         config = LLMCircuitBreakerConfig.LOCAL
     

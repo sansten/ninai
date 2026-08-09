@@ -276,9 +276,38 @@ async def login(
             detail="User has no assigned roles",
         )
     
-    # Use the first organization the user belongs to
-    org_id = user_roles_list[0].organization_id
-    
+    if body.org_slug:
+        # Explicit org selection — resolve the slug and require the user to
+        # actually have a role there, rather than silently logging them into
+        # whichever org their oldest UserRole row happens to belong to.
+        from app.models.organization import Organization
+
+        org_result = await db.execute(
+            select(Organization.id).where(Organization.slug == body.org_slug)
+        )
+        requested_org_id = org_result.scalar_one_or_none()
+        matching_role = next(
+            (ur for ur in user_roles_list if ur.organization_id == requested_org_id),
+            None,
+        )
+        if not requested_org_id or not matching_role:
+            await audit_service.log_auth_failure(
+                email=body.email,
+                reason="No role in requested organization",
+                ip_address=ip_address,
+                user_agent=user_agent,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="User has no role in the requested organization",
+            )
+        org_id = requested_org_id
+    else:
+        # No org specified — default to the first organization the user
+        # belongs to. A user in more than one org should pass org_slug to
+        # pick a specific one instead of relying on this default.
+        org_id = user_roles_list[0].organization_id
+
     # Get role names for this organization
     role_ids = [ur.role_id for ur in user_roles_list if ur.organization_id == org_id]
     if role_ids:
@@ -562,18 +591,60 @@ async def switch_organization(
     Switch to a different organization context.
     
     Returns a new access token scoped to the requested organization.
-    User must have a role in the target organization.
+    User must have a role in the target organization (Bug #4: Authorization check).
     """
-    # TODO: Verify user has role in target organization
-    # For now, just create a new token with the new org
+    # Verify user has a role in the target organization (Bug #4: was missing)
+    user_role_result = await db.execute(
+        select(UserRole).where(
+            UserRole.user_id == tenant.user_id,
+            UserRole.organization_id == body.organization_id,
+        )
+    )
+    user_role = user_role_result.scalar_one_or_none()
     
-    # Get user's roles in the new org
-    roles = []  # Placeholder - implement role lookup for new org
+    if not user_role:
+        audit_service = AuditService(db)
+        await audit_service.log_event(
+            event_type="auth.org_switch_denied",
+            actor_id=tenant.user_id,
+            organization_id=body.organization_id,
+            success=False,
+            details={"reason": "user_has_no_role_in_target_org"},
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User does not have a role in the target organization",
+        )
+    
+    # Get user's roles in the target org
+    user_roles_query = await db.execute(
+        select(UserRole).where(
+            UserRole.user_id == tenant.user_id,
+            UserRole.organization_id == body.organization_id,
+        )
+    )
+    user_roles_list = user_roles_query.scalars().all()
+    role_ids = [ur.role_id for ur in user_roles_list]
+    
+    roles_query = await db.execute(
+        select(Role.name).where(Role.id.in_(role_ids))
+    )
+    roles = roles_query.scalars().all()
     
     access_token = create_access_token(
         user_id=tenant.user_id,
         org_id=body.organization_id,
         roles=roles,
+    )
+    
+    # Audit successful org switch
+    audit_service = AuditService(db)
+    await audit_service.log_event(
+        event_type="auth.org_switch_success",
+        actor_id=tenant.user_id,
+        organization_id=body.organization_id,
+        success=True,
+        details={"roles": roles},
     )
     
     return TokenResponse(

@@ -112,11 +112,11 @@ Short-Term Memory (Redis) → Long-Term Memory (PostgreSQL + Qdrant)
 | **Query-aware representative selection** (submodular) | **✅ COMPLETE** — Implemented Feb 2026 | Greedy submodular optimization implementing Eq. (7) with coverage tracking |
 | **Uncertainty-gated adaptive inclusion** | **✅ COMPLETE** — Implemented Feb 2026 | `UncertaintyGatingService` with entropy-based evidence admission per Eq. (8) |
 | **Retroactive restructuring** (dynamic reassignment) | **✅ COMPLETE** — Implemented Feb 2026 | Lifecycle tracking, reassignment ratio, guided attach, periodic restructure |
-| Vector embeddings (OpenAI/Ollama) | **Full** — `text-embedding-3-small` + `nomic-embed-text` | ✅ Aligned |
+| Vector embeddings (OpenAI/vLLM) | **Full** — `text-embedding-3-small` + `nomic-embed-text` | ✅ Aligned |
 | Activation scoring | **Exceeds** — 8-component model vs. xMemory's simpler ranking | ✅ Ninai advantage |
 | Knowledge graph | **Exceeds** — Dual graph (FalkorDB + Postgres) with causal hypotheses | ✅ Ninai advantage |
 | Consolidation/dedup | **Full** — Text-similarity (0.85 threshold) merge + archive | ✅ Aligned |
-| LLM-based summarization | **Full** — Ollama-based STM→LTM summarization | ✅ Aligned |
+| LLM-based summarization | **Full** — vLLM-based STM→LTM summarization | ✅ Aligned |
 | Multi-tenant security | **Exceeds** — RLS + org-scoped Qdrant + clearance levels | ✅ Ninai advantage |
 | Cognitive loop (agent reasoning) | **Exceeds** — Planner/Executor/Critic with bounded iteration | ✅ Ninai advantage |
 | Retrieval explanation/audit | **Exceeds** — Full per-query 8-component scoring breakdown | ✅ Ninai advantage |
@@ -134,7 +134,7 @@ Let $\mathcal{H} = \{m_1, m_2, \ldots, m_T\}$ denote a history of $T$ messages. 
 
 $$\mathbf{x}_t = \phi(m_t) \in \mathbb{R}^d$$
 
-Ninai uses dual-provider embedding ($\phi_{\text{OpenAI}}$ or $\phi_{\text{Ollama}}$) with automatic fallback, yielding vectors in $\mathbb{R}^{1536}$ or $\mathbb{R}^{768}$ respectively.
+Ninai uses dual-provider embedding ($\phi_{\text{OpenAI}}$ or $\phi_{\text{vLLM}}$) with automatic fallback, yielding vectors in $\mathbb{R}^{1536}$ or $\mathbb{R}^{768}$ respectively.
 
 ### 4.2 Hierarchical Memory Organisation (xMemory)
 
@@ -243,7 +243,7 @@ Expansion halts when the uncertainty reduction falls below threshold $\delta$, y
 1. **Episode segmentation:** `EpisodeBoundaryService` with three boundary detectors:
    - Topic shift (cosine distance θ=0.45)
    - Temporal gap (5-minute threshold)
-   - LLM intent transition (Ollama-based detection)
+   - LLM intent transition (vLLM-based detection)
 
 2. **Semantic distillation:** `SemanticDistillationService` extracting high-value facts with four quality scores:
    - Persistence, Specificity, Utility, Independence
@@ -337,7 +337,7 @@ result = await retrieval_svc.retrieve(
    - Default threshold: δ=0.1 bits minimum uncertainty reduction
    - Fallback heuristic: response length proxy when logprobs unavailable
 
-2. **Ollama integration:**
+2. **vLLM integration:**
    - HTTP client for `/api/generate` endpoint with logprobs
    - Temperature=0.0 for deterministic entropy calculation
    - 50-token generation for confidence measurement
@@ -375,7 +375,7 @@ result = await retrieval_svc.retrieve_with_gating(
 - 3 RetrievalService integration tests (end-to-end pipeline)
 - All tests pass in Docker (0.94s execution)
 
-**Status:** Production-ready, validated with comprehensive mocking of Ollama responses. Ready for A/B testing against baseline retrieval to measure token savings vs. answer quality.
+**Status:** Production-ready, validated with comprehensive mocking of vLLM responses. Ready for A/B testing against baseline retrieval to measure token savings vs. answer quality.
 
 ---
 

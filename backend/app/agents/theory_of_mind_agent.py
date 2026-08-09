@@ -12,7 +12,8 @@ Inputs (via context["memory"]["enrichment"]):
   - user_interactions:   list[dict]       — [{query, domain, word_count, timestamp}]
   - feedback_signals:    list[dict]       — [{sentiment, category, domain}]
   - peer_agent_results:  dict[str, list]  — agent_name → [{status, confidence, domain}]
-  - attention_signals:   dict             — {focus_domain, attention_score}
+  - attention_signals:   list[dict]       — [{team, topic, entity_type, relevance}], as
+                                             produced by OrgAttentionAgent
   - credibility_scores:  dict[str, float] — entity/source → credibility float
 
 Outputs:
@@ -33,7 +34,7 @@ from typing import Any
 
 from app.agents.base import BaseAgent
 from app.agents.types import AgentContext, AgentResult
-from app.agents.llm.ollama_breaker import create_ollama_client
+from app.agents.llm.llm_breaker import create_llm_client
 from app.core.config import settings
 
 
@@ -179,7 +180,7 @@ def _build_peer_agent_models(peer_agent_results: dict[str, list[dict]]) -> list[
     return models
 
 
-def _infer_intent(user_interactions: list[dict], attention_signals: dict) -> str:
+def _infer_intent(user_interactions: list[dict], attention_signals: list[dict]) -> str:
     """Return the most likely user intent domain."""
     if user_interactions:
         domain_counts: dict[str, int] = {}
@@ -190,9 +191,25 @@ def _infer_intent(user_interactions: list[dict], attention_signals: dict) -> str
         if domain_counts:
             return max(domain_counts, key=lambda k: domain_counts[k])
 
-    focus = str(attention_signals.get("focus_domain") or "").strip()
-    if focus:
-        return focus
+    # attention_signals is OrgAttentionAgent's real output shape — a list of
+    # {team, topic, entity_type, relevance} dicts, not the {focus_domain,
+    # attention_score} dict this originally assumed (which OrgAttentionAgent
+    # never actually produces). Fall back to the highest-relevance topic.
+    best_topic = ""
+    best_relevance = -1.0
+    for signal in attention_signals or []:
+        if not isinstance(signal, dict):
+            continue
+        try:
+            relevance = float(signal.get("relevance") or 0.0)
+        except (TypeError, ValueError):
+            relevance = 0.0
+        topic = str(signal.get("topic") or "").strip()
+        if topic and relevance > best_relevance:
+            best_relevance = relevance
+            best_topic = topic
+    if best_topic:
+        return best_topic
 
     return "general"
 
@@ -201,7 +218,7 @@ async def run_heuristic_async(
     user_interactions: list[dict],
     feedback_signals: list[dict],
     peer_agent_results: dict[str, list[dict]],
-    attention_signals: dict,
+    attention_signals: list[dict],
 ) -> dict[str, Any]:
     """Heuristic path — no LLM required."""
     user_model = _build_user_model(user_interactions, feedback_signals)
@@ -370,7 +387,7 @@ class TheoryOfMindAgent(BaseAgent):
         user_interactions: list[dict] = enrichment.get("user_interactions") or []
         feedback_signals: list[dict] = enrichment.get("feedback_signals") or []
         peer_agent_results: dict[str, list[dict]] = enrichment.get("peer_agent_results") or {}
-        attention_signals: dict = enrichment.get("attention_signals") or {}
+        attention_signals: list[dict] = enrichment.get("attention_signals") or []
 
         strategy = str(getattr(settings, "AGENT_STRATEGY", "llm") or "llm").strip().lower()
 
@@ -406,11 +423,11 @@ class TheoryOfMindAgent(BaseAgent):
                 "  confidence:        float (0-1)\n"
             )
             try:
-                client = create_ollama_client(
-                    base_url=str(getattr(settings, "OLLAMA_BASE_URL", "http://localhost:11434")),
-                    model=str(settings.get_ollama_model("agents")),
-                    timeout_seconds=float(getattr(settings, "OLLAMA_TIMEOUT_SECONDS", 5.0)),
-                    max_concurrency=int(getattr(settings, "OLLAMA_MAX_CONCURRENCY", 2)),
+                client = create_llm_client(
+                    base_url=str(getattr(settings, "VLLM_BASE_URL", "http://localhost:11434")),
+                    model=str(settings.get_llm_model("agents")),
+                    timeout_seconds=float(getattr(settings, "VLLM_TIMEOUT_SECONDS", 5.0)),
+                    max_concurrency=int(getattr(settings, "VLLM_MAX_CONCURRENCY", 2)),
                 )
                 resp = await client.complete_json(
                     prompt=prompt,

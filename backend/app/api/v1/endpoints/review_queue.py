@@ -442,7 +442,10 @@ async def resolve_review_item(
         memory_id=body.memory_id,
         actor_id=tenant.user_id,
         feedback_type="review_verdict",
-        target_agent="FeedbackIntegrationAgent",
+        # See memory_enrichment.py's submit_feedback for why this targets
+        # FeedbackLearningAgent (the actual local consumer) rather than the
+        # enterprise-only FeedbackIntegrationAgent.
+        target_agent="FeedbackLearningAgent",
         payload=payload,
         is_applied=False,
     )

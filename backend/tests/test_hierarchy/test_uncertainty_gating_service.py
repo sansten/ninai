@@ -12,8 +12,8 @@ from app.services.uncertainty_gating_service import UncertaintyGatingService
 def mock_settings(autouse=True):
     """Mock settings for all tests."""
     with patch("app.services.uncertainty_gating_service.settings") as mock:
-        mock.OLLAMA_BASE_URL = "http://localhost:11434"
-        mock.OLLAMA_MODEL = "llama2"
+        mock.VLLM_BASE_URL = "http://localhost:11434"
+        mock.VLLM_MODEL = "llama2"
         yield mock
 
 
@@ -153,12 +153,12 @@ async def test_expand_with_gating_rejects_all_low_reduction(
 
 
 @pytest.mark.asyncio
-async def test_compute_entropy_calls_ollama(service):
-    """Should call Ollama API with correct prompt format."""
+async def test_compute_entropy_calls_vllm(service):
+    """Should call vLLM API with correct prompt format."""
     query = "What is the weather?"
     context = "Weather context here"
     
-    service._call_ollama_with_logprobs = AsyncMock(return_value={
+    service._call_vllm_with_logprobs = AsyncMock(return_value={
         "response": "The weather is sunny",
         "logprobs": [
             {"token": "The", "logprob": -0.5},
@@ -169,9 +169,9 @@ async def test_compute_entropy_calls_ollama(service):
 
     entropy = await service._compute_entropy(query=query, context=context)
 
-    # Should have called Ollama
-    assert service._call_ollama_with_logprobs.call_count == 1
-    call_kwargs = service._call_ollama_with_logprobs.call_args.kwargs
+    # Should have called vLLM
+    assert service._call_vllm_with_logprobs.call_count == 1
+    call_kwargs = service._call_vllm_with_logprobs.call_args.kwargs
     prompt = call_kwargs["prompt"]
     
     # Verify prompt structure
@@ -190,8 +190,8 @@ async def test_compute_entropy_uses_fallback_on_missing_logprobs(service):
     query = "test"
     context = "context"
     
-    # Mock Ollama response without logprobs
-    service._call_ollama_with_logprobs = AsyncMock(return_value={
+    # Mock vLLM response without logprobs
+    service._call_vllm_with_logprobs = AsyncMock(return_value={
         "response": "This is a longer response with multiple words here",
         "logprobs": None,
     })
@@ -258,15 +258,15 @@ async def test_build_prompt_includes_context_and_query(service):
 
 
 @pytest.mark.asyncio
-async def test_expand_with_gating_handles_ollama_error(
+async def test_expand_with_gating_handles_vllm_error(
     service, sample_candidate_items
 ):
-    """Should handle Ollama API errors gracefully."""
+    """Should handle vLLM API errors gracefully."""
     query = "test"
     initial_context = "context"
     
-    # Mock Ollama call failing
-    service._compute_entropy = AsyncMock(side_effect=Exception("Ollama connection failed"))
+    # Mock vLLM call failing
+    service._compute_entropy = AsyncMock(side_effect=Exception("vLLM connection failed"))
 
     # Should not crash, return empty result
     with pytest.raises(Exception):

@@ -7,6 +7,7 @@ StrategyEvolutionService (promote / prune / drift / no-op paths).
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -17,6 +18,7 @@ from app.services.continuous_learning_service import (
     _aggregate_strategy_metrics,
     _aggregate_playbook_metrics,
     _build_drift_alerts,
+    OutcomeTrackerService,
     StrategyEvolutionService,
     StrategyMetric,
     PlaybookMetric,
@@ -445,3 +447,104 @@ class TestStrategyEvolutionMetrics:
         )
         await svc.run(org_id="org-1")
         assert entry.sample_count >= 4
+
+
+class TestOutcomeTrackerService:
+    @pytest.mark.asyncio
+    async def test_load_outcomes_joins_latest_agent_run_by_memory_id(self):
+        session = AsyncMock()
+
+        action_rows = [
+            (
+                "success",
+                {"memory_id": "mem-1", "matched_playbook_id": "PB-1"},
+                "analyze service latency",
+                {"domain": "ops"},
+            )
+        ]
+        agent_rows = [
+            ("mem-1", "OlderAgent", datetime(2026, 1, 1, tzinfo=timezone.utc)),
+            ("mem-1", "AutonomousActionAgent", datetime(2026, 1, 2, tzinfo=timezone.utc)),
+        ]
+
+        session.execute = AsyncMock(side_effect=[
+            SimpleNamespace(all=lambda: action_rows),
+            SimpleNamespace(all=lambda: agent_rows),
+        ])
+
+        tracker = OutcomeTrackerService(session)
+        outcomes = await tracker.load_outcomes(
+            org_id="org-1",
+            start=datetime(2026, 1, 1, tzinfo=timezone.utc),
+            end=datetime(2026, 2, 1, tzinfo=timezone.utc),
+        )
+
+        assert len(outcomes) == 1
+        assert outcomes[0]["goal_type"] == "analysis"
+        assert outcomes[0]["domain"] == "ops"
+        assert outcomes[0]["matched_playbook_id"] == "PB-1"
+        assert outcomes[0]["memory_id"] == "mem-1"
+        assert outcomes[0]["source_agent"] == "AutonomousActionAgent"
+        assert session.execute.await_count == 2
+
+    @pytest.mark.asyncio
+    async def test_load_outcomes_prefers_payload_source_agent_over_join(self):
+        session = AsyncMock()
+
+        action_rows = [
+            (
+                "failed",
+                {
+                    "memory_id": "mem-2",
+                    "source_agent": "DeclaredSourceAgent",
+                    "matched_playbook_id": "PB-2",
+                },
+                "plan mitigation",
+                {"domain": "incident"},
+            )
+        ]
+        agent_rows = [
+            ("mem-2", "AutonomousActionAgent", datetime(2026, 1, 2, tzinfo=timezone.utc)),
+        ]
+
+        session.execute = AsyncMock(side_effect=[
+            SimpleNamespace(all=lambda: action_rows),
+            SimpleNamespace(all=lambda: agent_rows),
+        ])
+
+        tracker = OutcomeTrackerService(session)
+        outcomes = await tracker.load_outcomes(
+            org_id="org-1",
+            start=datetime(2026, 1, 1, tzinfo=timezone.utc),
+            end=datetime(2026, 2, 1, tzinfo=timezone.utc),
+        )
+
+        assert len(outcomes) == 1
+        assert outcomes[0]["success"] is False
+        assert outcomes[0]["source_agent"] == "DeclaredSourceAgent"
+
+    @pytest.mark.asyncio
+    async def test_load_outcomes_skips_agent_run_lookup_without_memory_ids(self):
+        session = AsyncMock()
+
+        action_rows = [
+            (
+                "success",
+                {"matched_playbook_id": "PB-3"},
+                "general update",
+                {"domain": "general"},
+            )
+        ]
+        session.execute = AsyncMock(side_effect=[SimpleNamespace(all=lambda: action_rows)])
+
+        tracker = OutcomeTrackerService(session)
+        outcomes = await tracker.load_outcomes(
+            org_id="org-1",
+            start=datetime(2026, 1, 1, tzinfo=timezone.utc),
+            end=datetime(2026, 2, 1, tzinfo=timezone.utc),
+        )
+
+        assert len(outcomes) == 1
+        assert outcomes[0]["memory_id"] is None
+        assert outcomes[0]["source_agent"] == ""
+        assert session.execute.await_count == 1

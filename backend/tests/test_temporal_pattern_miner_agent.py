@@ -188,13 +188,13 @@ class TestAgentRun:
             }
         )
         with patch("app.agents.temporal_pattern_miner_agent.settings") as mock_settings, patch(
-            "app.agents.temporal_pattern_miner_agent.create_ollama_client", return_value=mock_client
+            "app.agents.temporal_pattern_miner_agent.create_llm_client", return_value=mock_client
         ):
             mock_settings.TEMPORAL_PATTERN_MINER_STRATEGY = "llm"
-            mock_settings.OLLAMA_BASE_URL = "http://localhost:11434"
-            mock_settings.OLLAMA_TIMEOUT_SECONDS = 5.0
-            mock_settings.OLLAMA_MAX_CONCURRENCY = 2
-            mock_settings.get_ollama_model = lambda _x: "qwen2.5:7b"
+            mock_settings.VLLM_BASE_URL = "http://localhost:11434"
+            mock_settings.VLLM_TIMEOUT_SECONDS = 5.0
+            mock_settings.VLLM_MAX_CONCURRENCY = 2
+            mock_settings.get_vllm_model = lambda _x: "qwen2.5:7b"
             result = await agent.run("m1", _ctx(memories=[]))
         assert result.outputs["rationale"] == "llm"
 
@@ -204,13 +204,13 @@ class TestAgentRun:
         mock_client = MagicMock()
         mock_client.complete_json = AsyncMock(return_value={"bad": "shape"})
         with patch("app.agents.temporal_pattern_miner_agent.settings") as mock_settings, patch(
-            "app.agents.temporal_pattern_miner_agent.create_ollama_client", return_value=mock_client
+            "app.agents.temporal_pattern_miner_agent.create_llm_client", return_value=mock_client
         ):
             mock_settings.TEMPORAL_PATTERN_MINER_STRATEGY = "llm"
-            mock_settings.OLLAMA_BASE_URL = "http://localhost:11434"
-            mock_settings.OLLAMA_TIMEOUT_SECONDS = 5.0
-            mock_settings.OLLAMA_MAX_CONCURRENCY = 2
-            mock_settings.get_ollama_model = lambda _x: "qwen2.5:7b"
+            mock_settings.VLLM_BASE_URL = "http://localhost:11434"
+            mock_settings.VLLM_TIMEOUT_SECONDS = 5.0
+            mock_settings.VLLM_MAX_CONCURRENCY = 2
+            mock_settings.get_vllm_model = lambda _x: "qwen2.5:7b"
             result = await agent.run("m1", _ctx(memories=[]))
         assert result.outputs["rationale"] == "heuristic"
 

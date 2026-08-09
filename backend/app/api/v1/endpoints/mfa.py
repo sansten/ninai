@@ -15,7 +15,7 @@ from app.schemas.mfa_schemas import (
     MFAStatusResponse, MFADeviceResponse, MFAEnforceRequest
 )
 from app.services.mfa_service import (
-    TOTPService, SMSService, WebAuthnService, MFAEnrollmentService
+    TOTPService, SMSService, WebAuthnService, MFAEnrollmentService, MFAImplementationUnavailableError
 )
 
 
@@ -204,6 +204,11 @@ async def setup_sms(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Failed to setup SMS"
             )
+    except MFAImplementationUnavailableError as e:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(e)
+        )
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -231,6 +236,11 @@ async def send_sms_otp(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Failed to send OTP"
             )
+    except MFAImplementationUnavailableError as e:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(e)
+        )
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
@@ -266,6 +276,11 @@ async def verify_sms_otp(
             )
     except HTTPException:
         raise
+    except MFAImplementationUnavailableError as e:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(e)
+        )
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

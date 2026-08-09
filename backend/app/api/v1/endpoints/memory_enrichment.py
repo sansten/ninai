@@ -350,7 +350,13 @@ async def submit_feedback(
         memory_id=memory_id,
         actor_id=tenant.user_id,
         feedback_type="enrichment_verdict",
-        target_agent="FeedbackIntegrationAgent",
+        # FeedbackIntegrationAgent (Phase 24) is an enterprise-only agent with
+        # no execution path in an unlicensed deployment — the row was never
+        # unreachable (nothing filters MemoryFeedback by target_agent before
+        # applying it), but the label misattributed every override here to an
+        # agent that never actually processes it. FeedbackLearningAgent is
+        # the local agent whose write-time run reads/applies these rows.
+        target_agent="FeedbackLearningAgent",
         payload={
             "verdict": body.verdict,
             "credibility_override": body.credibility_override,

@@ -305,7 +305,13 @@ async def get_conflict_diff(
 
     contradiction_res = await db.execute(
         select(Contradiction)
-        .where(Contradiction.organization_id == tenant.org_id)
+        .where(
+            Contradiction.organization_id == tenant.org_id,
+            or_(
+                Contradiction.created_at >= since_ts,
+                Contradiction.resolved_at >= since_ts,
+            ),
+        )
         .order_by(asc(Contradiction.created_at))
         .limit(limit)
     )
@@ -320,7 +326,7 @@ async def get_conflict_diff(
             "created_at": row.created_at,
         }
         for row in contradictions
-        if row.created_at and row.created_at >= since_ts
+        if row.created_at
     ]
     resolved_conflicts = [
         {
@@ -330,7 +336,7 @@ async def get_conflict_diff(
             "severity": str(row.severity),
         }
         for row in contradictions
-        if row.resolved_at and row.resolved_at >= since_ts
+        if row.resolved_at
     ]
 
     meta_new: list[dict[str, Any]] = []
@@ -338,7 +344,13 @@ async def get_conflict_diff(
     if include_meta:
         meta_res = await db.execute(
             select(MetaConflictRegistry)
-            .where(MetaConflictRegistry.organization_id == tenant.org_id)
+            .where(
+                MetaConflictRegistry.organization_id == tenant.org_id,
+                or_(
+                    MetaConflictRegistry.created_at >= since_ts,
+                    MetaConflictRegistry.resolved_at >= since_ts,
+                ),
+            )
             .order_by(asc(MetaConflictRegistry.created_at))
             .limit(limit)
         )
@@ -353,7 +365,7 @@ async def get_conflict_diff(
                 "created_at": row.created_at,
             }
             for row in meta_rows
-            if row.created_at and row.created_at >= since_ts
+            if row.created_at
         ]
         meta_resolved = [
             {
@@ -363,7 +375,7 @@ async def get_conflict_diff(
                 "resolved_at": row.resolved_at,
             }
             for row in meta_rows
-            if row.resolved_at and row.resolved_at >= since_ts
+            if row.resolved_at
         ]
 
     return {

@@ -2,7 +2,7 @@
 
 Forces heuristic strategy for all agent calls so e2e tests exercise
 deterministic heuristic paths rather than live LLM calls (which vary by
-Ollama availability/version).
+vLLM availability/version).
 """
 
 from __future__ import annotations

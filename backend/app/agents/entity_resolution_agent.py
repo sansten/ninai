@@ -21,12 +21,12 @@ Outputs power downstream phases:
 from __future__ import annotations
 
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from app.agents.base import BaseAgent
 from app.agents.types import AgentContext, AgentResult
-from app.agents.llm.ollama_breaker import create_ollama_client
+from app.agents.llm.llm_breaker import create_llm_client
 from app.core.config import settings
 
 
@@ -244,6 +244,36 @@ _MONTH_MAP = {
     "jul": 7, "aug": 8, "sep": 9, "oct": 10, "nov": 11, "dec": 12,
 }
 
+_TURN_PREFIX_RE = re.compile(r"^\[([^\]]+)\](?:\s+\[([^\]]+)\])?\s*")
+_ISO_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+_WEEKDAY_INDEX = {
+    "monday": 0,
+    "tuesday": 1,
+    "wednesday": 2,
+    "thursday": 3,
+    "friday": 4,
+    "saturday": 5,
+    "sunday": 6,
+}
+
+
+def _parse_turn_context(content: str) -> tuple[str | None, str | None, str]:
+    """Parse LoCoMo-style prefixes like `[2023-05-08] [Caroline] text`."""
+    text = content or ""
+    m = _TURN_PREFIX_RE.match(text)
+    if not m:
+        return None, None, text
+
+    first = str(m.group(1) or "").strip()
+    second = str(m.group(2) or "").strip()
+    body = text[m.end():].strip()
+
+    if _ISO_DATE_RE.match(first):
+        return first, second or None, body
+    if second and _ISO_DATE_RE.match(second):
+        return second, first or None, body
+    return None, first or None, body
+
 
 def _normalize_date_string(text: str) -> str | None:
     """Try to parse a date string and return ISO YYYY-MM-DD, or None."""
@@ -285,6 +315,18 @@ def _extract_date_entities(text: str) -> list[dict[str, Any]]:
     """Extract and normalize all date expressions in text as canonical entities."""
     results: list[dict[str, Any]] = []
     seen_canonicals: set[str] = set()
+    anchor_date, _, _ = _parse_turn_context(text)
+
+    if anchor_date and anchor_date not in seen_canonicals:
+        seen_canonicals.add(anchor_date)
+        results.append({
+            "original": anchor_date,
+            "canonical": anchor_date,
+            "entity_type": "date",
+            "domains": ["general"],
+            "match_type": "anchor_date",
+            "confidence": 1.0,
+        })
 
     # Multi-word date patterns
     for pattern, _ in _DATE_PATTERNS:
@@ -300,6 +342,54 @@ def _extract_date_entities(text: str) -> list[dict[str, Any]]:
                     "match_type": "normalized",
                     "confidence": 0.95,
                 })
+
+    return results
+
+
+def _extract_relative_date_entities(text: str) -> list[dict[str, Any]]:
+    """Normalize basic relative dates against the turn's anchor date."""
+    anchor_date, _, body = _parse_turn_context(text)
+    if not anchor_date:
+        return []
+
+    try:
+        anchor_dt = datetime.strptime(anchor_date, "%Y-%m-%d")
+    except ValueError:
+        return []
+
+    lower = body.lower()
+    results: list[dict[str, Any]] = []
+    seen: set[str] = set()
+
+    def _emit(original: str, canonical: str, *, match_type: str) -> None:
+        if canonical in seen:
+            return
+        seen.add(canonical)
+        results.append({
+            "original": original,
+            "canonical": canonical,
+            "entity_type": "date",
+            "domains": ["general"],
+            "match_type": match_type,
+            "confidence": 0.9,
+        })
+
+    for phrase, delta_days in (("yesterday", -1), ("today", 0), ("tomorrow", 1)):
+        if re.search(rf"\b{phrase}\b", lower):
+            canonical = (anchor_dt + timedelta(days=delta_days)).strftime("%Y-%m-%d")
+            _emit(phrase, canonical, match_type="relative_date")
+
+    for modifier, direction in (("last", -1), ("next", 1)):
+        for weekday_name, weekday_idx in _WEEKDAY_INDEX.items():
+            if not re.search(rf"\b{modifier}\s+{weekday_name}\b", lower):
+                continue
+            delta = weekday_idx - anchor_dt.weekday()
+            if direction < 0:
+                delta = delta - 7 if delta >= 0 else delta
+            else:
+                delta = delta + 7 if delta <= 0 else delta
+            canonical = (anchor_dt + timedelta(days=delta)).strftime("%Y-%m-%d")
+            _emit(f"{modifier} {weekday_name}", canonical, match_type="relative_weekday")
 
     return results
 
@@ -332,9 +422,6 @@ def _resolve_temporal(name: str) -> dict[str, Any] | None:
 #       semantic retrieval without vocabulary gap.
 # ---------------------------------------------------------------------------
 
-_SPEAKER_RE = re.compile(r"^\[([^\]]+)\]\s+")
-
-
 def _extract_personal_attributes(content: str) -> list[dict[str, Any]]:
     """Extract personal attribute facts from a [Speaker]-prefixed turn.
 
@@ -344,12 +431,11 @@ def _extract_personal_attributes(content: str) -> list[dict[str, Any]]:
     results: list[dict[str, Any]] = []
     seen: set[str] = set()
 
-    m = _SPEAKER_RE.match(content)
-    if not m:
+    _, speaker, text = _parse_turn_context(content)
+    if not speaker:
         return results
 
-    subject = m.group(1).strip()
-    text = content[m.end():].strip()
+    subject = speaker.strip()
     subj_lc = subject.lower()
 
     def _emit(attribute: str, value: str) -> None:
@@ -457,6 +543,8 @@ def _looks_like_person_name(token: str) -> bool:
     """Heuristic: single capitalized word that is not a known non-person term."""
     t = token.strip()
     if len(t) < 3 or not t[0].isupper():
+        return False
+    if t.isupper():
         return False
     return t.lower() not in _PERSON_SKIP
 
@@ -580,6 +668,7 @@ class EntityResolutionAgent(BaseAgent):
                                    match_type, confidence}]
       - unresolved_entities: list[str]
       - cross_silo_links:    list[{canonical, entity_type, domains, silo_count}]
+      - structured_facts:    list[{subject, predicate, object, confidence}]
       - confidence:          float
       - rationale:           "heuristic" | "llm"
     """
@@ -600,6 +689,8 @@ class EntityResolutionAgent(BaseAgent):
             raise ValueError("cross_silo_links must be a list")
         if not isinstance(outputs.get("unresolved_entities", []), list):
             raise ValueError("unresolved_entities must be a list")
+        if "structured_facts" in outputs and not isinstance(outputs.get("structured_facts"), list):
+            raise ValueError("structured_facts must be a list")
         for entity in outputs.get("resolved_entities", []):
             if not isinstance(entity, dict):
                 raise ValueError("each resolved_entity must be a dict")
@@ -646,13 +737,17 @@ class EntityResolutionAgent(BaseAgent):
             if date_ent["canonical"] not in seen_canonicals:
                 resolved.append(date_ent)
                 seen_canonicals.add(date_ent["canonical"])
+        for date_ent in _extract_relative_date_entities(content):
+            if date_ent["canonical"] not in seen_canonicals:
+                resolved.append(date_ent)
+                seen_canonicals.add(date_ent["canonical"])
 
         # Speaker attribution: if content begins with [SpeakerName], emit a speaker entity
         # at confidence 1.0 so entity-indexed retrieval strongly anchors this memory to the
         # named speaker — critical for adversarial QA where attribution determines correctness.
-        _spk_m = _SPEAKER_RE.match(content.strip())
-        if _spk_m:
-            _spk_name = _spk_m.group(1)
+        _, speaker, _ = _parse_turn_context(content.strip())
+        if speaker:
+            _spk_name = speaker
             _spk_canonical = _spk_name.lower()
             if _spk_canonical not in seen_canonicals:
                 resolved.append({
@@ -694,6 +789,7 @@ class EntityResolutionAgent(BaseAgent):
             "resolved_entities": resolved,
             "unresolved_entities": unresolved,
             "cross_silo_links": cross_silo,
+            "structured_facts": [],
             "confidence": confidence,
             "rationale": "heuristic",
         }
@@ -742,31 +838,43 @@ class EntityResolutionAgent(BaseAgent):
                 "     - event: significant event the speaker describes (brief label, e.g. 'ran charity race')\n"
                 "     - location_visited: place the speaker visited or went to\n"
                 "     - activity: regular activity the speaker does (e.g. 'pottery', 'running')\n\n"
-                "3. unresolved_entities: list of entity name strings that could not be resolved\n"
-                "4. cross_silo_links: list of {canonical, entity_type, domains, silo_count} "
+                "3. STRUCTURED FACTS — extract explicit, reusable facts from any domain as short triples.\n"
+                "   Format each fact as: {subject, predicate, object, confidence}\n"
+                "   Rules:\n"
+                "     - only extract facts explicitly supported by the content\n"
+                "     - prefer normalized predicate names like relationship_status, depends_on, moved_from,\n"
+                "       works_for, located_in, attended, planned_for, identity, owns, likes\n"
+                "     - keep object concise and copy exact names when possible\n"
+                "     - do not invent a fact if the subject is unclear\n\n"
+                "4. unresolved_entities: list of entity name strings that could not be resolved\n"
+                "5. cross_silo_links: list of {canonical, entity_type, domains, silo_count} "
                 "for entities spanning multiple business departments\n"
-                "5. confidence: float 0.0 to 1.0\n"
-                "6. rationale: 'llm'\n\n"
+                "6. confidence: float 0.0 to 1.0\n"
+                "7. rationale: 'llm'\n\n"
                 f"CONTENT:\n{content}\n\n"
                 "Return JSON with exactly these keys: resolved_entities, unresolved_entities, "
-                "cross_silo_links, confidence, rationale"
+                "cross_silo_links, structured_facts, confidence, rationale"
             )
-            client = create_ollama_client(
-                base_url=str(getattr(settings, "OLLAMA_BASE_URL", "http://localhost:11434")),
-                model=str(settings.get_ollama_model("agents")),
-                timeout_seconds=float(getattr(settings, "OLLAMA_TIMEOUT_SECONDS", 5.0)),
-                max_concurrency=int(getattr(settings, "OLLAMA_MAX_CONCURRENCY", 2)),
+            client = create_llm_client(
+                base_url=str(getattr(settings, "VLLM_BASE_URL", "http://localhost:11434")),
+                model=str(settings.get_llm_model("agents")),
+                timeout_seconds=float(getattr(settings, "VLLM_TIMEOUT_SECONDS", 5.0)),
+                max_concurrency=int(getattr(settings, "VLLM_MAX_CONCURRENCY", 2)),
             )
-            resp = await client.complete_json(
-                prompt=prompt,
-                schema_hint={},
-                tool_event_sink=context.get("tool_event_sink"),
-            )
+            try:
+                resp = await client.complete_json(
+                    prompt=prompt,
+                    schema_hint={},
+                    tool_event_sink=context.get("tool_event_sink"),
+                )
+            except Exception:
+                resp = None
             if (
                 isinstance(resp, dict)
                 and isinstance(resp.get("resolved_entities"), list)
                 and isinstance(resp.get("unresolved_entities"), list)
                 and isinstance(resp.get("cross_silo_links"), list)
+                and isinstance(resp.get("structured_facts", []), list)
             ):
                 # Merge in deterministic heuristic results (date normalization, enterprise
                 # ontology lookup) that are cheap, certain, and don't need LLM.
@@ -780,10 +888,10 @@ class EntityResolutionAgent(BaseAgent):
                         resp["resolved_entities"].append(ent)
                 if not resp.get("cross_silo_links"):
                     resp["cross_silo_links"] = heuristic["cross_silo_links"]
+                resp.setdefault("structured_facts", [])
                 outputs = resp
             else:
                 outputs = self._heuristic(content=content, relationships=relationships)
-
         finished_at = datetime.now(timezone.utc)
 
         result = AgentResult(

@@ -157,7 +157,7 @@ def main() -> None:
 
     # External services
     _rounded_rect(draw, llm, 14, c_ext, c_ext_border)
-    _center_text(draw, llm, "Ollama\n(LLM)", h_f, fill=(88, 28, 135))
+    _center_text(draw, llm, "vLLM\n(LLM)", h_f, fill=(88, 28, 135))
 
     _rounded_rect(draw, ocr, 14, c_ext, c_ext_border)
     _center_text(draw, ocr, "OCR Sidecar\n(Tesseract)", t_f, fill=(88, 28, 135))
@@ -201,14 +201,14 @@ def main() -> None:
     legend_item(legend_y + 34, c_compute, c_compute_border, "Compute (scale out via replicas)")
     legend_item(legend_y + 60, c_queue, c_queue_border, "Queue/Broker (Redis)")
     legend_item(legend_y + 86, c_store, c_store_border, "Stateful stores (Postgres/Qdrant/Elasticsearch)")
-    legend_item(legend_y + 112, c_ext, c_ext_border, "External/sidecar services (Ollama/OCR)")
+    legend_item(legend_y + 112, c_ext, c_ext_border, "External/sidecar services (vLLM/OCR)")
 
     # Scaling notes
     notes = (
         "Scalability highlights:\n"
         "• Scale API pods for request throughput\n"
         "• Scale Celery workers for enrichment throughput\n"
-        "• LLM throttling: OLLAMA_MAX_CONCURRENCY\n"
+        "• LLM throttling: VLLM_MAX_CONCURRENCY\n"
         "• Result caching: agent_result_cache (Postgres + RLS)"
     )
     draw.text((620, 720), notes, font=t_f, fill=(51, 65, 85))

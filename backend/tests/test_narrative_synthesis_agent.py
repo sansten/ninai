@@ -497,12 +497,12 @@ class TestNarrativeSynthesisAgentLLM:
         mock_client = MagicMock()
         mock_client.complete_json = AsyncMock(return_value=_valid_llm_response())
         with patch("app.agents.narrative_synthesis_agent.settings") as mock_settings, \
-             patch("app.agents.narrative_synthesis_agent.create_ollama_client", return_value=mock_client):
+             patch("app.agents.narrative_synthesis_agent.create_llm_client", return_value=mock_client):
             mock_settings.NARRATIVE_SYNTHESIS_STRATEGY = "llm"
-            mock_settings.OLLAMA_BASE_URL = "http://localhost:11434"
-            mock_settings.OLLAMA_MODEL = "llama3.1:8b"
-            mock_settings.OLLAMA_TIMEOUT_SECONDS = 5.0
-            mock_settings.OLLAMA_MAX_CONCURRENCY = 2
+            mock_settings.VLLM_BASE_URL = "http://localhost:11434"
+            mock_settings.VLLM_MODEL = "llama3.1:8b"
+            mock_settings.VLLM_TIMEOUT_SECONDS = 5.0
+            mock_settings.VLLM_MAX_CONCURRENCY = 2
             result = await agent.run("mem-1", _ctx(_full_enrichment()))
         assert result.status == "success"
         assert result.outputs["narrative_text"] == _valid_llm_response()["narrative_text"]
@@ -513,12 +513,12 @@ class TestNarrativeSynthesisAgentLLM:
         mock_client = MagicMock()
         mock_client.complete_json = AsyncMock(return_value=None)
         with patch("app.agents.narrative_synthesis_agent.settings") as mock_settings, \
-             patch("app.agents.narrative_synthesis_agent.create_ollama_client", return_value=mock_client):
+             patch("app.agents.narrative_synthesis_agent.create_llm_client", return_value=mock_client):
             mock_settings.NARRATIVE_SYNTHESIS_STRATEGY = "llm"
-            mock_settings.OLLAMA_BASE_URL = "http://localhost:11434"
-            mock_settings.OLLAMA_MODEL = "llama3.1:8b"
-            mock_settings.OLLAMA_TIMEOUT_SECONDS = 5.0
-            mock_settings.OLLAMA_MAX_CONCURRENCY = 2
+            mock_settings.VLLM_BASE_URL = "http://localhost:11434"
+            mock_settings.VLLM_MODEL = "llama3.1:8b"
+            mock_settings.VLLM_TIMEOUT_SECONDS = 5.0
+            mock_settings.VLLM_MAX_CONCURRENCY = 2
             result = await agent.run("mem-1", _ctx())
         assert result.outputs["rationale"] == "heuristic"
 
@@ -529,12 +529,12 @@ class TestNarrativeSynthesisAgentLLM:
         mock_client = MagicMock()
         mock_client.complete_json = AsyncMock(return_value=bad)
         with patch("app.agents.narrative_synthesis_agent.settings") as mock_settings, \
-             patch("app.agents.narrative_synthesis_agent.create_ollama_client", return_value=mock_client):
+             patch("app.agents.narrative_synthesis_agent.create_llm_client", return_value=mock_client):
             mock_settings.NARRATIVE_SYNTHESIS_STRATEGY = "llm"
-            mock_settings.OLLAMA_BASE_URL = "http://localhost:11434"
-            mock_settings.OLLAMA_MODEL = "llama3.1:8b"
-            mock_settings.OLLAMA_TIMEOUT_SECONDS = 5.0
-            mock_settings.OLLAMA_MAX_CONCURRENCY = 2
+            mock_settings.VLLM_BASE_URL = "http://localhost:11434"
+            mock_settings.VLLM_MODEL = "llama3.1:8b"
+            mock_settings.VLLM_TIMEOUT_SECONDS = 5.0
+            mock_settings.VLLM_MAX_CONCURRENCY = 2
             result = await agent.run("mem-1", _ctx())
         assert result.outputs["rationale"] == "heuristic"
 
@@ -545,12 +545,12 @@ class TestNarrativeSynthesisAgentLLM:
         mock_client = MagicMock()
         mock_client.complete_json = AsyncMock(return_value=bad)
         with patch("app.agents.narrative_synthesis_agent.settings") as mock_settings, \
-             patch("app.agents.narrative_synthesis_agent.create_ollama_client", return_value=mock_client):
+             patch("app.agents.narrative_synthesis_agent.create_llm_client", return_value=mock_client):
             mock_settings.NARRATIVE_SYNTHESIS_STRATEGY = "llm"
-            mock_settings.OLLAMA_BASE_URL = "http://localhost:11434"
-            mock_settings.OLLAMA_MODEL = "llama3.1:8b"
-            mock_settings.OLLAMA_TIMEOUT_SECONDS = 5.0
-            mock_settings.OLLAMA_MAX_CONCURRENCY = 2
+            mock_settings.VLLM_BASE_URL = "http://localhost:11434"
+            mock_settings.VLLM_MODEL = "llama3.1:8b"
+            mock_settings.VLLM_TIMEOUT_SECONDS = 5.0
+            mock_settings.VLLM_MAX_CONCURRENCY = 2
             result = await agent.run("mem-1", _ctx())
         assert result.outputs["rationale"] == "heuristic"
 
@@ -561,12 +561,12 @@ class TestNarrativeSynthesisAgentLLM:
         mock_client = MagicMock()
         mock_client.complete_json = AsyncMock(return_value=bad)
         with patch("app.agents.narrative_synthesis_agent.settings") as mock_settings, \
-             patch("app.agents.narrative_synthesis_agent.create_ollama_client", return_value=mock_client):
+             patch("app.agents.narrative_synthesis_agent.create_llm_client", return_value=mock_client):
             mock_settings.NARRATIVE_SYNTHESIS_STRATEGY = "llm"
-            mock_settings.OLLAMA_BASE_URL = "http://localhost:11434"
-            mock_settings.OLLAMA_MODEL = "llama3.1:8b"
-            mock_settings.OLLAMA_TIMEOUT_SECONDS = 5.0
-            mock_settings.OLLAMA_MAX_CONCURRENCY = 2
+            mock_settings.VLLM_BASE_URL = "http://localhost:11434"
+            mock_settings.VLLM_MODEL = "llama3.1:8b"
+            mock_settings.VLLM_TIMEOUT_SECONDS = 5.0
+            mock_settings.VLLM_MAX_CONCURRENCY = 2
             result = await agent.run("mem-1", _ctx())
         assert result.outputs["rationale"] == "heuristic"
 
@@ -577,12 +577,12 @@ class TestNarrativeSynthesisAgentLLM:
         mock_client = MagicMock()
         mock_client.complete_json = AsyncMock(return_value=bad)
         with patch("app.agents.narrative_synthesis_agent.settings") as mock_settings, \
-             patch("app.agents.narrative_synthesis_agent.create_ollama_client", return_value=mock_client):
+             patch("app.agents.narrative_synthesis_agent.create_llm_client", return_value=mock_client):
             mock_settings.NARRATIVE_SYNTHESIS_STRATEGY = "llm"
-            mock_settings.OLLAMA_BASE_URL = "http://localhost:11434"
-            mock_settings.OLLAMA_MODEL = "llama3.1:8b"
-            mock_settings.OLLAMA_TIMEOUT_SECONDS = 5.0
-            mock_settings.OLLAMA_MAX_CONCURRENCY = 2
+            mock_settings.VLLM_BASE_URL = "http://localhost:11434"
+            mock_settings.VLLM_MODEL = "llama3.1:8b"
+            mock_settings.VLLM_TIMEOUT_SECONDS = 5.0
+            mock_settings.VLLM_MAX_CONCURRENCY = 2
             result = await agent.run("mem-1", _ctx())
         assert result.outputs["rationale"] == "heuristic"
 
@@ -593,12 +593,12 @@ class TestNarrativeSynthesisAgentLLM:
         mock_client = MagicMock()
         mock_client.complete_json = AsyncMock(return_value=bad)
         with patch("app.agents.narrative_synthesis_agent.settings") as mock_settings, \
-             patch("app.agents.narrative_synthesis_agent.create_ollama_client", return_value=mock_client):
+             patch("app.agents.narrative_synthesis_agent.create_llm_client", return_value=mock_client):
             mock_settings.NARRATIVE_SYNTHESIS_STRATEGY = "llm"
-            mock_settings.OLLAMA_BASE_URL = "http://localhost:11434"
-            mock_settings.OLLAMA_MODEL = "llama3.1:8b"
-            mock_settings.OLLAMA_TIMEOUT_SECONDS = 5.0
-            mock_settings.OLLAMA_MAX_CONCURRENCY = 2
+            mock_settings.VLLM_BASE_URL = "http://localhost:11434"
+            mock_settings.VLLM_MODEL = "llama3.1:8b"
+            mock_settings.VLLM_TIMEOUT_SECONDS = 5.0
+            mock_settings.VLLM_MAX_CONCURRENCY = 2
             result = await agent.run("mem-1", _ctx())
         assert result.outputs["rationale"] == "heuristic"
 
@@ -609,12 +609,12 @@ class TestNarrativeSynthesisAgentLLM:
         mock_client = MagicMock()
         mock_client.complete_json = AsyncMock(return_value=resp)
         with patch("app.agents.narrative_synthesis_agent.settings") as mock_settings, \
-             patch("app.agents.narrative_synthesis_agent.create_ollama_client", return_value=mock_client):
+             patch("app.agents.narrative_synthesis_agent.create_llm_client", return_value=mock_client):
             mock_settings.NARRATIVE_SYNTHESIS_STRATEGY = "llm"
-            mock_settings.OLLAMA_BASE_URL = "http://localhost:11434"
-            mock_settings.OLLAMA_MODEL = "llama3.1:8b"
-            mock_settings.OLLAMA_TIMEOUT_SECONDS = 5.0
-            mock_settings.OLLAMA_MAX_CONCURRENCY = 2
+            mock_settings.VLLM_BASE_URL = "http://localhost:11434"
+            mock_settings.VLLM_MODEL = "llama3.1:8b"
+            mock_settings.VLLM_TIMEOUT_SECONDS = 5.0
+            mock_settings.VLLM_MAX_CONCURRENCY = 2
             result = await agent.run("mem-1", _ctx())
         assert result.confidence == pytest.approx(0.88)
 
@@ -625,12 +625,12 @@ class TestNarrativeSynthesisAgentLLM:
         mock_client = MagicMock()
         mock_client.complete_json = AsyncMock(return_value=resp)
         with patch("app.agents.narrative_synthesis_agent.settings") as mock_settings, \
-             patch("app.agents.narrative_synthesis_agent.create_ollama_client", return_value=mock_client):
+             patch("app.agents.narrative_synthesis_agent.create_llm_client", return_value=mock_client):
             mock_settings.NARRATIVE_SYNTHESIS_STRATEGY = "llm"
-            mock_settings.OLLAMA_BASE_URL = "http://localhost:11434"
-            mock_settings.OLLAMA_MODEL = "llama3.1:8b"
-            mock_settings.OLLAMA_TIMEOUT_SECONDS = 5.0
-            mock_settings.OLLAMA_MAX_CONCURRENCY = 2
+            mock_settings.VLLM_BASE_URL = "http://localhost:11434"
+            mock_settings.VLLM_MODEL = "llama3.1:8b"
+            mock_settings.VLLM_TIMEOUT_SECONDS = 5.0
+            mock_settings.VLLM_MAX_CONCURRENCY = 2
             result = await agent.run("mem-1", _ctx())
         assert result.outputs["tone"] == "urgent"
 
@@ -640,13 +640,13 @@ class TestNarrativeSynthesisAgentLLM:
         mock_client = MagicMock()
         mock_client.complete_json = AsyncMock(return_value=_valid_llm_response())
         with patch("app.agents.narrative_synthesis_agent.settings") as mock_settings, \
-             patch("app.agents.narrative_synthesis_agent.create_ollama_client", return_value=mock_client):
+             patch("app.agents.narrative_synthesis_agent.create_llm_client", return_value=mock_client):
             mock_settings.NARRATIVE_SYNTHESIS_STRATEGY = None
             mock_settings.AGENT_STRATEGY = "llm"
-            mock_settings.OLLAMA_BASE_URL = "http://localhost:11434"
-            mock_settings.OLLAMA_MODEL = "llama3.1:8b"
-            mock_settings.OLLAMA_TIMEOUT_SECONDS = 5.0
-            mock_settings.OLLAMA_MAX_CONCURRENCY = 2
+            mock_settings.VLLM_BASE_URL = "http://localhost:11434"
+            mock_settings.VLLM_MODEL = "llama3.1:8b"
+            mock_settings.VLLM_TIMEOUT_SECONDS = 5.0
+            mock_settings.VLLM_MAX_CONCURRENCY = 2
             result = await agent.run("mem-1", _ctx())
         mock_client.complete_json.assert_awaited_once()
         assert result.status == "success"
@@ -657,12 +657,12 @@ class TestNarrativeSynthesisAgentLLM:
         mock_client = MagicMock()
         mock_client.complete_json = AsyncMock(return_value="just a string")
         with patch("app.agents.narrative_synthesis_agent.settings") as mock_settings, \
-             patch("app.agents.narrative_synthesis_agent.create_ollama_client", return_value=mock_client):
+             patch("app.agents.narrative_synthesis_agent.create_llm_client", return_value=mock_client):
             mock_settings.NARRATIVE_SYNTHESIS_STRATEGY = "llm"
-            mock_settings.OLLAMA_BASE_URL = "http://localhost:11434"
-            mock_settings.OLLAMA_MODEL = "llama3.1:8b"
-            mock_settings.OLLAMA_TIMEOUT_SECONDS = 5.0
-            mock_settings.OLLAMA_MAX_CONCURRENCY = 2
+            mock_settings.VLLM_BASE_URL = "http://localhost:11434"
+            mock_settings.VLLM_MODEL = "llama3.1:8b"
+            mock_settings.VLLM_TIMEOUT_SECONDS = 5.0
+            mock_settings.VLLM_MAX_CONCURRENCY = 2
             result = await agent.run("mem-1", _ctx())
         assert result.outputs["rationale"] == "heuristic"
 

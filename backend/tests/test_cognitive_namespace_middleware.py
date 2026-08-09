@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -31,13 +32,21 @@ async def test_cognitive_namespace_rejects_x_org_id_mismatch():
 async def test_cognitive_namespace_sets_response_header_for_cognitive_paths():
     headers = _auth_headers(org_id="org-abc")
 
-    with patch("app.api.v1.endpoints.cognitive_gateway.CognitiveGatewayService.write", AsyncMock(return_value=type("R", (), {
-        "memory_id": "m1",
-        "enriched": True,
-        "enrichment_summary": {},
-        "tags": [],
-        "created_at": __import__("datetime").datetime.now(__import__("datetime").timezone.utc),
-    })())):
+    with patch("app.api.v1.endpoints.cognitive_gateway.set_tenant_context", AsyncMock(return_value=None)), \
+         patch("app.api.v1.endpoints.cognitive_gateway.CognitiveIngestionService.build_gateway_memory_create", return_value=SimpleNamespace()), \
+         patch("app.api.v1.endpoints.cognitive_gateway.CognitiveIngestionService.ingest_memory", AsyncMock(return_value=SimpleNamespace(
+             memory=SimpleNamespace(id="m1"),
+             storage="long_term",
+         ))), \
+         patch("app.api.v1.endpoints.cognitive_gateway._context_working_set_summary", AsyncMock(return_value={})), \
+         patch("app.api.v1.endpoints.cognitive_gateway.MemoryResponse.model_validate", return_value=SimpleNamespace(model_dump=lambda mode="python": {})), \
+         patch("app.api.v1.endpoints.cognitive_gateway.CognitiveGatewayService.write", AsyncMock(return_value=type("R", (), {
+             "memory_id": "m1",
+             "enriched": True,
+             "enrichment_summary": {},
+             "tags": [],
+             "created_at": __import__("datetime").datetime.now(__import__("datetime").timezone.utc),
+         })())):
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as ac:
             resp = await ac.post("/api/v1/cognitive/gateway/write", headers=headers, json={"content": "test"})

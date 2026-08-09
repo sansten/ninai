@@ -151,7 +151,7 @@ flowchart TD
 Plain-text fallback summary: applications write to enrichment agents, persisted state lives in PostgreSQL/Qdrant/Redis, query reads assemble causality and narrative context, and Celery background agents continuously maintain memory quality and autonomous operations.
 
 **Key architectural rules across all agents:**
-- Every agent has a heuristic path that requires no LLM — the system degrades gracefully when Ollama is unavailable
+- Every agent has a heuristic path that requires no LLM — the system degrades gracefully when vLLM is unavailable
 - Every service call is wrapped in try/except with fault isolation — one agent failing does not cascade
 - All database queries are scoped via `set_tenant_context()` before execution — RLS enforces the rest
 - EMA-based learning (`new = 0.75 * prev + 0.25 * outcome`) for strategy and tool reliability tracking
@@ -168,7 +168,7 @@ Plain-text fallback summary: applications write to enrichment agents, persisted 
 | Vector store | Qdrant |
 | Cache / broker | Redis |
 | Task queue | Celery |
-| Local LLM | Ollama (qwen2.5:0.5b default) |
+| Local LLM | vLLM (qwen2.5:0.5b default) |
 | Runtime | Python 3.12+ |
 
 ---
@@ -308,7 +308,7 @@ docker compose up -d postgres redis qdrant
 python -m pytest tests/ -q
 ```
 
-All agents test both the heuristic path (no LLM) and the LLM path (with Ollama mock), plus fallback behavior when the LLM fails.
+All agents test both the heuristic path (no LLM) and the LLM path (with vLLM mock), plus fallback behavior when the LLM fails.
 
 ---
 
@@ -319,7 +319,7 @@ Last measured on Kaggle-backed unit benchmark suite:
 ```bash
 cd backend
 python -m tests.benchmarks.run_all --mode unit --strategy heuristic --dataset kaggle --json
-python -m tests.benchmarks.run_all --mode unit --strategy llm --dataset kaggle --ollama-model qwen2.5:7b --json
+python -m tests.benchmarks.run_all --mode unit --strategy llm --dataset kaggle --vllm-model qwen2.5:7b --json
 python -m tests.benchmarks.run_all --mode unit --strategy heuristic --dataset kaggle --runs 3 --json
 ```
 
@@ -336,11 +336,11 @@ python -m tests.benchmarks.run_all --mode unit --strategy heuristic --dataset ka
 | LLM fallback rate | 0 (heuristic) | 51% | 0 (heuristic) |
 
 > Heuristic mode makes zero LLM calls by design, so a 0% LLM rate is expected and not a failure.
-> LLM mode routes approximately 49% of decisions to Ollama and the remainder to the heuristic path.
+> LLM mode routes approximately 49% of decisions to vLLM and the remainder to the heuristic path.
 
 ### LLM Model Comparison (Kaggle, unit mode)
 
-The table below compares available Ollama models on the same benchmark runner. This is the model-to-model view for Ninai's LLM path.
+The table below compares available vLLM models on the same benchmark runner. This is the model-to-model view for Ninai's LLM path.
 
 | Metric | llama3.2:latest | qwen2.5:7b | deepseek-coder-v2:16b |
 |---|---:|---:|---:|
@@ -356,9 +356,9 @@ Re-run model comparison:
 
 ```bash
 cd backend
-python -m tests.benchmarks.run_all --mode unit --strategy llm --dataset kaggle --ollama-model llama3.2:latest --json
-python -m tests.benchmarks.run_all --mode unit --strategy llm --dataset kaggle --ollama-model qwen2.5:7b --json
-python -m tests.benchmarks.run_all --mode unit --strategy llm --dataset kaggle --ollama-model deepseek-coder-v2:16b --json
+python -m tests.benchmarks.run_all --mode unit --strategy llm --dataset kaggle --vllm-model llama3.2:latest --json
+python -m tests.benchmarks.run_all --mode unit --strategy llm --dataset kaggle --vllm-model qwen2.5:7b --json
+python -m tests.benchmarks.run_all --mode unit --strategy llm --dataset kaggle --vllm-model deepseek-coder-v2:16b --json
 ```
 
 ### How This Compares to Industry Benchmarks
@@ -398,9 +398,9 @@ POSTGRES_DB=ninai
 QDRANT_URL=http://localhost:6333
 REDIS_URL=redis://localhost:6379
 
-OLLAMA_BASE_URL=http://localhost:11434
-OLLAMA_MODEL=qwen2.5:0.5b
-OLLAMA_TIMEOUT_SECONDS=5.0
+VLLM_BASE_URL=http://localhost:11434
+VLLM_MODEL=qwen2.5:0.5b
+VLLM_TIMEOUT_SECONDS=5.0
 
 AGENT_STRATEGY=llm      # or: heuristic (no LLM, faster, fully deterministic)
 APP_ENV=development

@@ -104,10 +104,9 @@ async def test_sms_setup_endpoint(pg_client: AsyncClient, mfa_auth_headers):
         headers=mfa_auth_headers
     )
     
-    assert response.status_code == 200
+    assert response.status_code == 503
     data = response.json()
-    assert data["success"] is True
-    assert data["phone_number"] == "+1234567890"
+    assert "SMS MFA is unavailable" in data["detail"]
 
 
 @pytest.mark.asyncio
@@ -123,9 +122,9 @@ async def test_sms_send_otp_endpoint(pg_client: AsyncClient, mfa_auth_headers):
     # Send OTP
     response = await pg_client.post("/api/v1/mfa/sms/send-otp", json={}, headers=mfa_auth_headers)
     
-    assert response.status_code == 200
+    assert response.status_code == 503
     data = response.json()
-    assert data["success"] is True
+    assert "SMS MFA is unavailable" in data["detail"]
 
 
 @pytest.mark.asyncio
@@ -139,16 +138,16 @@ async def test_sms_verify_otp_endpoint(pg_client: AsyncClient, mfa_auth_headers)
     )
     await pg_client.post("/api/v1/mfa/sms/send-otp", json={}, headers=mfa_auth_headers)
     
-    # Verify (in test mode, any 6-digit code works)
+    # Verify should fail closed while SMS MFA is unimplemented
     response = await pg_client.post(
         "/api/v1/mfa/sms/verify-otp",
         json={"otp": "123456"},
         headers=mfa_auth_headers
     )
     
-    assert response.status_code == 200
+    assert response.status_code == 503
     data = response.json()
-    assert data["success"] is True
+    assert "SMS MFA is unavailable" in data["detail"]
 
 
 @pytest.mark.asyncio
@@ -191,7 +190,7 @@ async def test_mfa_status_after_totp_setup(pg_client: AsyncClient, mfa_auth_head
 
 @pytest.mark.asyncio
 async def test_mfa_status_multiple_devices(pg_client: AsyncClient, mfa_auth_headers):
-    """Test MFA status with multiple device types."""
+    """Test MFA status keeps SMS disabled when that factor is unavailable."""
     # Setup TOTP
     setup_response = await pg_client.post("/api/v1/mfa/totp/setup", json={}, headers=mfa_auth_headers)
     secret = setup_response.json()["secret"]
@@ -208,7 +207,7 @@ async def test_mfa_status_multiple_devices(pg_client: AsyncClient, mfa_auth_head
     data = response.json()
     
     assert data["totp_enabled"] is True
-    assert data["sms_enabled"] is True
+    assert data["sms_enabled"] is False
     assert len(data["devices"]) == 2
 
 

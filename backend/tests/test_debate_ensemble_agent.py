@@ -39,3 +39,52 @@ class TestDebateEnsembleAgent:
         assert result.status == "success"
         assert "debate_transcript" in result.outputs
         assert result.outputs["debate_transcript"][-1]["speaker"] == "moderator"
+
+    @pytest.mark.asyncio
+    async def test_run_falls_back_to_bus_enrichment_when_no_debate_key(self):
+        """Regression: the only real caller is OrchestrationBusAgent, which
+        never populates context["debate"] — it supplies the standard
+        context["memory"] location every other agent reads from. Previously
+        the absence of context["debate"] silently fabricated a debate from
+        content="" and enrichment={}, ignoring the real anomaly signal."""
+        agent = DebateEnsembleAgent()
+        result = await agent.run(
+            memory_id="m-debate-2",
+            context={
+                "memory": {
+                    "content": "critical auth outage, anomaly detected",
+                    "enrichment": {"anomaly_detected": True, "anomaly_score": 0.95},
+                },
+                "runtime": {},
+            },
+        )
+
+        assert result.status == "success"
+        # A real anomaly signal should push the safety debater to escalate,
+        # which the fabricated content="" / enrichment={} path never could.
+        transcript = result.outputs["debate_transcript"]
+        safety_ballot = next(t for t in transcript if t.get("role") == "safety")
+        assert safety_ballot["position"] == "escalate"
+
+    @pytest.mark.asyncio
+    async def test_run_prefers_explicit_debate_key_over_memory_fallback(self):
+        """Backward compatibility: an explicit context["debate"] (if a
+        future caller supplies one) still takes precedence over the
+        context["memory"] fallback."""
+        agent = DebateEnsembleAgent()
+        result = await agent.run(
+            memory_id="m-debate-3",
+            context={
+                "debate": {
+                    "content": "explicit debate content",
+                    "enrichment": {"anomaly_detected": False, "anomaly_score": 0.0},
+                },
+                "memory": {
+                    "content": "should be ignored",
+                    "enrichment": {"anomaly_detected": True, "anomaly_score": 0.99},
+                },
+            },
+        )
+        transcript = result.outputs["debate_transcript"]
+        safety_ballot = next(t for t in transcript if t.get("role") == "safety")
+        assert safety_ballot["position"] == "investigate"

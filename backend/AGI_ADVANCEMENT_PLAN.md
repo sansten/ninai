@@ -10,7 +10,7 @@ git workflow in CLAUDE.md (branch → commit → push → PR → merge).
 
 ## Ground Rules for Implementation
 
-- `AGENT_STRATEGY=heuristic` for all tests — no DB, no Ollama, no Qdrant required.
+- `AGENT_STRATEGY=heuristic` for all tests — no DB, no vLLM, no Qdrant required.
 - All new agents extend `app/agents/base.py` and register in `app/agents/registry.py`.
 - All new Celery tasks are wired into `app/core/celery_app.py` (includes + routes + beat).
 - No AI attribution in commits or PRs.

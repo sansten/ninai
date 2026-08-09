@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import inspect
 from typing import Any
 
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.memory_semantic_node import MemorySemanticNode
+from app.models.memory_state_snapshot import MemoryStateSnapshot
 from app.models.memory_topic import MemoryTopic
 from app.models.navigation_edge import NavigationEdge
 from app.services.cognitive_goal_loop_service import CognitiveGoalLoopService
@@ -50,9 +52,16 @@ class CognitiveEvidenceService:
         graph_neighbors = await self._load_graph_neighbors(episodes, semantic_nodes, topics)
         temporal_anchors = self._collect_temporal_anchors(memory_hits)
         fact_layers = await self._load_fact_layers(memory_ids)
+        fact_layers = self._merge_inline_fact_layers(memory_hits, fact_layers)
         goal_context = await self.goal_loop_service.build_context()
         temporal_reasoning = await self._build_temporal_reasoning(
             query=query,
+            memory_hits=memory_hits,
+            facts=list(fact_layers.get("facts") or []),
+            query_intelligence=dict(query_intelligence or {}),
+            planner_context=dict(planner_context or {}),
+        )
+        entity_context = await self._build_entity_context(
             memory_hits=memory_hits,
             facts=list(fact_layers.get("facts") or []),
             query_intelligence=dict(query_intelligence or {}),
@@ -72,6 +81,7 @@ class CognitiveEvidenceService:
             "graph_neighbors": graph_neighbors,
             "temporal_anchors": temporal_anchors,
             "temporal_reasoning": temporal_reasoning,
+            "entity_context": entity_context,
             "multi_hop_trace": list((planner_context or {}).get("multi_hop_trace") or []),
             "goal_context": goal_context,
             "evidence_quality": self._build_quality_summary(
@@ -246,9 +256,177 @@ class CognitiveEvidenceService:
                     "provenance": list(memory.get("provenance") or []),
                     "retrieval_learning": retrieval_learning,
                     "retrieval_prior": self._float_or_default(retrieval_learning.get("relevance_score"), 0.0),
+                    "extra_metadata": extra_metadata,
                 }
             )
         return normalized
+
+    def _merge_inline_fact_layers(
+        self,
+        memory_hits: list[dict[str, Any]],
+        fact_layers: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        merged = {
+            "facts": list((fact_layers or {}).get("facts") or []),
+            "contradictions": list((fact_layers or {}).get("contradictions") or []),
+        }
+        seen: set[tuple[str, str, str, str]] = set()
+        for fact in merged["facts"]:
+            key = (
+                str(fact.get("subject") or "").strip().lower(),
+                str(fact.get("predicate") or "").strip().lower(),
+                str(fact.get("object") or "").strip().lower(),
+                str(fact.get("source_memory_id") or "").strip(),
+            )
+            seen.add(key)
+
+        for hit in memory_hits:
+            extra = dict(hit.get("extra_metadata") or {})
+            inline_facts = []
+            fact_support = extra.get("fact_support")
+            if isinstance(fact_support, dict):
+                inline_facts.append(fact_support)
+            for item in list(extra.get("fact_supporting_facts") or []):
+                if isinstance(item, dict):
+                    inline_facts.append(item)
+
+            source_memory_id = str(hit.get("memory_id") or "")
+            for index, fact in enumerate(inline_facts):
+                subject = str(fact.get("subject") or "").strip()
+                predicate = str(fact.get("predicate") or "").strip()
+                obj = str(fact.get("object") or "").strip()
+                if not (subject and predicate and obj):
+                    continue
+                key = (subject.lower(), predicate.lower(), obj.lower(), source_memory_id)
+                if key in seen:
+                    continue
+                seen.add(key)
+                merged["facts"].append(
+                    {
+                        "fact_id": str(fact.get("fact_id") or f"inline::{source_memory_id}::{index}"),
+                        "subject": subject,
+                        "predicate": predicate,
+                        "object": obj,
+                        "confidence": self._float_or_default(fact.get("confidence"), 0.85),
+                        "status": str(fact.get("status") or "active"),
+                        "source_memory_id": source_memory_id,
+                        "valid_from": fact.get("valid_from"),
+                        "valid_to": fact.get("valid_to"),
+                        "contradiction_group_id": fact.get("contradiction_group_id"),
+                        "source_type": "state_space" if source_memory_id.startswith("state::") else "inline",
+                    }
+                )
+
+        merged["facts"].sort(
+            key=lambda item: self._float_or_default(item.get("confidence"), 0.0),
+            reverse=True,
+        )
+        return merged
+
+    async def _build_entity_context(
+        self,
+        *,
+        memory_hits: list[dict[str, Any]],
+        facts: list[dict[str, Any]],
+        query_intelligence: dict[str, Any],
+        planner_context: dict[str, Any],
+    ) -> dict[str, Any]:
+        entity_names = self._candidate_entity_names(
+            memory_hits=memory_hits,
+            facts=facts,
+            query_intelligence=query_intelligence,
+            planner_context=planner_context,
+        )
+        if not entity_names:
+            return {"primary_subject": None, "entities": []}
+
+        snapshots: list[MemoryStateSnapshot] = []
+        normalized = [self._normalize_entity_name(name) for name in entity_names if self._normalize_entity_name(name)]
+        try:
+            stmt = (
+                select(MemoryStateSnapshot)
+                .where(
+                    MemoryStateSnapshot.organization_id == self.org_id,
+                    MemoryStateSnapshot.scope_type == "entity",
+                    MemoryStateSnapshot.scope_key.in_(normalized[:8]),
+                )
+                .limit(8)
+            )
+            result = await self.session.execute(stmt)
+            scalars = result.scalars() if hasattr(result, "scalars") else None
+            if inspect.isawaitable(scalars):
+                scalars = await scalars
+            rows = scalars.all() if scalars is not None and hasattr(scalars, "all") else []
+            if inspect.isawaitable(rows):
+                rows = await rows
+            snapshots = list(rows or [])
+        except Exception:
+            snapshots = []
+        snapshot_index = {
+            self._normalize_entity_name(snapshot.scope_key): snapshot
+            for snapshot in snapshots
+        }
+
+        entities: list[dict[str, Any]] = []
+        primary_subject = str((planner_context.get("question_frame") or {}).get("primary_subject") or "").strip() or None
+
+        for index, entity_name in enumerate(entity_names[:4]):
+            scope_key = self._normalize_entity_name(entity_name)
+            snapshot = snapshot_index.get(scope_key)
+            state = dict(getattr(snapshot, "symbolic_state", {}) or {})
+            state_facts = [
+                dict(item)
+                for item in list(state.get("facts") or [])
+                if self._normalize_entity_name(item.get("subject")) == scope_key
+                or self._normalize_entity_name(item.get("object")) == scope_key
+            ][:5]
+            if not state_facts:
+                state_facts = [
+                    dict(item)
+                    for item in facts
+                    if self._normalize_entity_name(item.get("subject")) == scope_key
+                    or self._normalize_entity_name(item.get("object")) == scope_key
+                ][:5]
+            aliases = [
+                str(item).strip()
+                for item in list(state.get("aliases") or [])
+                if str(item).strip()
+            ]
+            recent_memories = []
+            for item in list(state.get("recent_memories") or [])[:3]:
+                preview = str(item.get("content_preview") or "").strip()
+                if not preview:
+                    continue
+                recent_memories.append(
+                    {
+                        "memory_id": str(item.get("memory_id") or "").strip(),
+                        "title": str(item.get("title") or "").strip(),
+                        "content_preview": preview[:160],
+                        "occurred_at": item.get("occurred_at"),
+                    }
+                )
+
+            mention_memories = self._entity_memory_mentions(memory_hits, entity_name)[:3]
+            entity_links = self._entity_links(entity_name=entity_name, facts=state_facts or facts)
+            canonical_name = self._canonical_entity_name(entity_name=entity_name, aliases=aliases, facts=state_facts)
+            entities.append(
+                {
+                    "canonical_name": canonical_name,
+                    "scope_key": scope_key,
+                    "state_version": int(getattr(snapshot, "state_version", 0) or 0),
+                    "is_primary_subject": bool(primary_subject and self._normalize_entity_name(primary_subject) == scope_key) or (index == 0 and not primary_subject),
+                    "aliases": aliases[:6],
+                    "facts": state_facts[:5],
+                    "recent_memories": recent_memories,
+                    "memory_mentions": mention_memories,
+                    "entity_links": entity_links[:5],
+                }
+            )
+
+        return {
+            "primary_subject": primary_subject or (entities[0]["canonical_name"] if entities else None),
+            "entities": entities,
+        }
 
     def _flatten_episode_index(
         self,
@@ -425,6 +603,149 @@ class CognitiveEvidenceService:
             "avg_feedback_signal": round(avg_feedback_signal, 4),
             "coverage_mode": coverage_mode,
         }
+
+    def _candidate_entity_names(
+        self,
+        *,
+        memory_hits: list[dict[str, Any]],
+        facts: list[dict[str, Any]],
+        query_intelligence: dict[str, Any],
+        planner_context: dict[str, Any],
+    ) -> list[str]:
+        names: list[str] = []
+        seen: set[str] = set()
+
+        def _add(value: Any) -> None:
+            text = str(value or "").strip()
+            key = self._normalize_entity_name(text)
+            if not text or not key or key in seen:
+                return
+            seen.add(key)
+            names.append(text)
+
+        frame = dict(planner_context.get("question_frame") or {})
+        _add(frame.get("primary_subject"))
+        for item in list(frame.get("secondary_entities") or []):
+            _add(item)
+        for item in list(query_intelligence.get("extracted_entities") or []):
+            _add(item)
+        for fact in facts[:12]:
+            subject = fact.get("subject")
+            obj = fact.get("object")
+            if self._looks_named_entity(subject):
+                _add(subject)
+            if self._looks_named_entity(obj):
+                _add(obj)
+        for hit in memory_hits[:8]:
+            for value in dict(hit.get("entities") or {}).values():
+                if isinstance(value, list):
+                    for item in value:
+                        if self._looks_named_entity(item):
+                            _add(item)
+                elif self._looks_named_entity(value):
+                    _add(value)
+        return names[:4]
+
+    def _entity_memory_mentions(
+        self,
+        memory_hits: list[dict[str, Any]],
+        entity_name: str,
+    ) -> list[dict[str, Any]]:
+        target = self._normalize_entity_name(entity_name)
+        mentions: list[dict[str, Any]] = []
+        for hit in memory_hits:
+            combined = " ".join(
+                [
+                    str(hit.get("title") or "").strip(),
+                    str(hit.get("content_preview") or "").strip(),
+                    " ".join(self._flatten_entity_values(dict(hit.get("entities") or {}))),
+                ]
+            ).lower()
+            if target and target not in combined:
+                continue
+            mentions.append(
+                {
+                    "memory_id": str(hit.get("memory_id") or "").strip(),
+                    "title": str(hit.get("title") or "").strip(),
+                    "content_preview": str(hit.get("content_preview") or "").strip()[:160],
+                }
+            )
+            if len(mentions) >= 3:
+                break
+        return mentions
+
+    def _entity_links(
+        self,
+        *,
+        entity_name: str,
+        facts: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        target = self._normalize_entity_name(entity_name)
+        links: list[dict[str, Any]] = []
+        seen: set[tuple[str, str, str]] = set()
+        for fact in facts:
+            subject = str(fact.get("subject") or "").strip()
+            predicate = str(fact.get("predicate") or "").strip()
+            obj = str(fact.get("object") or "").strip()
+            if not (subject and predicate and obj):
+                continue
+            subject_key = self._normalize_entity_name(subject)
+            object_key = self._normalize_entity_name(obj)
+            if subject_key == target and self._looks_named_entity(obj):
+                key = (subject_key, predicate.lower(), object_key)
+                if key in seen:
+                    continue
+                seen.add(key)
+                links.append({"direction": "out", "predicate": predicate, "entity": obj})
+            elif object_key == target and self._looks_named_entity(subject):
+                key = (object_key, predicate.lower(), subject_key)
+                if key in seen:
+                    continue
+                seen.add(key)
+                links.append({"direction": "in", "predicate": predicate, "entity": subject})
+        return links
+
+    def _canonical_entity_name(
+        self,
+        *,
+        entity_name: str,
+        aliases: list[str],
+        facts: list[dict[str, Any]],
+    ) -> str:
+        for fact in facts:
+            subject = str(fact.get("subject") or "").strip()
+            if subject and self._normalize_entity_name(subject) == self._normalize_entity_name(entity_name):
+                return subject
+        for alias in aliases:
+            if alias and self._normalize_entity_name(alias) == self._normalize_entity_name(entity_name):
+                return alias
+        return str(entity_name or "").strip()
+
+    @staticmethod
+    def _flatten_entity_values(entities: dict[str, Any]) -> list[str]:
+        values: list[str] = []
+        for value in entities.values():
+            if isinstance(value, list):
+                values.extend(str(item).strip() for item in value if str(item).strip())
+            else:
+                text = str(value or "").strip()
+                if text:
+                    values.append(text)
+        return values
+
+    @staticmethod
+    def _normalize_entity_name(value: Any) -> str:
+        return str(value or "").strip().lower()
+
+    @staticmethod
+    def _looks_named_entity(value: Any) -> bool:
+        text = str(value or "").strip()
+        if not text:
+            return False
+        return bool(
+            text[:1].isupper()
+            or any(ch.isupper() for ch in text[1:])
+        )
 
     @staticmethod
     def _float_or_default(value: Any, default: float) -> float:

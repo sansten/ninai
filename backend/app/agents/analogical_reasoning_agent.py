@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from app.agents.base import BaseAgent
-from app.agents.llm.ollama_breaker import create_ollama_client
+from app.agents.llm.llm_breaker import create_llm_client
 from app.agents.types import AgentContext, AgentResult
 from app.core.config import settings
 
@@ -193,7 +193,7 @@ class AnalogicalReasoningAgent(BaseAgent):
 
         # LLM path
         try:
-            client = create_ollama_client()
+            client = create_llm_client()
             prompt = (
                 "You are an analogical reasoning expert.\n\n"
                 f"SOURCE PROBLEM: {source_problem}\n"
@@ -203,7 +203,7 @@ class AnalogicalReasoningAgent(BaseAgent):
                 "transferred_solution (str), mapping (list[{source_term,target_term}]), "
                 "confidence (float), novel_elements (list[str])."
             )
-            resp = await client.generate(model=settings.OLLAMA_MODEL, prompt=prompt)
+            resp = await client.generate(model=settings.VLLM_MODEL, prompt=prompt)
             import json
 
             parsed = json.loads(resp.get("response", "{}"))

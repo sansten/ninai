@@ -4,6 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 
+import app.api.v1.endpoints.cognitive_gateway as gateway_endpoint_module
 from app.api.v1.endpoints.cognitive_gateway import (
     _apply_query_intelligence_filters,
     _coerce_hnms_mode,
@@ -60,6 +61,14 @@ def test_coerce_hnms_mode_accepts_string_values():
 
 @pytest.mark.asyncio
 async def test_gateway_answer_endpoint_exposes_answer_source_and_llm_error():
+    called = {"set_tenant_context": 0}
+
+    async def _fake_set_tenant_context(*args, **kwargs):
+        called["set_tenant_context"] += 1
+        return None
+
+    gateway_endpoint_module.set_tenant_context = _fake_set_tenant_context
+
     class _FakeGateway:
         async def answer(self, **kwargs):
             return SimpleNamespace(
@@ -72,9 +81,106 @@ async def test_gateway_answer_endpoint_exposes_answer_source_and_llm_error():
             )
 
     result = await gateway_answer(
-        payload={"question": "Where?", "memories": [{"content": "They moved to Stockholm."}]},
-        tenant=SimpleNamespace(),
+        payload={
+            "question": "Where?",
+            "memories": [{"content": "They moved to Stockholm."}],
+            "prompt_override": "Answer with one place only.",
+        },
+        tenant=SimpleNamespace(
+            user_id="user-1",
+            org_id="org-1",
+            roles_string="org_admin",
+            clearance_level=5,
+        ),
+        requester=SimpleNamespace(),
+        db=SimpleNamespace(),
         gateway=_FakeGateway(),
     )
     assert result["answer_source"] == "heuristic"
     assert result["llm_error"] == "HTTPError(404, 'model not found')"
+    assert result["llm_failure_mode"] is None
+    assert result["llm_endpoint"] is None
+    assert called["set_tenant_context"] == 0
+
+
+@pytest.mark.asyncio
+async def test_gateway_answer_endpoint_routes_large_structured_prompt_through_grounded_service(monkeypatch):
+    called = {"set_tenant_context": 0, "grounded": 0, "gateway": 0}
+
+    async def _fake_set_tenant_context(*args, **kwargs):
+        called["set_tenant_context"] += 1
+        return None
+
+    gateway_endpoint_module.set_tenant_context = _fake_set_tenant_context
+
+    class _FakeGroundedService:
+        def __init__(self, gateway):
+            self.gateway = gateway
+
+        async def answer(self, **kwargs):
+            called["grounded"] += 1
+            evidence_package = kwargs["evidence_package"]
+            assert evidence_package["memory_hits"]
+            return SimpleNamespace(
+                answer="researching adoption agencies",
+                model="test-model",
+                context_turns=3,
+                used_llm=True,
+                answer_source="gateway_compressed",
+                llm_error=None,
+                llm_failure_mode=None,
+                llm_endpoint="http://vllm-primary:11434",
+                grounded=True,
+                confidence=0.8,
+                support=["memory:Adoption agencies"],
+                contradictions=[],
+                uncertainty_reason=None,
+            )
+
+    monkeypatch.setattr(gateway_endpoint_module, "GroundedAnswerService", _FakeGroundedService)
+
+    class _FakeGateway:
+        async def answer(self, **kwargs):
+            called["gateway"] += 1
+            return SimpleNamespace(answer="should not be used")
+
+    large_prompt = "Conversation:\n" + ("Turn 1: filler line.\n" * 120) + "\nQuestion: What did Melanie plan?\nAnswer:"
+
+    result = await gateway_answer(
+        payload={
+            "question": "What are Melanie's plans for the summer with respect to adoption?",
+            "memories": [
+                {
+                    "content": "Melanie planned to spend the summer researching adoption agencies.",
+                    "extra_metadata": {
+                        "fact_supporting_facts": [
+                            {
+                                "subject": "Melanie",
+                                "predicate": "summer_plan",
+                                "object": "researching adoption agencies",
+                                "status": "active",
+                                "confidence": 0.95,
+                            }
+                        ]
+                    },
+                }
+            ],
+            "prompt_override": large_prompt,
+        },
+        tenant=SimpleNamespace(
+            user_id="user-1",
+            org_id="org-1",
+            roles_string="org_admin",
+            clearance_level=5,
+        ),
+        requester=SimpleNamespace(),
+        db=SimpleNamespace(),
+        gateway=_FakeGateway(),
+    )
+
+    assert result["answer"] == "researching adoption agencies"
+    assert result["answer_source"] == "gateway_compressed"
+    assert result["llm_endpoint"] == "http://vllm-primary:11434"
+    assert called["grounded"] == 1
+    assert called["gateway"] == 0
+    assert called["set_tenant_context"] == 0

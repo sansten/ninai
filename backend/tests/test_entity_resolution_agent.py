@@ -435,13 +435,13 @@ class TestEntityResolutionAgentLLM:
         mock_client.complete_json = AsyncMock(return_value=mock_resp)
 
         with patch("app.agents.entity_resolution_agent.settings") as mock_s, \
-             patch("app.agents.entity_resolution_agent.create_ollama_client", return_value=mock_client):
+             patch("app.agents.entity_resolution_agent.create_llm_client", return_value=mock_client):
             mock_s.ENTITY_RESOLUTION_STRATEGY = None
             mock_s.AGENT_STRATEGY = "llm"
-            mock_s.OLLAMA_BASE_URL = "http://localhost:11434"
-            mock_s.OLLAMA_MODEL = "llama3.1:8b"
-            mock_s.OLLAMA_TIMEOUT_SECONDS = 5.0
-            mock_s.OLLAMA_MAX_CONCURRENCY = 2
+            mock_s.VLLM_BASE_URL = "http://localhost:11434"
+            mock_s.VLLM_MODEL = "llama3.1:8b"
+            mock_s.VLLM_TIMEOUT_SECONDS = 5.0
+            mock_s.VLLM_MAX_CONCURRENCY = 2
             result = await agent.run("mem-1", _make_context("Acme Corp renewed their contract."))
 
         assert result.confidence == 0.9
@@ -454,13 +454,13 @@ class TestEntityResolutionAgentLLM:
         mock_client.complete_json = AsyncMock(return_value={"bad": "response"})
 
         with patch("app.agents.entity_resolution_agent.settings") as mock_s, \
-             patch("app.agents.entity_resolution_agent.create_ollama_client", return_value=mock_client):
+             patch("app.agents.entity_resolution_agent.create_llm_client", return_value=mock_client):
             mock_s.ENTITY_RESOLUTION_STRATEGY = None
             mock_s.AGENT_STRATEGY = "llm"
-            mock_s.OLLAMA_BASE_URL = "http://localhost:11434"
-            mock_s.OLLAMA_MODEL = "llama3.1:8b"
-            mock_s.OLLAMA_TIMEOUT_SECONDS = 5.0
-            mock_s.OLLAMA_MAX_CONCURRENCY = 2
+            mock_s.VLLM_BASE_URL = "http://localhost:11434"
+            mock_s.VLLM_MODEL = "llama3.1:8b"
+            mock_s.VLLM_TIMEOUT_SECONDS = 5.0
+            mock_s.VLLM_MAX_CONCURRENCY = 2
             rels = [{"type": "x", "concept": "client"}]
             result = await agent.run("mem-1", _make_context("", relationships=rels))
 
@@ -480,13 +480,13 @@ class TestEntityResolutionAgentLLM:
         })
 
         with patch("app.agents.entity_resolution_agent.settings") as mock_s, \
-             patch("app.agents.entity_resolution_agent.create_ollama_client", return_value=mock_client):
+             patch("app.agents.entity_resolution_agent.create_llm_client", return_value=mock_client):
             mock_s.ENTITY_RESOLUTION_STRATEGY = None
             mock_s.AGENT_STRATEGY = "llm"
-            mock_s.OLLAMA_BASE_URL = "http://localhost:11434"
-            mock_s.OLLAMA_MODEL = "llama3.1:8b"
-            mock_s.OLLAMA_TIMEOUT_SECONDS = 5.0
-            mock_s.OLLAMA_MAX_CONCURRENCY = 2
+            mock_s.VLLM_BASE_URL = "http://localhost:11434"
+            mock_s.VLLM_MODEL = "llama3.1:8b"
+            mock_s.VLLM_TIMEOUT_SECONDS = 5.0
+            mock_s.VLLM_MAX_CONCURRENCY = 2
             result = await agent.run("mem-1", _make_context("Budget review meeting."))
 
         assert result.outputs["rationale"] == "heuristic"
@@ -517,13 +517,13 @@ class TestEntityResolutionAgentLLM:
         mock_client.complete_json = AsyncMock(return_value=mock_resp)
 
         with patch("app.agents.entity_resolution_agent.settings") as mock_s, \
-             patch("app.agents.entity_resolution_agent.create_ollama_client", return_value=mock_client):
+             patch("app.agents.entity_resolution_agent.create_llm_client", return_value=mock_client):
             mock_s.ENTITY_RESOLUTION_STRATEGY = None
             mock_s.AGENT_STRATEGY = "llm"
-            mock_s.OLLAMA_BASE_URL = "http://localhost:11434"
-            mock_s.get_ollama_model = lambda _: "qwen2.5:0.5b"
-            mock_s.OLLAMA_TIMEOUT_SECONDS = 5.0
-            mock_s.OLLAMA_MAX_CONCURRENCY = 2
+            mock_s.VLLM_BASE_URL = "http://localhost:11434"
+            mock_s.get_vllm_model = lambda _: "qwen2.5:0.5b"
+            mock_s.VLLM_TIMEOUT_SECONDS = 5.0
+            mock_s.VLLM_MAX_CONCURRENCY = 2
             result = await agent.run(
                 "mem-1",
                 _make_context("[Caroline] I moved from my home country, Sweden."),
@@ -565,13 +565,13 @@ class TestEntityResolutionAgentLLM:
         mock_client.complete_json = AsyncMock(return_value=mock_resp)
 
         with patch("app.agents.entity_resolution_agent.settings") as mock_s, \
-             patch("app.agents.entity_resolution_agent.create_ollama_client", return_value=mock_client):
+             patch("app.agents.entity_resolution_agent.create_llm_client", return_value=mock_client):
             mock_s.ENTITY_RESOLUTION_STRATEGY = None
             mock_s.AGENT_STRATEGY = "llm"
-            mock_s.OLLAMA_BASE_URL = "http://localhost:11434"
-            mock_s.get_ollama_model = lambda _: "qwen2.5:0.5b"
-            mock_s.OLLAMA_TIMEOUT_SECONDS = 5.0
-            mock_s.OLLAMA_MAX_CONCURRENCY = 2
+            mock_s.VLLM_BASE_URL = "http://localhost:11434"
+            mock_s.get_vllm_model = lambda _: "qwen2.5:0.5b"
+            mock_s.VLLM_TIMEOUT_SECONDS = 5.0
+            mock_s.VLLM_MAX_CONCURRENCY = 2
             result = await agent.run(
                 "mem-1",
                 _make_context("[Caroline] Researching adoption agencies on June 14, 2026."),
@@ -679,6 +679,39 @@ class TestExtractPersonalAttributes:
         attrs = {a["attribute"]: a for a in result}
         assert "career_interest" in attrs
         assert "mental health" in attrs["career_interest"]["value"]
+
+
+class TestEntityResolutionStructuredFacts:
+    @pytest.mark.asyncio
+    async def test_validate_outputs_accepts_structured_facts(self):
+        agent = EntityResolutionAgent()
+        result = AgentResult(
+            agent_name=agent.name,
+            agent_version=agent.version,
+            memory_id="mem-1",
+            status="success",
+            confidence=0.9,
+            outputs={
+                "resolved_entities": [],
+                "unresolved_entities": [],
+                "cross_silo_links": [],
+                "structured_facts": [
+                    {
+                        "subject": "release train",
+                        "predicate": "depends_on",
+                        "object": "db migrations",
+                        "confidence": 0.9,
+                    }
+                ],
+                "rationale": "llm",
+            },
+            warnings=[],
+            errors=[],
+            started_at=_fake_now(),
+            finished_at=_fake_now(),
+            trace_id="trace-1",
+        )
+        agent.validate_outputs(result)
 
 
 # ---------------------------------------------------------------------------

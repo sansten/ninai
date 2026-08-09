@@ -83,7 +83,7 @@ docker logs ninai-frontend
 - **Vector Store:** Qdrant
 - **Search:** Elasticsearch
 - **Cache/Queue:** Redis (FalkorDB)
-- **LLM:** Ollama (local-first)
+- **LLM:** vLLM (local-first)
 - **OCR:** Tesseract
 
 ## Production Deployment

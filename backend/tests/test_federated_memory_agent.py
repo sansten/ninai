@@ -295,7 +295,7 @@ async def test_run_llm_uses_response_when_valid(monkeypatch):
         "rationale": "llm",
     }
 
-    with patch("app.agents.federated_memory_agent.create_ollama_client", return_value=mock_client):
+    with patch("app.agents.federated_memory_agent.create_llm_client", return_value=mock_client):
         result = await AGENT.run(
             "m47",
             _ctx(
@@ -316,7 +316,7 @@ async def test_run_llm_falls_back_on_invalid_response(monkeypatch):
     mock_client = AsyncMock()
     mock_client.complete_json.return_value = {"bad": "shape"}
 
-    with patch("app.agents.federated_memory_agent.create_ollama_client", return_value=mock_client):
+    with patch("app.agents.federated_memory_agent.create_llm_client", return_value=mock_client):
         result = await AGENT.run("m48", _ctx(federated_candidates=CANDIDATES))
 
     assert result.outputs["rationale"] == "heuristic"

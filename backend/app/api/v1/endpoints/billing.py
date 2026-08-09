@@ -104,7 +104,13 @@ async def stripe_webhook(
     body = await request.body()
     secret = os.getenv("STRIPE_WEBHOOK_SECRET", "")
 
-    if secret and stripe_signature:
+    # When a webhook secret is configured, a caller MUST present a valid
+    # signature — omitting the header used to skip verification entirely
+    # (the old check was `if secret and stripe_signature:`), letting anyone
+    # POST a forged event and have it processed as genuine Stripe traffic.
+    if secret:
+        if not stripe_signature:
+            raise HTTPException(status_code=400, detail="Missing Stripe-Signature header")
         timestamp = stripe_signature.split(",")[0].replace("t=", "")
         expected = hmac.new(secret.encode(), f"{timestamp}.".encode() + body, hashlib.sha256).hexdigest()
         received = stripe_signature.split("v1=")[-1].split(",")[0]

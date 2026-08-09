@@ -136,10 +136,20 @@ class PlaybookAutoSynthesisAgent(BaseAgent):
         return ["PlaybookExecutionTrackerAgent"]
 
     def validate_outputs(self, result: AgentResult) -> None:
-        assert isinstance(result.outputs.get("synthesized_count"), int)
-        assert isinstance(result.outputs.get("patterns_found"), int)
-        assert isinstance(result.outputs.get("playbooks"), list)
-        assert 0.0 <= result.outputs.get("confidence", 0) <= 1.0
+        if result.status != "success":
+            return
+        outputs = result.outputs or {}
+
+        if not isinstance(outputs.get("synthesized_count"), int):
+            raise ValueError("synthesized_count must be an int")
+        if not isinstance(outputs.get("patterns_found"), int):
+            raise ValueError("patterns_found must be an int")
+        if not isinstance(outputs.get("playbooks"), list):
+            raise ValueError("playbooks must be a list")
+
+        confidence = outputs.get("confidence", 0)
+        if not isinstance(confidence, (int, float)) or not (0.0 <= confidence <= 1.0):
+            raise ValueError("confidence must be a float in [0, 1]")
 
     async def run(self, memory_id: str, context: AgentContext) -> AgentResult:
         started_at = datetime.now(timezone.utc)

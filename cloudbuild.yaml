@@ -1,0 +1,16 @@
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '--no-cache'
+      - '-t'
+      - 'us-central1-docker.pkg.dev/ninai-os/staging-ninai/ninai-enterprise:$TAG_NAME'
+      - '-f'
+      - 'backend/Dockerfile'
+      - 'backend'
+images:
+  - 'us-central1-docker.pkg.dev/ninai-os/staging-ninai/ninai-enterprise:$TAG_NAME'
+options:
+  machineType: 'E2_HIGHCPU_8'
+  logging: CLOUD_LOGGING_ONLY
+timeout: '900s'

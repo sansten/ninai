@@ -46,7 +46,7 @@ No installation needed! Full development environment in your browser.
 | PostgreSQL | 5432 | Database | ✓ |
 | Redis | 6379 | Cache/Broker | ✓ |
 | Qdrant | 6333 | Vector DB | ✓ |
-| Ollama | 11434 | Local LLM | ✓ |
+| vLLM | 11434 | Local LLM | ✓ |
 | Prometheus | 9090 | Metrics | ✓ |
 | Grafana | 3100 | Dashboards | ✓ |
 

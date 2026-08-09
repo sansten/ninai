@@ -22,10 +22,14 @@ Endpoints:
 
 from __future__ import annotations
 
+import hashlib
+import hmac
+import json
+import os
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Path, status
+from fastapi import APIRouter, Body, Depends, Header, HTTPException, Path, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db, set_tenant_context
@@ -195,16 +199,47 @@ async def test_connector(
 # Inbound event receiver — writes memory + triggers cognitive review
 # ---------------------------------------------------------------------------
 
+def _verify_inbound_signature(connector_type: str, raw_body: bytes, signature: str | None) -> None:
+    """Verify X-Ninai-Signature against NINAI_INBOUND_WEBHOOK_SECRET(_<TYPE>), if configured.
+
+    Off by default (no-op) so existing internally-proxied callers that rely
+    on require_org_admin() JWT auth alone keep working unchanged. When an
+    operator configures a secret for a connector type, a caller MUST also
+    present a valid signature — this is the same require-if-configured
+    pattern used by the Stripe webhook handler in billing.py, generalized so
+    any connector_type can opt in to payload-level authenticity checking on
+    top of (not instead of) the JWT/API-key auth already enforced here.
+    """
+    secret = (
+        os.getenv(f"NINAI_INBOUND_WEBHOOK_SECRET_{connector_type.upper()}")
+        or os.getenv("NINAI_INBOUND_WEBHOOK_SECRET")
+        or ""
+    )
+    if not secret:
+        return
+    if not signature:
+        raise HTTPException(status_code=400, detail="Missing X-Ninai-Signature header")
+    expected = hmac.new(secret.encode(), raw_body, hashlib.sha256).hexdigest()
+    received = signature.split("sha256=")[-1].strip()
+    if not hmac.compare_digest(expected, received):
+        raise HTTPException(status_code=400, detail="Invalid inbound webhook signature")
+
+
 @router.post("/connectors/inbound/{connector_type}", status_code=status.HTTP_202_ACCEPTED)
 async def receive_inbound_event(
+    request: Request,
     connector_type: str = Path(...),
-    payload: dict[str, Any] = Body(...),
     tenant: TenantContext = Depends(require_org_admin()),
     db: AsyncSession = Depends(get_db),
+    x_ninai_signature: str | None = Header(default=None, alias="X-Ninai-Signature"),
 ) -> dict[str, Any]:
     """Convert an inbound webhook from an external system into a Ninai memory record.
 
     Steps:
+    0. If NINAI_INBOUND_WEBHOOK_SECRET(_<TYPE>) is configured, verify the
+       payload's HMAC signature (in addition to the JWT/API-key auth on the
+       route) so a leaked/shared org-admin credential alone isn't sufficient
+       to inject fabricated external events.
     1. Parse and normalize the external payload into a NormalizedEvent.
     2. Build MemoryCreate from the normalized fields.
     3. Write the memory (force_long_term=True so it persists in Postgres/Qdrant
@@ -214,6 +249,10 @@ async def receive_inbound_event(
 
     Returns 202 Accepted with memory_id and whether a cognitive review was triggered.
     """
+    raw_body = await request.body()
+    _verify_inbound_signature(connector_type, raw_body, x_ninai_signature)
+    payload: dict[str, Any] = json.loads(raw_body) if raw_body else {}
+
     event = parse_inbound_event(connector_type=connector_type, payload=payload)
     fields = event_to_memory_fields(event)
 

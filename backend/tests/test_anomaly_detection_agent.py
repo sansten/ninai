@@ -449,12 +449,12 @@ class TestAnomalyDetectionAgentLLM:
         mock_client = MagicMock()
         mock_client.complete_json = AsyncMock(return_value=_valid_llm_response())
         with patch("app.agents.anomaly_detection_agent.settings") as s, \
-             patch("app.agents.anomaly_detection_agent.create_ollama_client", return_value=mock_client):
+             patch("app.agents.anomaly_detection_agent.create_llm_client", return_value=mock_client):
             s.ANOMALY_DETECTION_STRATEGY = "llm"
-            s.OLLAMA_BASE_URL = "http://localhost:11434"
-            s.OLLAMA_MODEL = "llama3.1:8b"
-            s.OLLAMA_TIMEOUT_SECONDS = 5.0
-            s.OLLAMA_MAX_CONCURRENCY = 2
+            s.VLLM_BASE_URL = "http://localhost:11434"
+            s.VLLM_MODEL = "llama3.1:8b"
+            s.VLLM_TIMEOUT_SECONDS = 5.0
+            s.VLLM_MAX_CONCURRENCY = 2
             result = await agent.run("mem-1", _ctx())
         assert result.status == "success"
         assert result.outputs["anomaly_type"] == "credibility_spike"
@@ -465,12 +465,12 @@ class TestAnomalyDetectionAgentLLM:
         mock_client = MagicMock()
         mock_client.complete_json = AsyncMock(return_value=None)
         with patch("app.agents.anomaly_detection_agent.settings") as s, \
-             patch("app.agents.anomaly_detection_agent.create_ollama_client", return_value=mock_client):
+             patch("app.agents.anomaly_detection_agent.create_llm_client", return_value=mock_client):
             s.ANOMALY_DETECTION_STRATEGY = "llm"
-            s.OLLAMA_BASE_URL = "http://localhost:11434"
-            s.OLLAMA_MODEL = "llama3.1:8b"
-            s.OLLAMA_TIMEOUT_SECONDS = 5.0
-            s.OLLAMA_MAX_CONCURRENCY = 2
+            s.VLLM_BASE_URL = "http://localhost:11434"
+            s.VLLM_MODEL = "llama3.1:8b"
+            s.VLLM_TIMEOUT_SECONDS = 5.0
+            s.VLLM_MAX_CONCURRENCY = 2
             result = await agent.run("mem-1", _ctx())
         assert result.outputs["rationale"] == "heuristic"
 
@@ -481,12 +481,12 @@ class TestAnomalyDetectionAgentLLM:
         mock_client = MagicMock()
         mock_client.complete_json = AsyncMock(return_value=bad)
         with patch("app.agents.anomaly_detection_agent.settings") as s, \
-             patch("app.agents.anomaly_detection_agent.create_ollama_client", return_value=mock_client):
+             patch("app.agents.anomaly_detection_agent.create_llm_client", return_value=mock_client):
             s.ANOMALY_DETECTION_STRATEGY = "llm"
-            s.OLLAMA_BASE_URL = "http://localhost:11434"
-            s.OLLAMA_MODEL = "llama3.1:8b"
-            s.OLLAMA_TIMEOUT_SECONDS = 5.0
-            s.OLLAMA_MAX_CONCURRENCY = 2
+            s.VLLM_BASE_URL = "http://localhost:11434"
+            s.VLLM_MODEL = "llama3.1:8b"
+            s.VLLM_TIMEOUT_SECONDS = 5.0
+            s.VLLM_MAX_CONCURRENCY = 2
             result = await agent.run("mem-1", _ctx())
         assert result.outputs["rationale"] == "heuristic"
 
@@ -497,12 +497,12 @@ class TestAnomalyDetectionAgentLLM:
         mock_client = MagicMock()
         mock_client.complete_json = AsyncMock(return_value=bad)
         with patch("app.agents.anomaly_detection_agent.settings") as s, \
-             patch("app.agents.anomaly_detection_agent.create_ollama_client", return_value=mock_client):
+             patch("app.agents.anomaly_detection_agent.create_llm_client", return_value=mock_client):
             s.ANOMALY_DETECTION_STRATEGY = "llm"
-            s.OLLAMA_BASE_URL = "http://localhost:11434"
-            s.OLLAMA_MODEL = "llama3.1:8b"
-            s.OLLAMA_TIMEOUT_SECONDS = 5.0
-            s.OLLAMA_MAX_CONCURRENCY = 2
+            s.VLLM_BASE_URL = "http://localhost:11434"
+            s.VLLM_MODEL = "llama3.1:8b"
+            s.VLLM_TIMEOUT_SECONDS = 5.0
+            s.VLLM_MAX_CONCURRENCY = 2
             result = await agent.run("mem-1", _ctx())
         assert result.outputs["rationale"] == "heuristic"
 
@@ -513,12 +513,12 @@ class TestAnomalyDetectionAgentLLM:
         mock_client = MagicMock()
         mock_client.complete_json = AsyncMock(return_value=resp)
         with patch("app.agents.anomaly_detection_agent.settings") as s, \
-             patch("app.agents.anomaly_detection_agent.create_ollama_client", return_value=mock_client):
+             patch("app.agents.anomaly_detection_agent.create_llm_client", return_value=mock_client):
             s.ANOMALY_DETECTION_STRATEGY = "llm"
-            s.OLLAMA_BASE_URL = "http://localhost:11434"
-            s.OLLAMA_MODEL = "llama3.1:8b"
-            s.OLLAMA_TIMEOUT_SECONDS = 5.0
-            s.OLLAMA_MAX_CONCURRENCY = 2
+            s.VLLM_BASE_URL = "http://localhost:11434"
+            s.VLLM_MODEL = "llama3.1:8b"
+            s.VLLM_TIMEOUT_SECONDS = 5.0
+            s.VLLM_MAX_CONCURRENCY = 2
             result = await agent.run("mem-1", _ctx())
         assert result.outputs["anomaly_type"] is None
 

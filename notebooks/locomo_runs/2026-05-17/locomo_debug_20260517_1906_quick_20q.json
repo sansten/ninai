@@ -1,0 +1,766 @@
+{
+  "run_tag": "locomo-full-20260517-205201-4fa65162",
+  "scores": {
+    "single_hop": 16.7,
+    "multi_hop": 12.4,
+    "temporal": 0.0,
+    "adversarial": 0.0,
+    "open_domain": 3.2,
+    "overall": 6.5
+  },
+  "failure_mode_counts": {
+    "C": 13,
+    "OK": 1,
+    "F": 1,
+    "D": 4,
+    "A": 1
+  },
+  "failure_layer_counts": {
+    "retrieval_miss": 17,
+    "ok": 1,
+    "answer_extraction_miss": 1,
+    "format_only_miss": 1
+  },
+  "timestamp": "2026-05-17T19:06:02.110735",
+  "n_questions": 20,
+  "results": [
+    {
+      "qa_id": "locomo_001_q153",
+      "category": "adversarial",
+      "question": "What did Caroline realize after her charity race?",
+      "gold_answer": "self-care is important",
+      "generated_answer": "no mention",
+      "rouge1_f1": 0.0,
+      "semantic_correct": 0,
+      "failure_mode": "C",
+      "failure_layer": "retrieval_miss",
+      "retrieved_count": 0,
+      "answer_source": "gateway",
+      "llm_error": "",
+      "evidence_state": {
+        "question_terms": [
+          "caroline",
+          "realize",
+          "after",
+          "charity",
+          "race"
+        ],
+        "top_entities": [],
+        "bridge_entities": [],
+        "session_dates": [],
+        "relative_time_markers": [],
+        "first_person_turn_count": 0,
+        "fact_candidates": [],
+        "has_cross_session_evidence": false
+      },
+      "retrieved_turns_sample": [],
+      "prompt_used": "KEY EVENTS (all sessions):\n[Session 1 | 8 May, 2023]\n  Caroline: Caroline attends an LGBTQ support group for the first time.\n[Session 2 | 25 May, 2023]\n  Caroline: Caroline is inspired by her supportive friends and mentors to start researching adoption agencies.\n[Session 3 | 9 June, 2023]\n  Caroline: Caroline speaks at her school and encourages students to get involved in the LGBTQ community.\n[Session 4 | 27 June, 2023]\n  Melanie: Melanie takes her family camping for a weekend to bond.\n[Session "
+    },
+    {
+      "qa_id": "locomo_001_q003",
+      "category": "multi_hop",
+      "question": "What fields would Caroline be likely to pursue in her educaton?",
+      "gold_answer": "Psychology, counseling certification",
+      "generated_answer": "no mention",
+      "rouge1_f1": 0.0,
+      "semantic_correct": 0,
+      "failure_mode": "C",
+      "failure_layer": "retrieval_miss",
+      "retrieved_count": 0,
+      "answer_source": "gateway",
+      "llm_error": "",
+      "evidence_state": {
+        "question_terms": [
+          "fields",
+          "caroline",
+          "likely",
+          "pursue",
+          "educaton"
+        ],
+        "top_entities": [],
+        "bridge_entities": [],
+        "session_dates": [],
+        "relative_time_markers": [],
+        "first_person_turn_count": 0,
+        "fact_candidates": [],
+        "has_cross_session_evidence": false
+      },
+      "retrieved_turns_sample": [],
+      "prompt_used": "KEY EVENTS (all sessions):\n[Session 1 | 8 May, 2023]\n  Caroline: Caroline attends an LGBTQ support group for the first time.\n[Session 2 | 25 May, 2023]\n  Caroline: Caroline is inspired by her supportive friends and mentors to start researching adoption agencies.\n[Session 3 | 9 June, 2023]\n  Caroline: Caroline speaks at her school and encourages students to get involved in the LGBTQ community.\n[Session 4 | 27 June, 2023]\n  Melanie: Melanie takes her family camping for a weekend to bond.\n[Session "
+    },
+    {
+      "qa_id": "locomo_001_q083",
+      "category": "open_domain",
+      "question": "What did the charity race raise awareness for?",
+      "gold_answer": "mental health",
+      "generated_answer": "no mention",
+      "rouge1_f1": 0.0,
+      "semantic_correct": 0,
+      "failure_mode": "C",
+      "failure_layer": "retrieval_miss",
+      "retrieved_count": 0,
+      "answer_source": "local_fallback",
+      "llm_error": "",
+      "evidence_state": {
+        "question_terms": [
+          "charity",
+          "race",
+          "raise",
+          "awareness"
+        ],
+        "top_entities": [],
+        "bridge_entities": [],
+        "session_dates": [],
+        "relative_time_markers": [],
+        "first_person_turn_count": 0,
+        "fact_candidates": [],
+        "has_cross_session_evidence": false
+      },
+      "retrieved_turns_sample": [],
+      "prompt_used": "KEY EVENTS (all sessions):\n[Session 1 | 8 May, 2023]\n  Caroline: Caroline attends an LGBTQ support group for the first time.\n[Session 2 | 25 May, 2023]\n  Caroline: Caroline is inspired by her supportive friends and mentors to start researching adoption agencies.\n[Session 3 | 9 June, 2023]\n  Caroline: Caroline speaks at her school and encourages students to get involved in the LGBTQ community.\n[Session 4 | 27 June, 2023]\n  Melanie: Melanie takes her family camping for a weekend to bond.\n[Session "
+    },
+    {
+      "qa_id": "locomo_001_q004",
+      "category": "single_hop",
+      "question": "What did Caroline research?",
+      "gold_answer": "Adoption agencies",
+      "generated_answer": "Caroline researched adoption agencies",
+      "rouge1_f1": 66.67,
+      "semantic_correct": 1,
+      "failure_mode": "OK",
+      "failure_layer": "ok",
+      "retrieved_count": 4,
+      "answer_source": "gateway",
+      "llm_error": "",
+      "evidence_state": {
+        "question_terms": [
+          "caroline",
+          "research"
+        ],
+        "top_entities": [
+          "Caroline",
+          "Melanie",
+          "Thanks",
+          "Doing",
+          "Last",
+          "Yep"
+        ],
+        "bridge_entities": [],
+        "session_dates": [
+          "2023-10-13",
+          "2023-05-08"
+        ],
+        "relative_time_markers": [],
+        "first_person_turn_count": 0,
+        "fact_candidates": [
+          {
+            "date": "2023-10-13",
+            "text": "[2023-10-13] [Melanie] Thanks for the tip, Caroline. Doing research and readying myself emotionally makes sense. I'll do that. BTW, recently I had a setback. Last month I got hurt and had to take a break from pottery,..."
+          },
+          {
+            "date": "2023-10-13",
+            "text": "[2023-10-13] [Melanie] [temporal:2023-09] Thanks for the tip, Caroline. Doing research and readying myself emotionally makes sense. I'll do that. BTW, recently I had a setback. Last month I got hurt and had to take a..."
+          },
+          {
+            "date": "2023-10-13",
+            "text": "[2023-10-13] [Caroline] Yep! Do your research and find an adoption agency or lawyer. They'll help with the process and provide all the info. Gather documents like references, financial info and medical checks. Don't f..."
+          },
+          {
+            "date": "2023-05-08",
+            "text": "[2023-05-08] [Caroline] Totally agree, Mel. Relaxing and expressing ourselves is key. Well, I'm off to go do some research."
+          }
+        ],
+        "has_cross_session_evidence": true
+      },
+      "retrieved_turns_sample": [
+        "[2023-10-13] [Melanie] Thanks for the tip, Caroline. Doing research and readying myself emotionally makes sense. I'll do that. BTW, recently I had a setback. Last month I got hurt and had to take a break from pottery, which I use for self-expression and peace.",
+        "[2023-10-13] [Melanie] [temporal:2023-09] Thanks for the tip, Caroline. Doing research and readying myself emotionally makes sense. I'll do that. BTW, recently I had a setback. Last month I got hurt and had to take a break from pottery, which I use for self-expression and peace.",
+        "[2023-10-13] [Caroline] Yep! Do your research and find an adoption agency or lawyer. They'll help with the process and provide all the info. Gather documents like references, financial info and medical checks. Don't forget to prepare emotionally, since the wait can be hard. It's all worth it in the ",
+        "[2023-05-08] [Caroline] Totally agree, Mel. Relaxing and expressing ourselves is key. Well, I'm off to go do some research."
+      ],
+      "prompt_used": "KEY EVENTS (all sessions):\n[Session 1 | 8 May, 2023]\n  Caroline: Caroline attends an LGBTQ support group for the first time.\n[Session 2 | 25 May, 2023]\n  Caroline: Caroline is inspired by her supportive friends and mentors to start researching adoption agencies.\n[Session 3 | 9 June, 2023]\n  Caroline: Caroline speaks at her school and encourages students to get involved in the LGBTQ community.\n[Session 4 | 27 June, 2023]\n  Melanie: Melanie takes her family camping for a weekend to bond.\n[Session "
+    },
+    {
+      "qa_id": "locomo_001_q001",
+      "category": "temporal",
+      "question": "When did Caroline go to the LGBTQ support group?",
+      "gold_answer": "7 May 2023",
+      "generated_answer": "no mention",
+      "rouge1_f1": 0.0,
+      "semantic_correct": 0,
+      "failure_mode": "C",
+      "failure_layer": "retrieval_miss",
+      "retrieved_count": 0,
+      "answer_source": "gateway",
+      "llm_error": "",
+      "evidence_state": {
+        "question_terms": [
+          "caroline",
+          "lgbtq",
+          "support",
+          "group"
+        ],
+        "top_entities": [],
+        "bridge_entities": [],
+        "session_dates": [],
+        "relative_time_markers": [],
+        "first_person_turn_count": 0,
+        "fact_candidates": [],
+        "has_cross_session_evidence": false
+      },
+      "retrieved_turns_sample": [],
+      "prompt_used": "KEY EVENTS (all sessions):\n[Session 1 | 8 May, 2023]\n  Caroline: Caroline attends an LGBTQ support group for the first time.\n[Session 2 | 25 May, 2023]\n  Caroline: Caroline is inspired by her supportive friends and mentors to start researching adoption agencies.\n[Session 3 | 9 June, 2023]\n  Caroline: Caroline speaks at her school and encourages students to get involved in the LGBTQ community.\n[Session 4 | 27 June, 2023]\n  Melanie: Melanie takes her family camping for a weekend to bond.\n[Session "
+    },
+    {
+      "qa_id": "locomo_001_q154",
+      "category": "adversarial",
+      "question": "What are Melanie's plans for the summer with respect to adoption?",
+      "gold_answer": "researching adoption agencies",
+      "generated_answer": "no mention",
+      "rouge1_f1": 0.0,
+      "semantic_correct": 0,
+      "failure_mode": "C",
+      "failure_layer": "retrieval_miss",
+      "retrieved_count": 0,
+      "answer_source": "gateway",
+      "llm_error": "",
+      "evidence_state": {
+        "question_terms": [
+          "melanie's",
+          "plans",
+          "summer",
+          "respect",
+          "adoption"
+        ],
+        "top_entities": [],
+        "bridge_entities": [],
+        "session_dates": [],
+        "relative_time_markers": [],
+        "first_person_turn_count": 0,
+        "fact_candidates": [],
+        "has_cross_session_evidence": false
+      },
+      "retrieved_turns_sample": [],
+      "prompt_used": "KEY EVENTS (all sessions):\n[Session 1 | 8 May, 2023]\n  Caroline: Caroline attends an LGBTQ support group for the first time.\n[Session 2 | 25 May, 2023]\n  Caroline: Caroline is inspired by her supportive friends and mentors to start researching adoption agencies.\n[Session 3 | 9 June, 2023]\n  Caroline: Caroline speaks at her school and encourages students to get involved in the LGBTQ community.\n[Session 4 | 27 June, 2023]\n  Melanie: Melanie takes her family camping for a weekend to bond.\n[Session "
+    },
+    {
+      "qa_id": "locomo_001_q015",
+      "category": "multi_hop",
+      "question": "Would Caroline still want to pursue counseling as a career if she hadn't received support growing up?",
+      "gold_answer": "Likely no",
+      "generated_answer": "Likely yes; she showed resilience",
+      "rouge1_f1": 28.57,
+      "semantic_correct": 0,
+      "failure_mode": "F",
+      "failure_layer": "retrieval_miss",
+      "retrieved_count": 0,
+      "answer_source": "gateway",
+      "llm_error": "",
+      "evidence_state": {
+        "question_terms": [
+          "caroline",
+          "still",
+          "want",
+          "pursue",
+          "counseling",
+          "career",
+          "hadn't",
+          "received",
+          "support",
+          "growing"
+        ],
+        "top_entities": [],
+        "bridge_entities": [],
+        "session_dates": [],
+        "relative_time_markers": [],
+        "first_person_turn_count": 0,
+        "fact_candidates": [],
+        "has_cross_session_evidence": false
+      },
+      "retrieved_turns_sample": [],
+      "prompt_used": "KEY EVENTS (all sessions):\n[Session 1 | 8 May, 2023]\n  Caroline: Caroline attends an LGBTQ support group for the first time.\n[Session 2 | 25 May, 2023]\n  Caroline: Caroline is inspired by her supportive friends and mentors to start researching adoption agencies.\n[Session 3 | 9 June, 2023]\n  Caroline: Caroline speaks at her school and encourages students to get involved in the LGBTQ community.\n[Session 4 | 27 June, 2023]\n  Melanie: Melanie takes her family camping for a weekend to bond.\n[Session "
+    },
+    {
+      "qa_id": "locomo_001_q084",
+      "category": "open_domain",
+      "question": "What did Melanie realize after the charity race?",
+      "gold_answer": "self-care is important",
+      "generated_answer": "no mention",
+      "rouge1_f1": 0.0,
+      "semantic_correct": 0,
+      "failure_mode": "C",
+      "failure_layer": "retrieval_miss",
+      "retrieved_count": 0,
+      "answer_source": "local_fallback",
+      "llm_error": "",
+      "evidence_state": {
+        "question_terms": [
+          "melanie",
+          "realize",
+          "after",
+          "charity",
+          "race"
+        ],
+        "top_entities": [],
+        "bridge_entities": [],
+        "session_dates": [],
+        "relative_time_markers": [],
+        "first_person_turn_count": 0,
+        "fact_candidates": [],
+        "has_cross_session_evidence": false
+      },
+      "retrieved_turns_sample": [],
+      "prompt_used": "KEY EVENTS (all sessions):\n[Session 1 | 8 May, 2023]\n  Caroline: Caroline attends an LGBTQ support group for the first time.\n[Session 2 | 25 May, 2023]\n  Caroline: Caroline is inspired by her supportive friends and mentors to start researching adoption agencies.\n[Session 3 | 9 June, 2023]\n  Caroline: Caroline speaks at her school and encourages students to get involved in the LGBTQ community.\n[Session 4 | 27 June, 2023]\n  Melanie: Melanie takes her family camping for a weekend to bond.\n[Session "
+    },
+    {
+      "qa_id": "locomo_001_q005",
+      "category": "single_hop",
+      "question": "What is Caroline's identity?",
+      "gold_answer": "Transgender woman",
+      "generated_answer": "[2023-08-14] [Caroline] Thanks, Melanie",
+      "rouge1_f1": 0.0,
+      "semantic_correct": 0,
+      "failure_mode": "D",
+      "failure_layer": "answer_extraction_miss",
+      "retrieved_count": 5,
+      "answer_source": "gateway",
+      "llm_error": "",
+      "evidence_state": {
+        "question_terms": [
+          "caroline's",
+          "identity"
+        ],
+        "top_entities": [
+          "Caroline",
+          "Thanks",
+          "Melanie",
+          "Here",
+          "Embracing Identity",
+          "The"
+        ],
+        "bridge_entities": [],
+        "session_dates": [
+          "2023-08-14",
+          "2023-08-23",
+          "2023-09-13",
+          "2023-06-09"
+        ],
+        "relative_time_markers": [],
+        "first_person_turn_count": 0,
+        "fact_candidates": [
+          {
+            "date": "2023-08-14",
+            "text": "[2023-08-14] [Caroline] Thanks, Melanie. Here's one- 'Embracing Identity' is all about finding comfort and love in being yourself. The woman in the painting stands for the journey of acceptance. My aim was to show war..."
+          },
+          {
+            "date": "2023-08-14",
+            "text": "[2023-08-14] [About Melanie] (per Caroline): Thanks, Melanie. Here's one- 'Embracing Identity' is all about finding comfort and love in being yourself. The woman in the painting stands for the journey of acceptance. M..."
+          },
+          {
+            "date": "2023-08-23",
+            "text": "[2023-08-23] [Caroline] Thanks, Mel! I felt liberated and empowered doing it. Painting helps me explore my identity and be true to myself. It's definitely therapeutic."
+          },
+          {
+            "date": "2023-09-13",
+            "text": "[2023-09-13] [Caroline] Melanie, those bowls are amazing! They each have such cool designs. I love that you chose pottery for your art. Painting and drawing have helped me express my feelings and explore my gender ide..."
+          }
+        ],
+        "has_cross_session_evidence": true
+      },
+      "retrieved_turns_sample": [
+        "[2023-08-14] [Caroline] Thanks, Melanie. Here's one- 'Embracing Identity' is all about finding comfort and love in being yourself. The woman in the painting stands for the journey of acceptance. My aim was to show warmth, love and self-acceptance.",
+        "[2023-08-14] [About Melanie] (per Caroline): Thanks, Melanie. Here's one- 'Embracing Identity' is all about finding comfort and love in being yourself. The woman in the painting stands for the journey of acceptance. My aim was to show warmth, love and self-acceptance.",
+        "[2023-08-23] [Caroline] Thanks, Mel! I felt liberated and empowered doing it. Painting helps me explore my identity and be true to myself. It's definitely therapeutic.",
+        "[2023-09-13] [Caroline] Melanie, those bowls are amazing! They each have such cool designs. I love that you chose pottery for your art. Painting and drawing have helped me express my feelings and explore my gender identity. Creating art was really important to me during my transition - it helped me ",
+        "[2023-06-09] [Caroline] Thanks, Mel! Your backing really means a lot. I felt super powerful giving my talk. I shared my own journey, the struggles I had and how much I've developed since coming out. It was wonderful to see how the audience related to what I said and how it inspired them to be better"
+      ],
+      "prompt_used": "KEY EVENTS (all sessions):\n[Session 1 | 8 May, 2023]\n  Caroline: Caroline attends an LGBTQ support group for the first time.\n[Session 2 | 25 May, 2023]\n  Caroline: Caroline is inspired by her supportive friends and mentors to start researching adoption agencies.\n[Session 3 | 9 June, 2023]\n  Caroline: Caroline speaks at her school and encourages students to get involved in the LGBTQ community.\n[Session 4 | 27 June, 2023]\n  Melanie: Melanie takes her family camping for a weekend to bond.\n[Session "
+    },
+    {
+      "qa_id": "locomo_001_q002",
+      "category": "temporal",
+      "question": "When did Melanie paint a sunrise?",
+      "gold_answer": "2022",
+      "generated_answer": "no mention",
+      "rouge1_f1": 0.0,
+      "semantic_correct": 0,
+      "failure_mode": "C",
+      "failure_layer": "retrieval_miss",
+      "retrieved_count": 0,
+      "answer_source": "gateway",
+      "llm_error": "",
+      "evidence_state": {
+        "question_terms": [
+          "melanie",
+          "paint",
+          "sunrise"
+        ],
+        "top_entities": [],
+        "bridge_entities": [],
+        "session_dates": [],
+        "relative_time_markers": [],
+        "first_person_turn_count": 0,
+        "fact_candidates": [],
+        "has_cross_session_evidence": false
+      },
+      "retrieved_turns_sample": [],
+      "prompt_used": "KEY EVENTS (all sessions):\n[Session 1 | 8 May, 2023]\n  Caroline: Caroline attends an LGBTQ support group for the first time.\n[Session 2 | 25 May, 2023]\n  Caroline: Caroline is inspired by her supportive friends and mentors to start researching adoption agencies.\n[Session 3 | 9 June, 2023]\n  Caroline: Caroline speaks at her school and encourages students to get involved in the LGBTQ community.\n[Session 4 | 27 June, 2023]\n  Melanie: Melanie takes her family camping for a weekend to bond.\n[Session "
+    },
+    {
+      "qa_id": "locomo_001_q155",
+      "category": "adversarial",
+      "question": "What type of individuals does the adoption agency Melanie is considering support?",
+      "gold_answer": "LGBTQ+ individuals",
+      "generated_answer": "no mention",
+      "rouge1_f1": 0.0,
+      "semantic_correct": 0,
+      "failure_mode": "C",
+      "failure_layer": "retrieval_miss",
+      "retrieved_count": 0,
+      "answer_source": "local_fallback",
+      "llm_error": "",
+      "evidence_state": {
+        "question_terms": [
+          "type",
+          "individuals",
+          "adoption",
+          "agency",
+          "melanie",
+          "considering",
+          "support"
+        ],
+        "top_entities": [],
+        "bridge_entities": [],
+        "session_dates": [],
+        "relative_time_markers": [],
+        "first_person_turn_count": 0,
+        "fact_candidates": [],
+        "has_cross_session_evidence": false
+      },
+      "retrieved_turns_sample": [],
+      "prompt_used": "KEY EVENTS (all sessions):\n[Session 1 | 8 May, 2023]\n  Caroline: Caroline attends an LGBTQ support group for the first time.\n[Session 2 | 25 May, 2023]\n  Caroline: Caroline is inspired by her supportive friends and mentors to start researching adoption agencies.\n[Session 3 | 9 June, 2023]\n  Caroline: Caroline speaks at her school and encourages students to get involved in the LGBTQ community.\n[Session 4 | 27 June, 2023]\n  Melanie: Melanie takes her family camping for a weekend to bond.\n[Session "
+    },
+    {
+      "qa_id": "locomo_001_q023",
+      "category": "multi_hop",
+      "question": "Would Caroline likely have Dr. Seuss books on her bookshelf?",
+      "gold_answer": "Yes, since she collects classic children's books",
+      "generated_answer": "Likely no; Caroline is focused on adoption and activism.",
+      "rouge1_f1": 0.0,
+      "semantic_correct": 0,
+      "failure_mode": "D",
+      "failure_layer": "retrieval_miss",
+      "retrieved_count": 0,
+      "answer_source": "local_fallback",
+      "llm_error": "",
+      "evidence_state": {
+        "question_terms": [
+          "caroline",
+          "likely",
+          "seuss",
+          "books",
+          "bookshelf"
+        ],
+        "top_entities": [],
+        "bridge_entities": [],
+        "session_dates": [],
+        "relative_time_markers": [],
+        "first_person_turn_count": 0,
+        "fact_candidates": [],
+        "has_cross_session_evidence": false
+      },
+      "retrieved_turns_sample": [],
+      "prompt_used": "KEY EVENTS (all sessions):\n[Session 1 | 8 May, 2023]\n  Caroline: Caroline attends an LGBTQ support group for the first time.\n[Session 2 | 25 May, 2023]\n  Caroline: Caroline is inspired by her supportive friends and mentors to start researching adoption agencies.\n[Session 3 | 9 June, 2023]\n  Caroline: Caroline speaks at her school and encourages students to get involved in the LGBTQ community.\n[Session 4 | 27 June, 2023]\n  Melanie: Melanie takes her family camping for a weekend to bond.\n[Session "
+    },
+    {
+      "qa_id": "locomo_001_q085",
+      "category": "open_domain",
+      "question": "How does Melanie prioritize self-care?",
+      "gold_answer": "by carving out some me-time each day for activities like running, reading, or playing the violin",
+      "generated_answer": "Melanie takes her kids camping, registers for a pottery class, and runs longer distances.",
+      "rouge1_f1": 12.9,
+      "semantic_correct": 0,
+      "failure_mode": "D",
+      "failure_layer": "retrieval_miss",
+      "retrieved_count": 0,
+      "answer_source": "local_fallback",
+      "llm_error": "",
+      "evidence_state": {
+        "question_terms": [
+          "melanie",
+          "prioritize",
+          "self",
+          "care"
+        ],
+        "top_entities": [],
+        "bridge_entities": [],
+        "session_dates": [],
+        "relative_time_markers": [],
+        "first_person_turn_count": 0,
+        "fact_candidates": [],
+        "has_cross_session_evidence": false
+      },
+      "retrieved_turns_sample": [],
+      "prompt_used": "KEY EVENTS (all sessions):\n[Session 1 | 8 May, 2023]\n  Caroline: Caroline attends an LGBTQ support group for the first time.\n[Session 2 | 25 May, 2023]\n  Caroline: Caroline is inspired by her supportive friends and mentors to start researching adoption agencies.\n[Session 3 | 9 June, 2023]\n  Caroline: Caroline speaks at her school and encourages students to get involved in the LGBTQ community.\n[Session 4 | 27 June, 2023]\n  Melanie: Melanie takes her family camping for a weekend to bond.\n[Session "
+    },
+    {
+      "qa_id": "locomo_001_q008",
+      "category": "single_hop",
+      "question": "What is Caroline's relationship status?",
+      "gold_answer": "Single",
+      "generated_answer": "no mention",
+      "rouge1_f1": 0.0,
+      "semantic_correct": 0,
+      "failure_mode": "C",
+      "failure_layer": "retrieval_miss",
+      "retrieved_count": 0,
+      "answer_source": "gateway",
+      "llm_error": "",
+      "evidence_state": {
+        "question_terms": [
+          "caroline's",
+          "relationship",
+          "status"
+        ],
+        "top_entities": [],
+        "bridge_entities": [],
+        "session_dates": [],
+        "relative_time_markers": [],
+        "first_person_turn_count": 0,
+        "fact_candidates": [],
+        "has_cross_session_evidence": false
+      },
+      "retrieved_turns_sample": [],
+      "prompt_used": "KEY EVENTS (all sessions):\n[Session 1 | 8 May, 2023]\n  Caroline: Caroline attends an LGBTQ support group for the first time.\n[Session 2 | 25 May, 2023]\n  Caroline: Caroline is inspired by her supportive friends and mentors to start researching adoption agencies.\n[Session 3 | 9 June, 2023]\n  Caroline: Caroline speaks at her school and encourages students to get involved in the LGBTQ community.\n[Session 4 | 27 June, 2023]\n  Melanie: Melanie takes her family camping for a weekend to bond.\n[Session "
+    },
+    {
+      "qa_id": "locomo_001_q006",
+      "category": "temporal",
+      "question": "When did Melanie run a charity race?",
+      "gold_answer": "The sunday before 25 May 2023",
+      "generated_answer": "no mention",
+      "rouge1_f1": 0.0,
+      "semantic_correct": 0,
+      "failure_mode": "C",
+      "failure_layer": "retrieval_miss",
+      "retrieved_count": 0,
+      "answer_source": "gateway",
+      "llm_error": "",
+      "evidence_state": {
+        "question_terms": [
+          "melanie",
+          "run",
+          "charity",
+          "race"
+        ],
+        "top_entities": [],
+        "bridge_entities": [],
+        "session_dates": [],
+        "relative_time_markers": [],
+        "first_person_turn_count": 0,
+        "fact_candidates": [],
+        "has_cross_session_evidence": false
+      },
+      "retrieved_turns_sample": [],
+      "prompt_used": "KEY EVENTS (all sessions):\n[Session 1 | 8 May, 2023]\n  Caroline: Caroline attends an LGBTQ support group for the first time.\n[Session 2 | 25 May, 2023]\n  Caroline: Caroline is inspired by her supportive friends and mentors to start researching adoption agencies.\n[Session 3 | 9 June, 2023]\n  Caroline: Caroline speaks at her school and encourages students to get involved in the LGBTQ community.\n[Session 4 | 27 June, 2023]\n  Melanie: Melanie takes her family camping for a weekend to bond.\n[Session "
+    },
+    {
+      "qa_id": "locomo_001_q156",
+      "category": "adversarial",
+      "question": "Why did Melanie choose the adoption agency?",
+      "gold_answer": "because of their inclusivity and support for LGBTQ+ individuals",
+      "generated_answer": "no mention",
+      "rouge1_f1": 0.0,
+      "semantic_correct": 0,
+      "failure_mode": "C",
+      "failure_layer": "retrieval_miss",
+      "retrieved_count": 0,
+      "answer_source": "local_fallback",
+      "llm_error": "",
+      "evidence_state": {
+        "question_terms": [
+          "melanie",
+          "choose",
+          "adoption",
+          "agency"
+        ],
+        "top_entities": [],
+        "bridge_entities": [],
+        "session_dates": [],
+        "relative_time_markers": [],
+        "first_person_turn_count": 0,
+        "fact_candidates": [],
+        "has_cross_session_evidence": false
+      },
+      "retrieved_turns_sample": [],
+      "prompt_used": "KEY EVENTS (all sessions):\n[Session 1 | 8 May, 2023]\n  Caroline: Caroline attends an LGBTQ support group for the first time.\n[Session 2 | 25 May, 2023]\n  Caroline: Caroline is inspired by her supportive friends and mentors to start researching adoption agencies.\n[Session 3 | 9 June, 2023]\n  Caroline: Caroline speaks at her school and encourages students to get involved in the LGBTQ community.\n[Session 4 | 27 June, 2023]\n  Melanie: Melanie takes her family camping for a weekend to bond.\n[Session "
+    },
+    {
+      "qa_id": "locomo_001_q028",
+      "category": "multi_hop",
+      "question": "Would Caroline pursue writing as a career option?",
+      "gold_answer": "LIkely no; though she likes reading, she wants to be a counselor",
+      "generated_answer": "Likely no; Caroline is focused on adoption",
+      "rouge1_f1": 21.05,
+      "semantic_correct": 1,
+      "failure_mode": "A",
+      "failure_layer": "format_only_miss",
+      "retrieved_count": 0,
+      "answer_source": "local_fallback",
+      "llm_error": "",
+      "evidence_state": {
+        "question_terms": [
+          "caroline",
+          "pursue",
+          "writing",
+          "career",
+          "option"
+        ],
+        "top_entities": [],
+        "bridge_entities": [],
+        "session_dates": [],
+        "relative_time_markers": [],
+        "first_person_turn_count": 0,
+        "fact_candidates": [],
+        "has_cross_session_evidence": false
+      },
+      "retrieved_turns_sample": [],
+      "prompt_used": "KEY EVENTS (all sessions):\n[Session 1 | 8 May, 2023]\n  Caroline: Caroline attends an LGBTQ support group for the first time.\n[Session 2 | 25 May, 2023]\n  Caroline: Caroline is inspired by her supportive friends and mentors to start researching adoption agencies.\n[Session 3 | 9 June, 2023]\n  Caroline: Caroline speaks at her school and encourages students to get involved in the LGBTQ community.\n[Session 4 | 27 June, 2023]\n  Melanie: Melanie takes her family camping for a weekend to bond.\n[Session "
+    },
+    {
+      "qa_id": "locomo_001_q086",
+      "category": "open_domain",
+      "question": "What are Caroline's plans for the summer?",
+      "gold_answer": "researching adoption agencies",
+      "generated_answer": "no mention",
+      "rouge1_f1": 0.0,
+      "semantic_correct": 0,
+      "failure_mode": "C",
+      "failure_layer": "retrieval_miss",
+      "retrieved_count": 2,
+      "answer_source": "local_fallback",
+      "llm_error": "",
+      "evidence_state": {
+        "question_terms": [
+          "caroline's",
+          "plans",
+          "summer"
+        ],
+        "top_entities": [
+          "Melanie",
+          "Thanks",
+          "Caroline",
+          "It",
+          "My",
+          "We"
+        ],
+        "bridge_entities": [],
+        "session_dates": [
+          "2023-05-25"
+        ],
+        "relative_time_markers": [],
+        "first_person_turn_count": 0,
+        "fact_candidates": [
+          {
+            "date": "2023-05-25",
+            "text": "[2023-05-25] [Melanie] Thanks, Caroline. It's still a work in progress, but I'm doing my best. My kids are so excited about summer break! We're thinking about going camping next month. Any fun plans for the summer?"
+          },
+          {
+            "date": "2023-05-25",
+            "text": "[2023-05-25] [Melanie] [temporal:2023-06] Thanks, Caroline. It's still a work in progress, but I'm doing my best. My kids are so excited about summer break! We're thinking about going camping next month. Any fun plans..."
+          }
+        ],
+        "has_cross_session_evidence": false
+      },
+      "retrieved_turns_sample": [
+        "[2023-05-25] [Melanie] Thanks, Caroline. It's still a work in progress, but I'm doing my best. My kids are so excited about summer break! We're thinking about going camping next month. Any fun plans for the summer?",
+        "[2023-05-25] [Melanie] [temporal:2023-06] Thanks, Caroline. It's still a work in progress, but I'm doing my best. My kids are so excited about summer break! We're thinking about going camping next month. Any fun plans for the summer?"
+      ],
+      "prompt_used": "KEY EVENTS (all sessions):\n[Session 1 | 8 May, 2023]\n  Caroline: Caroline attends an LGBTQ support group for the first time.\n[Session 2 | 25 May, 2023]\n  Caroline: Caroline is inspired by her supportive friends and mentors to start researching adoption agencies.\n[Session 3 | 9 June, 2023]\n  Caroline: Caroline speaks at her school and encourages students to get involved in the LGBTQ community.\n[Session 4 | 27 June, 2023]\n  Melanie: Melanie takes her family camping for a weekend to bond.\n[Session "
+    },
+    {
+      "qa_id": "locomo_001_q012",
+      "category": "single_hop",
+      "question": "Where did Caroline move from 4 years ago?",
+      "gold_answer": "Sweden",
+      "generated_answer": "no mention",
+      "rouge1_f1": 0.0,
+      "semantic_correct": 0,
+      "failure_mode": "C",
+      "failure_layer": "retrieval_miss",
+      "retrieved_count": 2,
+      "answer_source": "gateway",
+      "llm_error": "",
+      "evidence_state": {
+        "question_terms": [
+          "caroline",
+          "move",
+          "years",
+          "ago"
+        ],
+        "top_entities": [
+          "Caroline",
+          "That",
+          "Melanie",
+          "How",
+          "Woohoo Melanie",
+          "Friday"
+        ],
+        "bridge_entities": [],
+        "session_dates": [
+          "2023-07-15",
+          "2023-10-22"
+        ],
+        "relative_time_markers": [],
+        "first_person_turn_count": 0,
+        "fact_candidates": [
+          {
+            "date": "2023-07-15",
+            "text": "[2023-07-15] [Caroline] That's awesome, Melanie! How have your family been supportive during your move?"
+          },
+          {
+            "date": "2023-10-22",
+            "text": "[2023-10-22] [Caroline] Woohoo Melanie! I passed the adoption agency interviews last Friday! I'm so excited and thankful. This is a big move towards my goal of having a family."
+          }
+        ],
+        "has_cross_session_evidence": true
+      },
+      "retrieved_turns_sample": [
+        "[2023-07-15] [Caroline] That's awesome, Melanie! How have your family been supportive during your move?",
+        "[2023-10-22] [Caroline] Woohoo Melanie! I passed the adoption agency interviews last Friday! I'm so excited and thankful. This is a big move towards my goal of having a family."
+      ],
+      "prompt_used": "KEY EVENTS (all sessions):\n[Session 1 | 8 May, 2023]\n  Caroline: Caroline attends an LGBTQ support group for the first time.\n[Session 2 | 25 May, 2023]\n  Caroline: Caroline is inspired by her supportive friends and mentors to start researching adoption agencies.\n[Session 3 | 9 June, 2023]\n  Caroline: Caroline speaks at her school and encourages students to get involved in the LGBTQ community.\n[Session 4 | 27 June, 2023]\n  Melanie: Melanie takes her family camping for a weekend to bond.\n[Session "
+    },
+    {
+      "qa_id": "locomo_001_q007",
+      "category": "temporal",
+      "question": "When is Melanie planning on going camping?",
+      "gold_answer": "June 2023",
+      "generated_answer": "Melanie takes her family camping for a weekend to bond.",
+      "rouge1_f1": 0.0,
+      "semantic_correct": 0,
+      "failure_mode": "D",
+      "failure_layer": "retrieval_miss",
+      "retrieved_count": 0,
+      "answer_source": "gateway",
+      "llm_error": "",
+      "evidence_state": {
+        "question_terms": [
+          "melanie",
+          "planning",
+          "going",
+          "camping"
+        ],
+        "top_entities": [],
+        "bridge_entities": [],
+        "session_dates": [],
+        "relative_time_markers": [],
+        "first_person_turn_count": 0,
+        "fact_candidates": [],
+        "has_cross_session_evidence": false
+      },
+      "retrieved_turns_sample": [],
+      "prompt_used": "KEY EVENTS (all sessions):\n[Session 1 | 8 May, 2023]\n  Caroline: Caroline attends an LGBTQ support group for the first time.\n[Session 2 | 25 May, 2023]\n  Caroline: Caroline is inspired by her supportive friends and mentors to start researching adoption agencies.\n[Session 3 | 9 June, 2023]\n  Caroline: Caroline speaks at her school and encourages students to get involved in the LGBTQ community.\n[Session 4 | 27 June, 2023]\n  Melanie: Melanie takes her family camping for a weekend to bond.\n[Session "
+    }
+  ]
+}

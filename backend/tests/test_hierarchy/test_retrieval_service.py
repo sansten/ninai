@@ -119,7 +119,7 @@ def org_id() -> UUID:
 def mock_settings():
     """Mock settings for all tests."""
     with patch("app.services.retrieval_service.settings") as mock_settings:
-        mock_settings.OLLAMA_EMBEDDING_MODEL = "nomic-embed-text"
+        mock_settings.VLLM_EMBEDDING_MODEL = "nomic-embed-text"
         mock_settings.QDRANT_COLLECTION_NAME = "test_collection"
         yield mock_settings
 

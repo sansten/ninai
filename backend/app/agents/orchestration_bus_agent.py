@@ -27,11 +27,18 @@ import re
 from collections import deque
 from datetime import datetime, timezone
 from typing import Any
+import asyncio
 
 from app.agents.base import BaseAgent
 from app.agents.types import AgentContext, AgentResult
-from app.agents.llm.ollama_breaker import create_ollama_client
+from app.agents.llm.llm_breaker import create_llm_client
 from app.core.config import settings
+
+# ---------------------------------------------------------------------------
+# Limits to bound per-write LLM fan-out (Bug #2: LLM fan-out unbounded)
+# ---------------------------------------------------------------------------
+_MAX_AGENTS_PER_WRITE = 20  # Hard limit on agent count per memory write
+_WRITE_TIMEOUT_SECONDS = 60  # Max total time for orchestration bus to complete
 
 
 # ---------------------------------------------------------------------------
@@ -64,6 +71,44 @@ _DEFAULT_AGENTS: list[str] = [
     "NarrativeSynthesisAgent",
     "FeedbackIntegrationAgent",
     "AnomalyDetectionAgent",
+    # Previously registered but never included here (and so never invoked in
+    # production at all — see get_agent() in registry.py, which resolves any
+    # of these by name but nothing ever called it with these names).
+    "ActiveKnowledgeSeekerAgent",
+    "AdaptiveEnrichmentBudgetAgent",
+    "AdaptivePersonaAgent",
+    "AnalogicalReasoningAgent",
+    "AuditTrailAgent",
+    "AutoResearchAgent",
+    "AutonomousActionAgent",
+    "AutonomousGoalGenerationAgent",
+    "CompositionalGeneralizationAgent",
+    "ConceptLearningAgent",
+    "CounterfactualMemoryAgent",
+    "CrossModalReasoningAgent",
+    "DebateEnsembleAgent",
+    "EmotionalAffectiveMemoryAgent",
+    "EpisodicFutureSimulationAgent",
+    "ErrorRecoveryAgent",
+    "ErrorRemediationAgent",
+    "FederatedMemoryAgent",
+    "HierarchicalGoalPlannerAgent",
+    "HumanReviewQueueAgent",
+    "MemoryTierManagerAgent",
+    "MetaCognitivePlanningAgent",
+    "MultiTurnGoalTrackingAgent",
+    "MultimodalDeepMemoryAgent",
+    "NarrativeCompressionAgent",
+    "PlaybookAutoSynthesisAgent",
+    "PlaybookExecutionTrackerAgent",
+    "ProspectiveMemoryAgent",
+    "QueryIntelligenceAgent",
+    "SelfImprovementPlannerAgent",
+    "SemanticChangeDetectionAgent",
+    "SemanticRoleInferenceAgent",
+    "SocialMemoryAgent",
+    "TemporalPatternMinerAgent",
+    "TheoryOfMindAgent",
 ]
 
 # Agents the LLM may select when filtering the pipeline for a given memory.
@@ -173,6 +218,82 @@ def _heuristic_agent_names(content: str, enrichment: dict[str, Any]) -> list[str
     if any(kw in content_lower for kw in ("team", "department", "org", "silo", "cross")):
         selected += ["SiloPropagationAgent", "OrgAttentionAgent", "ProactiveMemoryPushAgent"]
 
+    # Social / relationship / collaboration signals
+    if any(kw in content_lower for kw in ("relationship", "collaborat", "trust", "rapport", "who knows", "worked with")):
+        selected += ["SocialMemoryAgent", "TheoryOfMindAgent"]
+
+    # Emotional / sentiment signals
+    if any(kw in content_lower for kw in ("frustrated", "upset", "excited", "concerned", "worried", "happy", "angry", "stressed")):
+        selected += ["EmotionalAffectiveMemoryAgent"]
+
+    # Research / investigation signals
+    if any(kw in content_lower for kw in ("research", "investigate", "look into", "find out", "explore whether")):
+        selected += ["AutoResearchAgent", "ActiveKnowledgeSeekerAgent"]
+
+    # Analogy / cross-domain / generalization signals
+    if any(kw in content_lower for kw in ("similar to", "like when", "reminds me", "analogous", "same as before", "same pattern")):
+        selected += ["AnalogicalReasoningAgent", "CompositionalGeneralizationAgent"]
+
+    # Multimodal attachment signals
+    if any(kw in content_lower for kw in ("screenshot", "image", "photo", "diagram", "attached", "video", "recording")):
+        selected += ["MultimodalDeepMemoryAgent", "CrossModalReasoningAgent"]
+
+    # Review / audit / compliance signals
+    if any(kw in content_lower for kw in ("review", "audit", "compliance", "approve", "sign off", "sign-off")):
+        selected += ["HumanReviewQueueAgent", "AuditTrailAgent"]
+
+    # Error / incident / remediation signals
+    if any(kw in content_lower for kw in ("error", "bug", "incident", "outage", "broke", "failure", "crash")):
+        selected += ["ErrorRemediationAgent", "ErrorRecoveryAgent", "AutonomousActionAgent"]
+
+    # Decision / debate / counterfactual signals
+    if any(kw in content_lower for kw in ("should we", "pros and cons", "decide between", "what if", "trade-off", "tradeoff")):
+        selected += ["DebateEnsembleAgent", "CounterfactualMemoryAgent"]
+
+    # Summarization / recap signals
+    if any(kw in content_lower for kw in ("summarize", "summarise", "recap", "tl;dr", "condense")):
+        selected += ["NarrativeCompressionAgent"]
+
+    # Reminder / future / prospective signals
+    if any(kw in content_lower for kw in ("remind me", "follow up", "follow-up", "next time", "don't forget", "later this")):
+        selected += ["ProspectiveMemoryAgent", "EpisodicFutureSimulationAgent"]
+
+    # Search / lookup signals
+    if any(kw in content_lower for kw in ("search for", "find memories", "look up", "find all")):
+        selected += ["QueryIntelligenceAgent"]
+
+    # Runbook / procedure / automation signals
+    if any(kw in content_lower for kw in ("runbook", "procedure", "steps to", "automat", "playbook")):
+        selected += ["PlaybookAutoSynthesisAgent", "PlaybookExecutionTrackerAgent"]
+
+    # Recurring / trend / drift signals
+    if any(kw in content_lower for kw in ("recurring", "trend", "cycle", "over time", "pattern of", "drift")):
+        selected += ["TemporalPatternMinerAgent", "SemanticChangeDetectionAgent"]
+
+    # Industry / benchmark / cross-org signals
+    if any(kw in content_lower for kw in ("industry", "benchmark", "peer", "other companies", "best practice")):
+        selected += ["FederatedMemoryAgent"]
+
+    # Preference / style / tone signals
+    if any(kw in content_lower for kw in ("prefer", "communication style", "tone", "writing style")):
+        selected += ["AdaptivePersonaAgent"]
+
+    # Reflection / self-improvement signals
+    if any(kw in content_lower for kw in ("retrospective", "lessons learned", "mistake", "improve next time", "reflect")):
+        selected += ["MetaCognitivePlanningAgent", "SelfImprovementPlannerAgent", "AdaptiveEnrichmentBudgetAgent"]
+
+    # Extend the goal/task branch with the additional goal-tracking agents.
+    if any(kw in content_lower for kw in ("goal", "task", "objective", "plan", "milestone")):
+        selected += ["MultiTurnGoalTrackingAgent", "HierarchicalGoalPlannerAgent", "AutonomousGoalGenerationAgent"]
+
+    # New concept / terminology signals
+    if any(kw in content_lower for kw in ("new concept", "define", "terminology", "what does", "means that")):
+        selected += ["ConceptLearningAgent"]
+
+    # Who-did-what / action attribution signals
+    if any(kw in content_lower for kw in ("who did", "responsible for", "assigned to", "action item")):
+        selected += ["SemanticRoleInferenceAgent"]
+
     # Always close with synthesis / reporting at the end
     selected += [
         "UncertaintyReportingAgent",
@@ -269,8 +390,8 @@ class OrchestrationBusAgent(BaseAgent):
             agent_names = list(explicit_names)
         elif strategy == "llm":
             try:
-                model = str(getattr(settings, "OLLAMA_MODEL", "qwen2.5:7b"))
-                client = create_ollama_client()
+                model = str(getattr(settings, "VLLM_MODEL", "qwen2.5:7b"))
+                client = create_llm_client()
                 agent_names = await _llm_agent_names(content, enrichment, client, model)
             except Exception:
                 agent_names = list(_DEFAULT_AGENTS)
@@ -306,6 +427,25 @@ class OrchestrationBusAgent(BaseAgent):
                 finished_at=t_err,
             )
 
+        # Apply limits to bound per-write LLM fan-out (Bug #2)
+        # If more than max agents after topo sort, keep only the highest-priority agents
+        if len(ordered) > _MAX_AGENTS_PER_WRITE:
+            # Prioritize: core agents (always), then agents in dependency order
+            priority_agents = []
+            core_names = {"MetadataExtractionAgent", "SemanticNormalizationAgent", 
+                         "EntityResolutionAgent", "CredibilityAgent", "UncertaintyReportingAgent"}
+            for agent in ordered:
+                if agent.name in core_names:
+                    priority_agents.append(agent)
+            # Fill remaining slots with others in order
+            for agent in ordered:
+                if len(priority_agents) >= _MAX_AGENTS_PER_WRITE:
+                    break
+                if agent.name not in core_names:
+                    priority_agents.append(agent)
+            ordered = priority_agents
+
+
         # Execute in order --------------------------------------------------------
         completed: dict[str, str] = {}  # agent_name -> status
         skipped_agents: list[str] = []
@@ -320,6 +460,22 @@ class OrchestrationBusAgent(BaseAgent):
         run_context["memory"] = run_memory  # type: ignore[index]
 
         for agent in ordered:
+            # Check timeout before running each agent (Bug #2: timeout bound)
+            elapsed_ms = (datetime.now(timezone.utc) - t0).total_seconds() * 1000
+            if elapsed_ms > _WRITE_TIMEOUT_SECONDS * 1000:
+                skipped_agents.append(agent.name)
+                execution_plan.append(
+                    {
+                        "agent_name": agent.name,
+                        "status": "skipped",
+                        "reason": f"bus_timeout_exceeded:{round(elapsed_ms)}ms",
+                        "latency_ms": 0.0,
+                        "outputs": {},
+                    }
+                )
+                completed[agent.name] = "skipped"
+                continue
+
             # Check that all in-scope dependencies succeeded
             deps_failed = [
                 dep
@@ -377,9 +533,22 @@ class OrchestrationBusAgent(BaseAgent):
             t_b = datetime.now(timezone.utc)
             latency = (t_b - t_a).total_seconds() * 1000
 
-            # Propagate outputs into shared enrichment for downstream agents
+            # Propagate outputs into shared enrichment for downstream agents.
+            #
+            # Generic field names (confidence, rationale, severity, ...) are
+            # common across many agents' own outputs — a flat dict.update()
+            # means whichever agent runs LAST silently clobbers an earlier
+            # agent's value under that name, and a downstream agent reading
+            # enrichment.get("confidence") has no way to know whose
+            # confidence it actually got. Keep the flat merge for
+            # distinctively-named keys (propagation_signals, context_bundle,
+            # ...) that existing agents already rely on unambiguously, but
+            # also namespace each agent's full outputs under its own name so
+            # a downstream agent that needs a SPECIFIC upstream agent's field
+            # can read it unambiguously via enrichment["_agent_outputs"][name].
             if agent_status == "success" and agent_outputs:
                 run_enrichment.update(agent_outputs)
+                run_enrichment.setdefault("_agent_outputs", {})[agent.name] = agent_outputs
 
             execution_plan.append(
                 {

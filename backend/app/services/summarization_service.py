@@ -1,7 +1,7 @@
 import os
 import httpx
 
-OLLAMA_URL = os.getenv("OLLAMA_URL", "http://ollama:11434")
+VLLM_BASE_URL = os.getenv("VLLM_BASE_URL", os.getenv("LLM_BASE_URL", "http://vllm:8000"))
 SUMMARY_PROMPT = os.getenv(
     "SUMMARY_PROMPT",
     "Summarize the following short-term memories into a concise, factual long-term memory entry. Focus on key actions, decisions, and important context."
@@ -9,7 +9,7 @@ SUMMARY_PROMPT = os.getenv(
 
 async def summarize_short_term_memories(memories: list[str], prompt: str = None) -> str:
     """
-    Summarize a list of short-term memory strings using Ollama LLM.
+    Summarize a list of short-term memory strings using vLLM LLM.
     Args:
         memories: List of memory strings.
         prompt: Optional custom prompt (otherwise uses env/default).
@@ -23,7 +23,7 @@ async def summarize_short_term_memories(memories: list[str], prompt: str = None)
     full_prompt = f"{prompt}\n\n{context}"
     payload = {"model": "llama3", "prompt": full_prompt}
     async with httpx.AsyncClient(timeout=60) as client:
-        response = await client.post(f"{OLLAMA_URL}/api/generate", json=payload)
+        response = await client.post(f"{VLLM_BASE_URL}/api/generate", json=payload)
         response.raise_for_status()
         data = response.json()
         return data.get("response") or data.get("text") or ""

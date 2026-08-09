@@ -8,11 +8,12 @@ Design principles:
 - Returns an empty dict if all services are unavailable or raise.
 - Compact output only — no raw DB objects, no large payloads.
 - Called once per cognitive session (before the planning loop).
+- Uses sequential awaits because the wired services typically share one
+  AsyncSession; concurrent DB use on a single session is unsafe.
 """
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from typing import TYPE_CHECKING, Any
 
@@ -51,11 +52,10 @@ class CognitiveContextAggregator:
         """
         context: dict[str, Any] = {}
 
-        # Run all service calls concurrently; individual failures are caught below.
-        epistemic_task = self._fetch_epistemic_state(goal)
-        gaps_task = self._fetch_knowledge_gaps(org_id)
-
-        epistemic, gaps = await asyncio.gather(epistemic_task, gaps_task)
+        # These services usually share one AsyncSession via dependency wiring,
+        # so we fetch sequentially to avoid concurrent use of the same session.
+        epistemic = await self._fetch_epistemic_state(goal)
+        gaps = await self._fetch_knowledge_gaps(org_id)
 
         if epistemic:
             context["epistemic_state"] = epistemic
@@ -72,10 +72,8 @@ class CognitiveContextAggregator:
         if not self.meta_cognitive:
             return None
         try:
-            state, complexity = await asyncio.gather(
-                self.meta_cognitive.get_epistemic_state(),
-                self.meta_cognitive.estimate_query_complexity(goal),
-            )
+            state = await self.meta_cognitive.get_epistemic_state()
+            complexity = await self.meta_cognitive.estimate_query_complexity(goal)
             return {
                 "known_domains": list(state.get("known_domains") or []),
                 "uncertain_domains": list(state.get("uncertain_domains") or []),

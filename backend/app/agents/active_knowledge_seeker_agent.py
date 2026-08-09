@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from app.agents.base import BaseAgent
-from app.agents.llm.ollama_breaker import create_ollama_client
+from app.agents.llm.llm_breaker import create_llm_client
 from app.agents.types import AgentContext, AgentResult
 from app.core.config import settings
 
@@ -161,11 +161,11 @@ class ActiveKnowledgeSeekerAgent(BaseAgent):
                 "- confidence: float\n"
                 "- rationale: str"
             )
-            client = create_ollama_client(
-                base_url=str(getattr(settings, "OLLAMA_BASE_URL", "http://localhost:11434")),
-                model=str(settings.get_ollama_model("agents")),
-                timeout_seconds=float(getattr(settings, "OLLAMA_TIMEOUT_SECONDS", 5.0)),
-                max_concurrency=int(getattr(settings, "OLLAMA_MAX_CONCURRENCY", 2)),
+            client = create_llm_client(
+                base_url=str(getattr(settings, "VLLM_BASE_URL", "http://localhost:11434")),
+                model=str(settings.get_llm_model("agents")),
+                timeout_seconds=float(getattr(settings, "VLLM_TIMEOUT_SECONDS", 5.0)),
+                max_concurrency=int(getattr(settings, "VLLM_MAX_CONCURRENCY", 2)),
             )
             resp = await client.complete_json(
                 prompt=prompt,

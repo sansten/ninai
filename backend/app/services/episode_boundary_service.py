@@ -71,15 +71,15 @@ async def _llm_intent_boundary(prev_text: str, curr_text: str) -> tuple[bool, fl
         "No other text."
     )
     try:
-        model_name = settings.get_ollama_model("boundary")
+        model_name = settings.get_llm_model("boundary")
         logger.info(
-            "llm.model_route provider=ollama purpose=boundary model=%s base_url=%s",
+            "llm.model_route provider=local purpose=boundary model=%s base_url=%s",
             model_name,
-            settings.OLLAMA_BASE_URL,
+            settings.VLLM_BASE_URL,
         )
         async with httpx.AsyncClient(timeout=15) as client:
             resp = await client.post(
-                f"{settings.OLLAMA_BASE_URL}/api/generate",
+                f"{settings.VLLM_BASE_URL}/api/generate",
                 json={
                     "model": model_name,
                     "prompt": prompt,

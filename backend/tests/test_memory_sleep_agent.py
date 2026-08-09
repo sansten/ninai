@@ -540,13 +540,13 @@ class TestMemorySleepAgentLLM:
         mock_client = AsyncMock()
         mock_client.complete_json = AsyncMock(return_value=llm_resp)
         with patch("app.agents.memory_sleep_agent.settings") as mock_settings, \
-             patch("app.agents.memory_sleep_agent.create_ollama_client", return_value=mock_client):
+             patch("app.agents.memory_sleep_agent.create_llm_client", return_value=mock_client):
             mock_settings.MEMORY_SLEEP_STRATEGY = None
             mock_settings.AGENT_STRATEGY = "llm"
-            mock_settings.OLLAMA_BASE_URL = "http://localhost:11434"
-            mock_settings.OLLAMA_MODEL = "llama3.1:8b"
-            mock_settings.OLLAMA_TIMEOUT_SECONDS = 5.0
-            mock_settings.OLLAMA_MAX_CONCURRENCY = 2
+            mock_settings.VLLM_BASE_URL = "http://localhost:11434"
+            mock_settings.VLLM_MODEL = "llama3.1:8b"
+            mock_settings.VLLM_TIMEOUT_SECONDS = 5.0
+            mock_settings.VLLM_MAX_CONCURRENCY = 2
             result = await agent.run("mem-llm-001", ctx)
         assert result.outputs["sleep_action"] == "strengthen"
         assert result.outputs["association_links"] == ["x1"]
@@ -558,13 +558,13 @@ class TestMemorySleepAgentLLM:
         mock_client = AsyncMock()
         mock_client.complete_json = AsyncMock(return_value={"bad": "response"})
         with patch("app.agents.memory_sleep_agent.settings") as mock_settings, \
-             patch("app.agents.memory_sleep_agent.create_ollama_client", return_value=mock_client):
+             patch("app.agents.memory_sleep_agent.create_llm_client", return_value=mock_client):
             mock_settings.MEMORY_SLEEP_STRATEGY = None
             mock_settings.AGENT_STRATEGY = "llm"
-            mock_settings.OLLAMA_BASE_URL = "http://localhost:11434"
-            mock_settings.OLLAMA_MODEL = "llama3.1:8b"
-            mock_settings.OLLAMA_TIMEOUT_SECONDS = 5.0
-            mock_settings.OLLAMA_MAX_CONCURRENCY = 2
+            mock_settings.VLLM_BASE_URL = "http://localhost:11434"
+            mock_settings.VLLM_MODEL = "llama3.1:8b"
+            mock_settings.VLLM_TIMEOUT_SECONDS = 5.0
+            mock_settings.VLLM_MAX_CONCURRENCY = 2
             result = await agent.run("mem-llm-002", ctx)
         assert result.outputs["sleep_action"] in _VALID_ACTIONS
         assert result.outputs["rationale"] == "heuristic"
@@ -576,13 +576,13 @@ class TestMemorySleepAgentLLM:
         mock_client = AsyncMock()
         mock_client.complete_json = AsyncMock(side_effect=RuntimeError("timeout"))
         with patch("app.agents.memory_sleep_agent.settings") as mock_settings, \
-             patch("app.agents.memory_sleep_agent.create_ollama_client", return_value=mock_client):
+             patch("app.agents.memory_sleep_agent.create_llm_client", return_value=mock_client):
             mock_settings.MEMORY_SLEEP_STRATEGY = None
             mock_settings.AGENT_STRATEGY = "llm"
-            mock_settings.OLLAMA_BASE_URL = "http://localhost:11434"
-            mock_settings.OLLAMA_MODEL = "llama3.1:8b"
-            mock_settings.OLLAMA_TIMEOUT_SECONDS = 5.0
-            mock_settings.OLLAMA_MAX_CONCURRENCY = 2
+            mock_settings.VLLM_BASE_URL = "http://localhost:11434"
+            mock_settings.VLLM_MODEL = "llama3.1:8b"
+            mock_settings.VLLM_TIMEOUT_SECONDS = 5.0
+            mock_settings.VLLM_MAX_CONCURRENCY = 2
             # Should raise since fallback isn't wrapped around LLM exceptions
             with pytest.raises(RuntimeError):
                 await agent.run("mem-llm-003", ctx)
@@ -600,13 +600,13 @@ class TestMemorySleepAgentLLM:
         mock_client = AsyncMock()
         mock_client.complete_json = AsyncMock(return_value=llm_resp)
         with patch("app.agents.memory_sleep_agent.settings") as mock_settings, \
-             patch("app.agents.memory_sleep_agent.create_ollama_client", return_value=mock_client):
+             patch("app.agents.memory_sleep_agent.create_llm_client", return_value=mock_client):
             mock_settings.MEMORY_SLEEP_STRATEGY = None
             mock_settings.AGENT_STRATEGY = "llm"
-            mock_settings.OLLAMA_BASE_URL = "http://localhost:11434"
-            mock_settings.OLLAMA_MODEL = "llama3.1:8b"
-            mock_settings.OLLAMA_TIMEOUT_SECONDS = 5.0
-            mock_settings.OLLAMA_MAX_CONCURRENCY = 2
+            mock_settings.VLLM_BASE_URL = "http://localhost:11434"
+            mock_settings.VLLM_MODEL = "llama3.1:8b"
+            mock_settings.VLLM_TIMEOUT_SECONDS = 5.0
+            mock_settings.VLLM_MAX_CONCURRENCY = 2
             result = await agent.run("mem-llm-004", ctx)
         assert result.outputs["sleep_action"] in _VALID_ACTIONS
 

@@ -386,6 +386,34 @@ class TestOrchestrationBusAgentHeuristic:
         order = result.outputs["agent_order"]
         assert order.index("A") < order.index("B")
 
+    async def test_agent_outputs_are_namespaced_alongside_flat_merge(self):
+        """Regression: a flat dict.update() merge means a generic field name
+        like "confidence" gets silently overwritten by whichever agent runs
+        last — a downstream agent reading enrichment.get("confidence") has
+        no way to know whose value it got. _agent_outputs preserves each
+        agent's own outputs under its own name in the SAME shared enrichment
+        dict later agents see, alongside (not instead of) the existing flat
+        merge other agents already rely on for distinctively-named keys."""
+        a = _stub_agent("A", deps=[], outputs={"confidence": 0.9, "a_only": 1})
+        b = _stub_agent("B", deps=["A"], outputs={"confidence": 0.1, "b_only": 2})
+
+        bus = _make_bus()
+        with patch("app.agents.registry.get_agent") as mock_get:
+            mock_get.side_effect = lambda name: {"a": a, "b": b}.get(name)
+            await bus.run("mem-1", _context(config={"agent_names": ["A", "B"]}))
+
+        # B ran after A — inspect the enrichment dict the bus actually
+        # handed to B's run() to confirm A's outputs are namespaced there.
+        # (The dict is mutated in place as later agents run, so only
+        # "_agent_outputs"[A] — which only A itself writes — is a reliable
+        # post-hoc snapshot; the flat "confidence" key gets overwritten by
+        # B's own output by the time the run completes, which is exactly
+        # the pre-existing ambiguity this fix works around.)
+        b_call_context = b.run.call_args.args[1]
+        b_enrichment = b_call_context["memory"]["enrichment"]
+        assert b_enrichment["_agent_outputs"]["A"]["confidence"] == 0.9
+        assert b_enrichment["_agent_outputs"]["A"]["a_only"] == 1
+
     @pytest.mark.asyncio
     async def test_heuristic_strategy_default_used_when_no_agent_names(self):
         bus = _make_bus()
@@ -420,7 +448,7 @@ class TestOrchestrationBusLLMPath:
             "message": {"content": '{"agents": ["EntityResolutionAgent"]}'}
         })
 
-        with patch("app.agents.orchestration_bus_agent.create_ollama_client", return_value=mock_client):
+        with patch("app.agents.orchestration_bus_agent.create_llm_client", return_value=mock_client):
             with patch("app.agents.registry.get_agent") as mock_get:
                 mock_get.side_effect = lambda name: a if name == "entityresolutionagent" else None
                 result = await bus.run(
@@ -436,7 +464,7 @@ class TestOrchestrationBusLLMPath:
         mock_client = MagicMock()
         mock_client.chat = AsyncMock(return_value={"message": {"content": "{}"}})
 
-        with patch("app.agents.orchestration_bus_agent.create_ollama_client", return_value=mock_client):
+        with patch("app.agents.orchestration_bus_agent.create_llm_client", return_value=mock_client):
             with patch("app.agents.registry.get_agent") as mock_get:
                 mock_get.return_value = None
                 result = await bus.run("mem-1", _context(config={"agent_strategy": "llm"}))
@@ -447,9 +475,9 @@ class TestOrchestrationBusLLMPath:
     async def test_llm_fallback_on_client_exception(self):
         bus = _make_bus()
         mock_client = MagicMock()
-        mock_client.chat = AsyncMock(side_effect=ConnectionError("ollama down"))
+        mock_client.chat = AsyncMock(side_effect=ConnectionError("vllm down"))
 
-        with patch("app.agents.orchestration_bus_agent.create_ollama_client", return_value=mock_client):
+        with patch("app.agents.orchestration_bus_agent.create_llm_client", return_value=mock_client):
             with patch("app.agents.registry.get_agent") as mock_get:
                 mock_get.return_value = None
                 result = await bus.run("mem-1", _context(config={"agent_strategy": "llm"}))
@@ -462,7 +490,7 @@ class TestOrchestrationBusLLMPath:
         mock_client = MagicMock()
         mock_client.chat = AsyncMock(return_value={"message": {"content": "not json"}})
 
-        with patch("app.agents.orchestration_bus_agent.create_ollama_client", return_value=mock_client):
+        with patch("app.agents.orchestration_bus_agent.create_llm_client", return_value=mock_client):
             with patch("app.agents.registry.get_agent") as mock_get:
                 mock_get.return_value = None
                 result = await bus.run("mem-1", _context(config={"agent_strategy": "llm"}))

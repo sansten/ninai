@@ -5,7 +5,7 @@ This profile brings up a reproducible local-first stack with:
 - Qdrant
 - Redis (cache/broker)
 - FalkorDB (graph)
-- Ollama
+- vLLM
 - Ninai API
 
 ## One-time setup

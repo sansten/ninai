@@ -21,8 +21,8 @@
     "DATABASE_URL": "postgresql+asyncpg://ninai:ninai@localhost:5432/ninai_dev",
     "REDIS_URL": "redis://localhost:6379",
     "QDRANT_URL": "http://localhost:6333",
-    "OLLAMA_BASE_URL": "http://localhost:11434",
-    "OLLAMA_MODEL": "qwen2.5:7b",
+    "VLLM_BASE_URL": "http://localhost:11434",
+    "VLLM_MODEL": "qwen2.5:7b",
     "SECRET_KEY": "dev-secret-key",
     "LOG_LEVEL": "debug",
     "AGENT_STRATEGY": "heuristic"
@@ -120,7 +120,7 @@
       "onAutoForward": "silent"
     },
     "11434": {
-      "label": "Ollama Local LLM",
+      "label": "vLLM Local LLM",
       "onAutoForward": "silent"
     },
     "9090": {

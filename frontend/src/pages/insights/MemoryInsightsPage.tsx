@@ -444,7 +444,7 @@ export function MemoryInsightsPage() {
             <div className="space-y-1">
               <p className="font-semibold text-gray-900">Active Enrichment Agents</p>
               <p>How many of the 21 enrichment agents have logged at least one successful run against your corpus.</p>
-              <p className="text-gray-500 mt-1">If this is lower than expected, some agents may be disabled or their upstream dependencies (e.g. Qdrant, Ollama) may be unavailable.</p>
+              <p className="text-gray-500 mt-1">If this is lower than expected, some agents may be disabled or their upstream dependencies (e.g. Qdrant, vLLM) may be unavailable.</p>
             </div>
           }
         />

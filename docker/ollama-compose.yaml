@@ -1,15 +1,15 @@
-# Ollama Docker Compose Service
-ollama:
-  image: ollama/ollama:latest
-  container_name: ollama
+# vLLM Docker Compose Service
+vllm:
+  image: vllm/vllm:latest
+  container_name: vllm
   ports:
     - "11434:11434"
   volumes:
-    - ollama_data:/root/.ollama
+    - vllm_data:/root/.vllm
   environment:
-    - OLLAMA_MODELS=qwen2.5:0.5b
+    - VLLM_MODELS=qwen2.5:0.5b
     # You can change to another model, e.g. mistral, phi3, or mixtral if preferred
   restart: unless-stopped
 
 volumes:
-  ollama_data:
+  vllm_data:

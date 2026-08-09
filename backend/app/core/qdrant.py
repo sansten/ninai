@@ -85,7 +85,7 @@ class QdrantService:
         """Ensure the memories collection exists with the configured vector dimensions.
 
         If the collection exists but was created with a different dimension (e.g. switching
-        from OpenAI 1536-dim to Ollama nomic-embed-text 768-dim), the old collection is
+        from OpenAI 1536-dim to vllm-embed bge-base-en-v1.5 768-dim), the old collection is
         deleted and recreated automatically so embeddings remain consistent.
         """
         if cls._collection_ready:

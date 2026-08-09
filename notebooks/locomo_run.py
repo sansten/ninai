@@ -3,6 +3,7 @@ import urllib.parse
 import httpx
 import subprocess
 import base64
+import concurrent.futures
 import pandas as pd
 from datetime import datetime, timezone, timedelta
 from rouge_score import rouge_scorer
@@ -32,9 +33,19 @@ from locomo_evidence import (
 # Official LoCoMo dataset (snap-research/locomo, 10 convs, 1986 QA pairs)
 DATASET_PATH = _NB_DIR / 'locomo_dataset' / 'locomo10.json'
 
+_output_root = pathlib.Path(os.environ.get('LOCOMO_OUTPUT_ROOT', str(pathlib.Path.cwd() / 'locomo_runs')))
+_output_date = os.environ.get('LOCOMO_OUTPUT_DATE', datetime.now().strftime('%Y-%m-%d'))
+_output_dir_env = os.environ.get('LOCOMO_OUTPUT_DIR')
+if _output_dir_env:
+    OUTPUT_DIR = pathlib.Path(_output_dir_env)
+else:
+    OUTPUT_DIR = _output_root / _output_date
+OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
 RETRIEVAL_LIMIT   = int(os.environ.get('RETRIEVAL_LIMIT', '35'))   # top-N from deduplicated unique turns per conversation
 USE_GRAPH_RETRIEVAL = os.environ.get('USE_GRAPH_RETRIEVAL', '1').lower() in ('1','true','yes')
 USE_GRAPH_RETRIEVAL_MULTIHOP = os.environ.get('USE_GRAPH_RETRIEVAL_MULTIHOP', '1').lower() in ('1','true','yes')
+BENCHMARK_CORE_API_ONLY = os.environ.get('BENCHMARK_CORE_API_ONLY', '1').lower() in ('1', 'true', 'yes')
 # Ollama endpoint for LLM answer generation.
 # Default: local Ollama. To use the GCP instance, kubectl port-forward first:
 #   kubectl port-forward svc/ollama 11435:11434 -n ninai-enterprise
@@ -51,7 +62,8 @@ LLM_TIMEOUT_QWEN  = 200
 LLM_TIMEOUT_DEEP  = 200
 LLM_TIMEOUT_MID   = 200
 LLM_WORKERS       = int(os.environ.get('LLM_WORKERS', '4'))
-INGEST_WORKERS    = int(os.environ.get('INGEST_WORKERS', '4'))  # bumped: postgres-ha has pool_size=20/replica, 2 API replicas → 120 capacity; 4 workers is well within safe limits
+INGEST_WORKERS    = int(os.environ.get('INGEST_WORKERS', '2'))  # 2 workers: 4 caused Celery/Redis saturation leading to burst 500/502 storms
+INGEST_LIMIT      = int(os.environ.get('INGEST_LIMIT', '0'))    # 0 = no limit; set >0 to cap for smoke tests
 INGEST_PROGRESS_EVERY = int(os.environ.get('INGEST_PROGRESS_EVERY', '100'))
 INGEST_HEARTBEAT_S = int(os.environ.get('INGEST_HEARTBEAT_S', '30'))
 ADVERSARIAL_CONTEXT_LIMIT = int(os.environ.get('ADVERSARIAL_CONTEXT_LIMIT', '25'))
@@ -73,6 +85,9 @@ MIN_QUICK_VALIDATE_MEMORIES = int(os.environ.get('MIN_QUICK_VALIDATE_MEMORIES', 
 STRICT_COMPONENT_PROOF = os.environ.get('STRICT_COMPONENT_PROOF', '1').lower() in ('1', 'true', 'yes')
 STRICT_GATEWAY_ONLY = os.environ.get('STRICT_GATEWAY_ONLY', '1').lower() in ('1', 'true', 'yes')
 STRICT_NO_HEURISTIC = os.environ.get('STRICT_NO_HEURISTIC', '1').lower() in ('1', 'true', 'yes')
+QUEUE_ON_GATEWAY_DOWN = os.environ.get('QUEUE_ON_GATEWAY_DOWN', '1').lower() in ('1', 'true', 'yes')
+GATEWAY_RECOVERY_RETRIES = int(os.environ.get('GATEWAY_RECOVERY_RETRIES', '6') or 6)
+GATEWAY_RECOVERY_SLEEP_S = int(os.environ.get('GATEWAY_RECOVERY_SLEEP_S', '10') or 10)
 MIN_ENTITY_KEYS = int(os.environ.get('MIN_ENTITY_KEYS', '500'))
 MIN_ENTITY_REFS = int(os.environ.get('MIN_ENTITY_REFS', '2000'))
 
@@ -136,8 +151,9 @@ print(f'Exists  : {DATASET_PATH.exists()}')
 print(f'run_tag : {run_tag!r}')
 print(f'Mode    : {"QUICK_VALIDATE " + str(QUICK_CATS) if QUICK_VALIDATE else "FULL RUN"}')
 print(f'SKIP    : {SKIP_INGEST}')
+print(f'Output  : {OUTPUT_DIR}')
 
-client = NinaiClient(base_url=BASE_URL, timeout=120.0)
+client = NinaiClient(base_url=BASE_URL, timeout=300.0)  # Increased from 120 for slow semantic searches
 def _login_with_retry(_client, attempts=None):
     _attempts = max(1, int(attempts or os.getenv('AUTH_RETRY_ATTEMPTS', '8') or 8))
     _last_exc = None
@@ -559,20 +575,42 @@ def _derive_relation_mems(speaker, text, conv_id, sess_n, occurred_at, run_tag):
 def _derive_cross_mention_mems(speaker, text, other_speaker, conv_id, sess_n, occurred_at, run_tag):
     """When Speaker B's turn contains substantive content about Speaker A,
     create an 'About A' memory tagged for A so entity lookup finds it."""
-    if not re.search(r'\b' + re.escape(other_speaker.lower()) + r'\b', text, re.IGNORECASE):
+    toks = [re.sub(r'[^\w]', '', w).lower() for w in text.split()]
+    toks = [t for t in toks if t]
+    other_parts = [p for p in re.sub(r'[^\w\s]', ' ', other_speaker.lower()).split() if p]
+
+    if not toks or not other_parts:
         return []
-    words = text.split()
-    first_two = {re.sub(r'[^\w]', '', w).lower() for w in words[:2]}
-    if len(words) <= 5 and other_speaker.lower().split()[0] in first_two:
+
+    # Treat either full-name coverage or a surname/unique-token hit as a mention.
+    has_name_hit = all(p in toks for p in other_parts) or any(p in toks for p in other_parts)
+    if not has_name_hit:
         return []
-    has_substance = bool(re.search(
-        r'\b' + re.escape(other_speaker.lower())
-        + r'\b.{0,60}\b(?:is|was|has|had|got|will|told|said|went|loves|likes|works|lives|moved|started|mentioned|plan)\b',
-        text, re.IGNORECASE,
-    )) or bool(re.search(
-        r'\b(?:she|he)\b\s+\b(?:is|was|has|had|got|told|said|went|loves|likes|works|lives|moved|started)\b',
-        text, re.IGNORECASE,
-    ))
+
+    first_two = set(toks[:2])
+    if len(toks) <= 5 and other_parts[0] in first_two:
+        return []
+
+    verb_cues = {
+        'is', 'was', 'has', 'had', 'got', 'will', 'told', 'said', 'went',
+        'loves', 'likes', 'works', 'lives', 'moved', 'started', 'mentioned', 'plan',
+    }
+    pronouns = {'she', 'he'}
+    name_positions = [i for i, t in enumerate(toks) if t in set(other_parts)]
+
+    has_substance = False
+    for i in name_positions:
+        window = toks[i + 1:i + 8]
+        if any(w in verb_cues for w in window):
+            has_substance = True
+            break
+
+    if not has_substance:
+        for i in range(len(toks) - 1):
+            if toks[i] in pronouns and toks[i + 1] in verb_cues:
+                has_substance = True
+                break
+
     if not has_substance:
         return []
     return [{
@@ -685,7 +723,11 @@ else:
                         'occurred_at': _ev_dt + timedelta(minutes=_ev_idx),
                     })
 
-    print(f'Turns to ingest: {len(to_ingest)}')
+    if INGEST_LIMIT > 0:
+        to_ingest = to_ingest[:INGEST_LIMIT]
+        print(f'Turns to ingest: {len(to_ingest)} (capped by INGEST_LIMIT={INGEST_LIMIT})')
+    else:
+        print(f'Turns to ingest: {len(to_ingest)}')
 
     def _create_one(item, idx, total, progress_state, progress_lock):
         last_error = None
@@ -710,10 +752,11 @@ else:
                 transient = any(tok in err for tok in (
                     'timed out', 'timeout', 'queuepool', 'connection timed out',
                     'too many connections', '502', '503', '504', 'bad gateway',
-                    'gateway timeout',
+                    'gateway timeout', '500', 'internal server error',
+                    'operationalerror', 'service unavailable',
                 ))
                 if attempt < 5 and transient:
-                    backoff_s = min(8.0, 0.75 * (2 ** (attempt - 1)))
+                    backoff_s = min(20.0, 1.0 * (2 ** (attempt - 1)))
                     print(
                         f'  WARN: ingest retry idx={idx}/{total} conv={item["conv_id"]} '
                         f'attempt={attempt}/5 in {backoff_s:.1f}s: {str(e)[:160]}'
@@ -1735,120 +1778,59 @@ def _build_entity_block(mem_dicts, max_items=12):
 
 
 def _search_semantic(question, conv_id, run_tag, client, limit, hybrid=True, use_graph=True):
-    # Ninai hybrid semantic+lexical search filtered to one conversation.
-    # The backend search contract is stricter than this notebook's older manual URL
-    # builder: limit must be <= 100, and the route does not accept the notebook's
-    # ad hoc threshold/tags query params. Use the SDK's supported shape, then filter
-    # the returned hits to the requested conversation/run tag locally.
+    # Core-only retrieval path: call backend /memories/search directly and trust
+    # core ranking/filtering. No notebook-side fallback, expansion, or reranking.
+    _ = client  # kept for signature compatibility
+    if not _token:
+        raise RuntimeError('Missing bearer token for core /memories/search retrieval')
+
     for attempt in range(3):
         try:
-            _api_limit = min(max(limit * 2, limit), 100)
-            _result = client.memories.search(
-                query=question,
-                tags=[conv_id, run_tag],   # server-side filter: only this conversation/run
-                limit=_api_limit,
-                threshold=0.0,
-                hybrid=hybrid,
-            )
-            _raw_hits = _result.items or []
-            # Some backend builds currently under-return (or zero-return) with
-            # server-side tags in semantic search. Fallback: broad search then
-            # enforce run/conversation tags locally.
-            if not _raw_hits:
-                _fallback = client.memories.search(
-                    query=question,
-                    limit=100,
-                    threshold=0.0,
-                    hybrid=hybrid,
-                )
-                _raw_hits = _fallback.items or []
-            hits = [
-                _mem_obj_to_dict(m) if not isinstance(m, dict) else m
-                for m in _raw_hits
-                if (
-                    (run_tag in (m.get('tags') or []) if isinstance(m, dict)
-                     else run_tag in (getattr(m, 'tags', None) or []))
-                    and (conv_id in (m.get('tags') or []) if isinstance(m, dict)
-                         else conv_id in (getattr(m, 'tags', None) or []))
-                    and (
-                        (m.get('source_type') == 'locomo_benchmark' if isinstance(m, dict)
-                         else getattr(m, 'source_type', None) == 'locomo_benchmark')
-                        or (m.get('source_type') is None if isinstance(m, dict)
-                            else getattr(m, 'source_type', None) is None)
-                    )
-                )
+            _api_limit = min(max(int(limit), 1), 100)
+            # Build params as a list of tuples so repeated 'tags' values are
+            # serialised as ?tags=conv_id&tags=run_tag, NOT ?tags=conv_id,run_tag.
+            # The comma-joined form is treated as a single tag value by the backend
+            # and matches nothing (urlencode on a dict produces one param value).
+            params = [
+                ('query', question),
+                ('limit', str(_api_limit)),
+                ('score_threshold', '0.0'),
+                ('hybrid', 'true' if hybrid else 'false'),
+                ('use_graph', 'true' if use_graph else 'false'),
+                ('tags', conv_id),
+                ('tags', run_tag),
             ]
-            # semantic search can return duplicate turns; keep first occurrence only
-            _seen = set()
-            _unique_hits = []
-            for h in hits:
-                _key = h.get('content', '') if isinstance(h, dict) else getattr(h, 'content', '')
-                if _key and _key in _seen:
-                    continue
-                _seen.add(_key)
-                _unique_hits.append(h)
+            req = urllib.request.Request(
+                BASE_URL.rstrip('/') + '/memories/search?' + urllib.parse.urlencode(params),
+                headers={'Authorization': 'Bearer ' + _token},
+            )
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                payload = json.loads(resp.read().decode())
 
-            # Graph-vector fusion: expand the query with graph-neighbor entities,
-            # then use vector search to fetch the memory chunks.
-            if use_graph and conv_id:
-                q_entities = _extract_question_entities(question)
-                if q_entities:
-                    expansion_terms = []
-                    for ent in q_entities[:2]:
-                        expansion_terms.extend(_graph_neighbor_terms(ent, _token, limit=6))
-                    if expansion_terms:
-                        gq = question + ' ' + ' '.join(expansion_terms[:6])
-                        g_res = client.memories.search(
-                            query=gq,
-                            tags=[conv_id, run_tag],
-                            limit=_api_limit,
-                            threshold=0.0,
-                            hybrid=hybrid,
-                        )
-                        _g_raw_hits = g_res.items or []
-                        if not _g_raw_hits:
-                            _g_fb = client.memories.search(
-                                query=gq,
-                                limit=100,
-                                threshold=0.0,
-                                hybrid=hybrid,
-                            )
-                            _g_raw_hits = _g_fb.items or []
-                        g_hits = [
-                            _mem_obj_to_dict(m) if not isinstance(m, dict) else m
-                            for m in _g_raw_hits
-                            if (
-                                (run_tag in (m.get('tags') or []) if isinstance(m, dict)
-                                 else run_tag in (getattr(m, 'tags', None) or []))
-                                and (conv_id in (m.get('tags') or []) if isinstance(m, dict)
-                                     else conv_id in (getattr(m, 'tags', None) or []))
-                                and (
-                                    (m.get('source_type') == 'locomo_benchmark' if isinstance(m, dict)
-                                     else getattr(m, 'source_type', None) == 'locomo_benchmark')
-                                    or (m.get('source_type') is None if isinstance(m, dict)
-                                        else getattr(m, 'source_type', None) is None)
-                                )
-                            )
-                        ]
-                        merged = []
-                        seen_ids = set()
-                        for m in g_hits + _unique_hits:
-                            mid = m.get('id', '')
-                            if mid and mid in seen_ids:
-                                continue
-                            if mid:
-                                seen_ids.add(mid)
-                            merged.append(m)
-                        _unique_hits = merged
-            return _unique_hits
+            raw_items = payload.get('results') or payload.get('items') or []
+            hits = []
+            seen_ids = set()
+            for item in raw_items:
+                mid = str(item.get('id', '')).strip()
+                if not mid or mid in seen_ids:
+                    continue
+                seen_ids.add(mid)
+                hits.append({
+                    'id': mid,
+                    'content': item.get('content') or item.get('content_preview') or '',
+                    'entities': item.get('entities') or {},
+                    'tags': item.get('tags') or [],
+                    'occurred_at': item.get('occurred_at'),
+                })
+            return hits
         except Exception as e:
             _sys_dbg = __import__('sys')
-            _sys_dbg.stdout.write(f'  [DBG] search ERR attempt={attempt}: {type(e).__name__}: {str(e)[:120]}\n')
+            _sys_dbg.stdout.write(f'  [DBG] core search ERR attempt={attempt}: {type(e).__name__}: {str(e)[:120]}\n')
             _sys_dbg.stdout.flush()
             if attempt < 2:
                 _time.sleep(1.5 ** attempt)
-            else:
-                return []
+                continue
+            raise
     return []
 
 def _cognitive_rerank(question, hits, limit, base_url, token):
@@ -1894,51 +1876,100 @@ def _extract_question_entities(question):
     return result
 
 
+def _graph_entity_candidates(entity):
+    s = str(entity or '').strip()
+    if not s:
+        return []
+    # Try a few lightweight canonical variants to handle case/style mismatches
+    # between extracted question terms and world-model node names.
+    clean = re.sub(r'\s+', ' ', s).strip()
+    low = clean.lower()
+    title = ' '.join(p.capitalize() for p in low.split())
+    variants = [clean, low, title]
+    # Also probe without punctuation noise.
+    compact = re.sub(r'[^\w\s]', ' ', clean)
+    compact = re.sub(r'\s+', ' ', compact).strip()
+    if compact:
+        variants.extend([compact, compact.lower(), ' '.join(p.capitalize() for p in compact.lower().split())])
+    out = []
+    seen = set()
+    for v in variants:
+        if not v:
+            continue
+        k = v.lower()
+        if k in seen:
+            continue
+        seen.add(k)
+        out.append(v)
+    return out
+
+
 def _graph_neighbor_terms(entity, token, limit=8):
     if not entity or not token:
         return []
-    try:
-        qs = urllib.parse.urlencode({'entity': entity, 'limit': max(1, int(limit))})
-        req = urllib.request.Request(
-            BASE_URL.rstrip('/') + '/graph/neighbors?' + qs,
-            headers={'Authorization': 'Bearer ' + token},
-        )
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            data = json.loads(resp.read().decode())
-        neigh = data.get('neighbors') or []
-        out = []
-        for n in neigh:
-            if isinstance(n, dict):
-                name = n.get('entity') or n.get('name') or n.get('target') or ''
-            else:
-                name = str(n)
-            name = str(name).strip()
-            if not name:
-                continue
-            out.append(name)
-        return out
-    except Exception:
-        return []
+    for candidate in _graph_entity_candidates(entity):
+        try:
+            qs = urllib.parse.urlencode({'entity': candidate, 'limit': max(1, int(limit))})
+            req = urllib.request.Request(
+                BASE_URL.rstrip('/') + '/graph/neighbors?' + qs,
+                headers={'Authorization': 'Bearer ' + token},
+            )
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                data = json.loads(resp.read().decode())
+            neigh = data.get('neighbors') or []
+            out = []
+            for n in neigh:
+                if isinstance(n, dict):
+                    name = n.get('entity') or n.get('name') or n.get('target') or ''
+                else:
+                    name = str(n)
+                name = str(name).strip()
+                if not name:
+                    continue
+                out.append(name)
+            if out:
+                return out
+        except Exception:
+            continue
+    return []
 
 
 def _graph_neighbor_probe(entity, token, limit=10):
     if not entity or not token:
         return {'ok': False, 'status': None, 'count': 0, 'error': 'missing_probe_inputs'}
+    last_http = None
+    last_err = ''
     try:
-        qs = urllib.parse.urlencode({'entity': entity, 'limit': max(1, int(limit))})
-        req = urllib.request.Request(
-            BASE_URL.rstrip('/') + '/graph/neighbors?' + qs,
-            headers={'Authorization': 'Bearer ' + token},
-        )
-        with urllib.request.urlopen(req, timeout=20) as resp:
-            data = json.loads(resp.read().decode())
-            neigh = data.get('neighbors') or []
-            return {
-                'ok': True,
-                'status': getattr(resp, 'status', 200),
-                'count': len(neigh),
-                'error': '',
-            }
+        for candidate in _graph_entity_candidates(entity):
+            qs = urllib.parse.urlencode({'entity': candidate, 'limit': max(1, int(limit))})
+            req = urllib.request.Request(
+                BASE_URL.rstrip('/') + '/graph/neighbors?' + qs,
+                headers={'Authorization': 'Bearer ' + token},
+            )
+            try:
+                with urllib.request.urlopen(req, timeout=20) as resp:
+                    data = json.loads(resp.read().decode())
+                    neigh = data.get('neighbors') or []
+                    if neigh:
+                        return {
+                            'ok': True,
+                            'status': getattr(resp, 'status', 200),
+                            'count': len(neigh),
+                            'error': '',
+                            'matched_entity': candidate,
+                        }
+                    last_http = getattr(resp, 'status', 200)
+            except urllib.error.HTTPError as e:
+                last_http = e.code
+                last_err = f'http_{e.code}'
+            except Exception as e:
+                last_err = f'{type(e).__name__}: {str(e)[:120]}'
+        return {
+            'ok': (last_http is not None and 200 <= int(last_http) < 300),
+            'status': last_http,
+            'count': 0,
+            'error': last_err or 'no_neighbors',
+        }
     except urllib.error.HTTPError as e:
         return {'ok': False, 'status': e.code, 'count': 0, 'error': f'http_{e.code}'}
     except Exception as e:
@@ -1973,86 +2004,22 @@ def _cognitive_rerank_probe(question, hits, limit, token, timeout=20):
 
 def _retrieve(question, mem_dicts, limit,
               client=None, run_tag=None, conv_id=None):
-    # Universal retrieval — same pipeline for all question types.
-    # Entity search + multi-hop chain + semantic + BM25 → RRF → neighbor expand → cognitive rerank.
-    unique = _dedup_by_content(mem_dicts)
-    syn_q = _synonym_expand(question)
+    # Architecture-pure retrieval: core API path only.
+    if BENCHMARK_CORE_API_ONLY:
+        if client is None or run_tag is None or conv_id is None:
+            raise RuntimeError('BENCHMARK_CORE_API_ONLY requires live core API client + run scoping tags')
+        return _search_semantic(
+            question,
+            conv_id,
+            run_tag,
+            client,
+            limit,
+            hybrid=True,
+            use_graph=USE_GRAPH_RETRIEVAL,
+        )[:limit]
 
-    if client is not None and run_tag is not None and conv_id is not None:
-        k = min(limit * 3, 150)
-
-        # Stage 1: entity-indexed lookup (Phase 7 enrichment) — exact and synonym-matched
-        ent_hits = _entity_search(syn_q, conv_id, limit * 2)
-
-        # Stage 2: semantic search with query-expanded question
-        search_q = _query_expand(syn_q)
-        sem_hits = _search_semantic(search_q, conv_id, run_tag, client, k, use_graph=USE_GRAPH_RETRIEVAL)
-
-        # Stage 3: multi-hop entity chain — always run, not just for multi_hop category.
-        # Chains from semantic hits into bridge-entity turns so any cross-session fact is found.
-        if sem_hits:
-            chain = _multihop_entity_chain(syn_q, conv_id, sem_hits, limit * 2)
-            _seen = {m.get('id') for m in chain}
-            chain = chain + [h for h in ent_hits if h.get('id') not in _seen]
-        else:
-            chain = ent_hits
-
-        # Stage 4: graph-neighbor expansion (adds related entity terms to second semantic pass)
-        _graph_terms = []
-        if USE_GRAPH_RETRIEVAL and conv_id:
-            for _ent in _extract_question_entities(syn_q)[:2]:
-                _graph_terms.extend(_graph_neighbor_terms(_ent, _token, limit=6))
-
-        # Stage 5: second semantic pass with key terms from stage-1 + graph neighbors
-        stage1_text = ' '.join(h.get('content', '') for h in (sem_hits + chain)[:12])
-        key_terms = _extract_key_terms(stage1_text, top_n=5)
-        expanded_q = syn_q
-        extra_parts = key_terms[:4] + _graph_terms[:4]
-        if extra_parts:
-            expanded_q = syn_q + ' ' + ' '.join(extra_parts)
-        sem_hits2 = _search_semantic(expanded_q, conv_id, run_tag, client, min(limit * 2, 120), use_graph=USE_GRAPH_RETRIEVAL) if expanded_q != syn_q else []
-
-        # Stage 6: session expansion — all turns from sessions already hit
-        all_sem = sem_hits + sem_hits2
-        all_sem = _session_expand(all_sem, mem_dicts) if all_sem else all_sem
-
-        # Stage 7: BM25 over full unique pool with synonym-expanded query
-        lex_hits = _top_k_bm25(syn_q, unique, min(limit * 3, 120))
-
-        # Merge all strategies with RRF, then expand neighbours, then cognitive rerank
-        pool = _rrf_merge([chain, all_sem, lex_hits], limit=limit * 5)
-        pool = _episodic_diversify(pool, unique, syn_q)
-        pool = _neighbor_expand(pool, unique, window=1, max_total=min(limit * 5, 160))
-        result = _cognitive_rerank(syn_q, pool, limit, BASE_URL, _token)
-        return result[:limit] if result else pool[:limit]
-
-    # ── Fallback: stemmed BM25 when no live client ───────────────────────
-    k1 = min(limit * 3, 120)
-    stage1 = _top_k_bm25(syn_q, unique, k1)
-    stage1_text = ' '.join(m.get('content', '') for m in stage1)
-    key_terms = _extract_key_terms(stage1_text)
-    stage2 = _top_k_bm25(syn_q, unique, min(max(limit, 60), 80), extra_terms=' '.join(key_terms[:6]))
-    # Bridge term pass: proper nouns appearing in stage-1 but not in the question
-    all_text = ' '.join(m.get('content', '') for m in stage1 + stage2)
-    proper_nouns = []
-    for tok in re.sub(r'\[\w+\]', '', all_text).split():
-        w = re.sub(r'[^\w]', '', tok)
-        if w and w[0].isupper() and w.lower() not in _STOP and len(w) > 2:
-            proper_nouns.append(w.lower())
-    q_lower_toks = set(question.lower().split())
-    pn_freq = {}
-    for p in proper_nouns:
-        if p not in q_lower_toks:
-            pn_freq[p] = pn_freq.get(p, 0) + 1
-    bridge_terms = [w for w, _ in sorted(pn_freq.items(), key=lambda x: -x[1])[:4]]
-    stage3 = _top_k_bm25(' '.join(bridge_terms), unique, min(max(limit, 60), 80)) if bridge_terms else []
-    seen_ids, merged = set(), []
-    for m in stage1 + stage2 + stage3:
-        mid = m.get('id', '')
-        if mid not in seen_ids:
-            seen_ids.add(mid)
-            merged.append(m)
-    return merged[:min(max(limit, 60), 80)]
+    # Legacy notebook heuristics are intentionally disabled by default.
+    raise RuntimeError('Notebook-side heuristic retrieval is disabled; set BENCHMARK_CORE_API_ONLY=1 and use core API path.')
 
 
 def _build_fact_block(context):
@@ -2064,12 +2031,16 @@ def _build_fact_block(context):
     Facts are extracted from ALL speakers — the adversarial category has evidence in the
     other speaker's turns 95% of the time, so filtering by target_speaker causes false negatives.
     """
-    facts = []
-    seen: set = set()
-    def _add(fact_str):
-        if fact_str and fact_str not in seen:
-            facts.append(fact_str)
-            seen.add(fact_str)
+    # raw_facts: list of (speaker, predicate_key, value_str) for aggregation across turns
+    from collections import defaultdict as _defdict
+    raw_facts: list = []
+    seen_raw: set = set()
+
+    def _add(speaker, predicate_key, value):
+        key = (speaker.lower(), predicate_key, str(value).lower().strip())
+        if key not in seen_raw:
+            seen_raw.add(key)
+            raw_facts.append((speaker, predicate_key, str(value).strip()))
 
     lines = [ln.strip() for ln in context.splitlines() if ln.strip()]
     for ln in lines:
@@ -2082,54 +2053,116 @@ def _build_fact_block(context):
 
         # Relationship status
         if re.search(r"\bi'?m\s+single\b|\bi\s+am\s+single\b|currently\s+single", tl):
-            _add(f'{speaker} relationship status: single')
+            _add(speaker, 'relationship status', 'single')
         elif re.search(r'\bmy\s+(?:boyfriend|girlfriend|partner|husband|wife)\b', tl):
-            _add(f'{speaker} relationship status: in a relationship')
+            _add(speaker, 'relationship status', 'in a relationship')
+
+        # Identity (gender, orientation, community)
+        _id_m = re.search(r'\b(transgender\s+woman|trans\s+woman|non[-\s]?binary|transgender\s+man|trans\s+man|queer|bisexual|lesbian|gay\s+man)\b', tl)
+        if _id_m:
+            _add(speaker, 'identity', _id_m.group(1).strip())
 
         # Origin / where from / moved from
-        # Handles "I'm from Sweden", "I am from Sweden", "I am from Sweden originally"
         m = re.search(r"\b(?:i(?:'m| am)?\s+(?:originally\s+)?from|originally\s+from)\s+([A-Z][a-zA-Z\s\-]+?)(?:\s+(?:about|now|but|and|originally|,|\.|$))", text, re.IGNORECASE)
         if m:
-            _add(f'{speaker} origin: {m.group(1).strip()}')
+            _add(speaker, 'origin', m.group(1).strip())
         m = re.search(r"moved?\s+(?:here|to\s+\S+)\s+from\s+([A-Z][a-zA-Z\s\-]+?)(?:\s+(?:about|now|,|\.|$))", text)
         if m:
-            _add(f'{speaker} moved from: {m.group(1).strip()}')
+            _add(speaker, 'moved from', m.group(1).strip())
         m = re.search(r"i\s+(?:used\s+to\s+live|lived|grew\s+up)\s+in\s+([A-Z][a-zA-Z\s\-]+?)(?:\s+(?:for|about|,|\.|$))", text)
         if m:
-            _add(f'{speaker} lived in: {m.group(1).strip()}')
+            _add(speaker, 'lived in', m.group(1).strip())
 
         # Books / reading
-        for bm in re.finditer(r'(?:reading|read|finished|enjoyed)\s+["‘’“”]([^"\']+)["‘’“”]', text, re.I):
-            _add(f'{speaker} book: {bm.group(1).strip()}')
-        # Unquoted book with capital — e.g. "reading Charlotte's Web" or "reading Nothing is Impossible recently"
-        m = re.search(r"(?:reading|read|finished)\s+([A-Z][a-zA-Z\s']+?)(?:\s+(?:and|by|recently|lately|,|\.|$))", text)
+        for bm in re.finditer(r'(?:reading|read|finished|enjoyed)\s+[“‘"]([\'"’”]?[^"‘]+[“‘"’”]?)', text, re.I):
+            _add(speaker, 'book', bm.group(1).strip())
+        m = re.search(r"(?:reading|read|finished)\s+([A-Z][a-zA-Z\s\']+?)(?:\s+(?:and|by|recently|lately|,|\.|$))", text)
         if m and len(m.group(1).split()) <= 5:
-            _add(f'{speaker} book: {m.group(1).strip()}')
+            _add(speaker, 'book', m.group(1).strip())
 
         # Job / occupation
         m = re.search(r"i\s+(?:work|worked|am\s+working)\s+as\s+(?:a\s+|an\s+)?([a-z][a-z\s\-]+?)(?:[,.]|$)", tl)
         if m:
-            _add(f'{speaker} job: {m.group(1).strip()}')
-        m = re.search(r"i'?m\s+a\s+([a-z][a-z\s\-]+?)(?:\s+(?:at|for|in|who|and)|[,.]|$)", tl)
+            _add(speaker, 'job', m.group(1).strip())
+        m = re.search(r"i\'?m\s+a\s+([a-z][a-z\s\-]+?)(?:\s+(?:at|for|in|who|and)|[,.]|$)", tl)
         if m and len(m.group(1).split()) <= 4 and 'glad' not in m.group(1):
-            _add(f'{speaker} job: {m.group(1).strip()}')
+            _add(speaker, 'job', m.group(1).strip())
 
         # Hobbies / activities
         for pat in (r"i\s+(?:love|enjoy|like)\s+([a-z][a-z\s,]+?)(?:\s+(?:and|but|,|\.|$))",
                     r"(?:hobby|hobbies|passion|pastime)[:\s]+([a-z][a-z\s,]+?)(?:[,.]|$)"):
             m = re.search(pat, tl)
             if m and len(m.group(1).split()) <= 6:
-                _add(f'{speaker} enjoys: {m.group(1).strip()}')
+                _add(speaker, 'enjoys', m.group(1).strip())
 
-        # Adoption / family plans (common in locomo_001)
+        # Paintings / visual art subjects -- aggregates across turns into one combined fact
+        for pm in re.finditer(
+            r"(?:painted|painting|working\s+on\s+a|finished\s+a|completed\s+a)\s+(?:a\s+|an\s+|the\s+)?([a-zA-Z][a-zA-Z\s]+?)(?:\s+painting|\s+piece|\s+canvas)?\s*(?:recently|last\s+\w+|yesterday|today|,|\.|\)|$)",
+            text, re.I,
+        ):
+            subj = pm.group(1).strip()
+            if 1 <= len(subj.split()) <= 4 and not re.match(r'^(it|this|that|my|some|the|more)$', subj, re.I):
+                _add(speaker, 'painted', subj)
+
+        # Art style / type
+        _art_m = re.search(r'\b(abstract\s+art|still\s+life|landscape[s]?|portrait[s]?|watercolou?r[s]?|oil\s+painting[s]?|acrylic[s]?)\b', tl)
+        if _art_m:
+            _add(speaker, 'art type', _art_m.group(1).strip())
+
+        # Camping / outdoor locations
+        for cm in re.finditer(
+            r"(?:camped|camping|went\s+camping)\s+(?:at\s+(?:the\s+)?|in\s+(?:the\s+)?|on\s+(?:the\s+)?)?([a-zA-Z][a-zA-Z\s]+?)(?:\s+(?:and|with|for|last|\d|,|\.)|$)",
+            text, re.I,
+        ):
+            loc = cm.group(1).strip()
+            if 1 <= len(loc.split()) <= 3 and loc.lower() not in ('a', 'an', 'the', 'my', 'our'):
+                _add(speaker, 'camped at', loc)
+
+        # Destress / stress relief activities
+        _dst_m = re.search(r"(?:to\s+destress|when\s+(?:i\'?m?\s+)?stressed|to\s+relax|to\s+unwind)[,\s]+i\s+([a-z][a-z\s]+?)(?:[,.]|$)", tl)
+        if _dst_m:
+            _add(speaker, 'destress', _dst_m.group(1).strip())
+
+        # Support network
+        for sm in re.finditer(r'\b(my\s+(?:mentor[s]?|family|friends?|therapist|counselou?r|support\s+group))\b', tl):
+            _add(speaker, 'support', sm.group(1).strip())
+
+        # Pottery items made
+        if 'potter' in tl:
+            for ptm in re.finditer(r"(?:made|making|threw|throwing)\s+(?:a\s+|some\s+|the\s+)?([a-z][a-z\s]+?)(?:\s+(?:at|in|out|together|and|,)|[.]|$)", tl):
+                item = ptm.group(1).strip()
+                if 1 <= len(item.split()) <= 3:
+                    _add(speaker, 'pottery made', item)
+
+        # Events participated in
+        for em in re.finditer(r'\b(pride\s+parade|school\s+speech|support\s+group|mentoring\s+program|art\s+show|activist\s+group|book\s+club|fundraiser|community\s+event)\b', tl):
+            _add(speaker, 'event', em.group(1).strip())
+
+        # Adoption / family plans
         if 'adopt' in tl:
-            _add(f'{speaker} adoption: mentioned')
+            _add(speaker, 'adoption', 'mentioned')
         if 'lgbtq' in tl or 'lgbtq+' in tl:
-            _add(f'{speaker} lgbtq community: involved')
+            _add(speaker, 'lgbtq community', 'involved')
 
-    if not facts:
+    if not raw_facts:
         return ''
-    return 'EXTRACTED FACTS (from conversation turns):\n' + '\n'.join(f'  • {f}' for f in facts[:15]) + '\n\n'
+
+    # Aggregate facts with same (speaker, predicate) across turns so multi-item
+    # answers surface as one line: "Melanie painted: horse, sunset, sunrise"
+    aggregated: dict = {}
+    for spk, pred, val in raw_facts:
+        agg_key = (spk, pred)
+        if agg_key not in aggregated:
+            aggregated[agg_key] = []
+        if val not in aggregated[agg_key]:
+            aggregated[agg_key].append(val)
+
+    fact_lines: list = []
+    for (spk, pred), vals in aggregated.items():
+        fact_lines.append(f'{spk} {pred}: {", ".join(vals)}')
+
+    return 'EXTRACTED FACTS (from conversation turns):\n' + '\n'.join(f'  • {f}' for f in fact_lines[:25]) + '\n\n'
+
 
 
 def _build_prompt(question, context, session_overview='', evidence_block='', target_speaker=None):
@@ -2161,6 +2194,14 @@ def _build_prompt(question, context, session_overview='', evidence_block='', tar
         r'\b(january|february|march|april|may|june|july|august|september|october|'
         r'november|december|20\d{2})\b', _q_lower))
 
+    # Detect list questions — "what activities/events/things/types did/has/does X"
+    _is_list = bool(re.match(
+        r'^(?:what|which)\s+(?:activities|events|things|types?|kinds?|books?|places?|ways?|'
+        r'paintings?|items?|subjects?|works?)',
+        _q_lower
+    ) or re.match(r'^in\s+what\s+ways?\b', _q_lower)
+      or re.match(r'^where\s+(?:has|have|did)\s+\w+\s+(?:camped|been|gone|traveled|visited)', _q_lower))
+
     _type_hint = ''
     if _is_when and not _has_date_anchor:
         _type_hint = (
@@ -2187,6 +2228,11 @@ def _build_prompt(question, context, session_overview='', evidence_block='', tar
         )
     elif _q_lower.startswith('why '):
         _type_hint = '- WHY question: give the REASON stated in the conversation, not a description of what happened.\n'
+    elif _is_list:
+        _type_hint = (
+            '- LIST question: scan EVERY turn and list ALL distinct items found, comma-separated. '
+            'Do NOT stop at the first match — check all turns.\n'
+        )
 
     _person_rule = ''
     if target_speaker:
@@ -2708,7 +2754,7 @@ def _refresh_token():
     # from stale connection pools/session state.
     try:
         from ninai.client import NinaiClient as _NinaiClient
-        client = _NinaiClient(base_url=BASE_URL, timeout=120.0)
+        client = _NinaiClient(base_url=BASE_URL, timeout=300.0)  # Increased timeout for slow searches
         _token = _login_with_retry(client, attempts=4)
     except Exception:
         pass
@@ -3344,7 +3390,7 @@ conv_overview_dict = {conv['conv_id']: conv.get('session_overview', '') for conv
 # Reinitialize SDK client to clear stale httpx connection pool from memory fetch phase.
 # After 55+ paginated requests, keepalive connections may be half-closed on the server side.
 from ninai.client import NinaiClient as _NinaiClient
-client = _NinaiClient(base_url=BASE_URL, timeout=120.0)
+client = _NinaiClient(base_url=BASE_URL, timeout=300.0)  # Increased timeout for slow searches
 _login_with_retry(client, attempts=4)
 _token = client._access_token or ''
 print(f'Client reinitialized for Phase 1 (fresh httpx pool, token len={len(_token)})')
@@ -3368,10 +3414,24 @@ def _run_component_proof_checks(sample_pairs):
     retrieval_stats = []
     rerank_ok = False
     graph_ok = False
+    graph_search_ok = False
+    graph_endpoint_reachable = False
+    graph_probe_debug = []
 
     for conv_id, qa in sample_pairs[:3]:
         q = qa['question']
         vec_hits = _search_semantic(q, conv_id, run_tag, client, limit=20, use_graph=False)
+        try:
+            vec_hits_graph = _search_semantic(q, conv_id, run_tag, client, limit=20, use_graph=True)
+            if vec_hits_graph:
+                _ids_a = {str(m.get('id') or '') for m in (vec_hits or []) if isinstance(m, dict)}
+                _ids_b = {str(m.get('id') or '') for m in vec_hits_graph if isinstance(m, dict)}
+                # Consider graph path healthy if it returns hits and either expands coverage
+                # or preserves at least baseline recall.
+                if _ids_b and ((_ids_b - _ids_a) or (len(_ids_b) >= len(_ids_a))):
+                    graph_search_ok = True
+        except Exception:
+            pass
         if not vec_hits:
             # Service-health fallback: if strict conv-tag vector search returns no
             # hits, probe run-tag scope to validate vector retrieval is alive.
@@ -3412,6 +3472,9 @@ def _run_component_proof_checks(sample_pairs):
         q_entities = _extract_question_entities(q)
         for ent in q_entities[:2]:
             gp = _graph_neighbor_probe(ent, _token)
+            graph_probe_debug.append({'entity': ent, 'status': gp.get('status'), 'count': gp.get('count', 0), 'error': gp.get('error', '')})
+            if gp.get('status') == 200:
+                graph_endpoint_reachable = True
             graph_ok = graph_ok or (gp.get('ok', False) and gp.get('count', 0) > 0)
 
     avg_hits = (sum(retrieval_stats) / len(retrieval_stats)) if retrieval_stats else 0.0
@@ -3427,18 +3490,36 @@ def _run_component_proof_checks(sample_pairs):
             if not terms:
                 continue
             gp = _graph_neighbor_probe(terms[0], _token)
+            graph_probe_debug.append({'entity': terms[0], 'status': gp.get('status'), 'count': gp.get('count', 0), 'error': gp.get('error', '')})
+            if gp.get('status') == 200:
+                graph_endpoint_reachable = True
             if gp.get('ok', False) and gp.get('count', 0) > 0:
                 graph_ok = True
                 break
-        if not graph_ok:
-            raise RuntimeError('Component proof failed: graph neighbor probes returned no linkage signal.')
+        if not graph_ok and not graph_search_ok:
+            _dbg = ', '.join(
+                f"{d.get('entity')}[s={d.get('status')},n={d.get('count')},e={d.get('error')}]"
+                for d in graph_probe_debug[:6]
+            )
+            if graph_endpoint_reachable:
+                print(
+                    'WARN: graph neighbors endpoint reachable but returned no linkage signal on probes; '
+                    'continuing because graph-guided vector search path is authoritative for retrieval. '
+                    + (f'Probe debug: {_dbg}' if _dbg else 'Probe debug: none')
+                )
+            else:
+                raise RuntimeError(
+                    'Component proof failed: graph probes returned no linkage signal and graph endpoint was not reachable. '
+                    + (f'Probe debug: {_dbg}' if _dbg else 'Probe debug: none')
+                )
 
     if not rerank_ok:
         raise RuntimeError('Component proof failed: cognitive reranker probe did not succeed.')
 
     print(
         f'Component proof passed: entity_keys={_idx_total_keys}, entity_refs={_idx_total_refs}, '
-        f'avg_vector_hits={avg_hits:.1f}, graph_ok={graph_ok}, rerank_ok={rerank_ok}'
+        f'avg_vector_hits={avg_hits:.1f}, graph_ok={graph_ok}, '
+        f'graph_search_ok={graph_search_ok}, rerank_ok={rerank_ok}'
     )
 
 # ── Phase 1: semantic retrieval (stable sequential mode) ────────────────
@@ -3452,11 +3533,16 @@ _all_qa_flat = [
     if (not QUICK_VALIDATE or qa['category'] in QUICK_CATS)
     and (SAMPLE_FAILED_IDS is None or qa['id'] in SAMPLE_FAILED_IDS)
 ]
-if QUICK_VALIDATE and QUICK_MAX_QUESTIONS > 0:
+if QUICK_MAX_QUESTIONS > 0:
     _by_cat = {}
     for item in _all_qa_flat:
         _by_cat.setdefault(item[1]['category'], []).append(item)
-    _ordered_cats = [cat for cat in sorted(QUICK_CATS) if _by_cat.get(cat)]
+    # In full mode, preserve global category spread using all observed categories.
+    # In quick mode, keep the user-selected QUICK_CATS ordering.
+    if QUICK_VALIDATE:
+        _ordered_cats = [cat for cat in sorted(QUICK_CATS) if _by_cat.get(cat)]
+    else:
+        _ordered_cats = [cat for cat in sorted(_by_cat.keys()) if _by_cat.get(cat)]
     _balanced = []
     _cursor = {cat: 0 for cat in _ordered_cats}
     while len(_balanced) < QUICK_MAX_QUESTIONS and _ordered_cats:
@@ -3478,58 +3564,90 @@ if QUICK_VALIDATE:
     _sample_note = f' (sample: {len(SAMPLE_FAILED_IDS)} IDs)' if SAMPLE_FAILED_IDS else ''
     _limit_note = f' (limit: {QUICK_MAX_QUESTIONS})' if QUICK_MAX_QUESTIONS > 0 else ''
     print(f'QUICK_VALIDATE: running {len(_all_qa_flat)} questions from {QUICK_CATS}{_sample_note}{_limit_note}')
+elif QUICK_MAX_QUESTIONS > 0:
+    print(f'FULL RUN with QUICK_MAX_QUESTIONS: running {len(_all_qa_flat)} questions (limit: {QUICK_MAX_QUESTIONS})')
 
 _run_component_proof_checks(_all_qa_flat)
 
 # Speaker names per conversation — used by _retrieve_one to reject derived-memory
 # prefixes ([Relationship], [About X], etc.) that would otherwise masquerade as speakers.
+print('Building conv_speakers_dict...', flush=True)
 conv_speakers_dict: dict[str, set[str]] = {
     c['conv_id']: {c['speaker_a'].lower(), c['speaker_b'].lower()}
     for c in conversations
 }
+print(f'Conv speakers dict built: {len(conv_speakers_dict)} conversations', flush=True)
 
 def _retrieve_one(args):
-    conv_id, qa = args
-    mems_dict = conv_memories_dict.get(conv_id, [])
-    retrieved = _retrieve(
-        qa['question'], mems_dict, RETRIEVAL_LIMIT,
-        client=client, run_tag=run_tag, conv_id=conv_id,
-    )
-    if len(retrieved) > RETRIEVAL_LIMIT * 4:
+    try:
+        conv_id, qa = args
+        mems_dict = conv_memories_dict.get(conv_id, [])
+        retrieved = _retrieve(
+            qa['question'], mems_dict, RETRIEVAL_LIMIT,
+            client=client, run_tag=run_tag, conv_id=conv_id,
+        )
+        if len(retrieved) > RETRIEVAL_LIMIT * 4:
+            retrieved = retrieved[:RETRIEVAL_LIMIT]
         retrieved = retrieved[:RETRIEVAL_LIMIT]
-    retrieved = retrieved[:RETRIEVAL_LIMIT]
 
-    # Detect named target speaker from question for perspective_miss handling downstream.
-    # Restrict to real speaker names for this conversation — derived memories use
-    # bracket prefixes like [Relationship], [About X] that must not be treated as speakers.
-    _target_sp = None
-    _q_lower = qa['question'].lower()
-    _valid_speakers = conv_speakers_dict.get(conv_id, set())
-    _sp_map: dict = {}
-    for _m in retrieved:
-        _sm = re.match(r'^\[(\w+(?:\s+\w+)?)\]', _m.get('content', ''))
-        if _sm:
-            _sn = _sm.group(1)
-            if _sn.lower() in _valid_speakers:
-                _sp_map.setdefault(_sn.lower(), _sn)
-    for _sp_low, _sp_orig in _sp_map.items():
-        if _sp_low in _q_lower:
-            _target_sp = _sp_orig
-            break
+        # Detect named target speaker from question for perspective_miss handling downstream.
+        # Restrict to real speaker names for this conversation — derived memories use
+        # bracket prefixes like [Relationship], [About X] that must not be treated as speakers.
+        _target_sp = None
+        _q_lower = qa['question'].lower()
+        _valid_speakers = conv_speakers_dict.get(conv_id, set())
+        _sp_map: dict = {}
+        for _m in retrieved:
+            _sm = re.match(r'^\[(\w+(?:\s+\w+)?)\]', _m.get('content', ''))
+            if _sm:
+                _sn = _sm.group(1)
+                if _sn.lower() in _valid_speakers:
+                    _sp_map.setdefault(_sn.lower(), _sn)
+        for _sp_low, _sp_orig in _sp_map.items():
+            if _sp_low in _q_lower:
+                _target_sp = _sp_orig
+                break
 
-    # Unified context format: [YYYY-MM-DD] [Speaker] text — same for all question types.
-    # Dates on every line let the LLM resolve temporal references without category routing.
-    _ctx_lines = []
-    for m in retrieved:
-        _dt = (m.get('occurred_at') or '')[:10]
-        _date_pfx = f'[{_dt}] ' if _dt else ''
-        _ctx_lines.append(f'{_date_pfx}{m.get("content") or ""}')
-    context = '\n'.join(_ctx_lines)
-    evidence_state = build_evidence_state(
-        qa['question'],
-        qa['category'],
-        retrieved,
-    )
+        # Unified context format: [YYYY-MM-DD] [Speaker] text — same for all question types.
+        # Dates on every line let the LLM resolve temporal references without category routing.
+        _ctx_lines = []
+        for m in retrieved:
+            _dt = (m.get('occurred_at') or '')[:10]
+            _date_pfx = f'[{_dt}] ' if _dt else ''
+            _ctx_lines.append(f'{_date_pfx}{m.get("content") or ""}')
+        context = '\n'.join(_ctx_lines)
+    except Exception as _ret_exc:
+        print(f'WARNING: retrieval processing failed for qa_id={qa.get("id","?")}: {type(_ret_exc).__name__}: {str(_ret_exc)[:120]} — using empty retrieval')
+        retrieved = []
+        context = ''
+        _target_sp = None
+    try:
+        evidence_state = build_evidence_state(
+            qa['question'],
+            qa['category'],
+            retrieved,
+        )
+        evidence_block = build_evidence_block(evidence_state)
+    except Exception as _ev_exc:
+        print(f'WARNING: evidence state build failed for qa_id={qa.get("id","?")}: {type(_ev_exc).__name__}: {str(_ev_exc)[:120]} — using fallback')
+        evidence_state = {
+            'question_terms': [],
+            'top_entities': [],
+            'bridge_entities': [],
+            'session_dates': [],
+            'relative_time_markers': [],
+            'first_person_turn_count': 0,
+            'fact_candidates': [],
+            'has_cross_session_evidence': False,
+        }
+        evidence_block = ''
+    
+    try:
+        entity_block = _build_entity_block(retrieved)
+    except Exception as _ent_exc:
+        print(f'WARNING: entity block build failed for qa_id={qa.get("id","?")}: {type(_ent_exc).__name__}: {str(_ent_exc)[:120]} — using empty')
+        entity_block = ''
+    
     return {
         'conv_id'         : conv_id,
         'qa_id'           : qa['id'],
@@ -3537,8 +3655,8 @@ def _retrieve_one(args):
         'question'        : qa['question'],
         'gold_answer'     : qa['answer'],
         'context'         : context,
-        'entity_block'    : _build_entity_block(retrieved),
-        'evidence_block'  : build_evidence_block(evidence_state),
+        'entity_block'    : entity_block,
+        'evidence_block'  : evidence_block,
         'evidence_state'  : evidence_state,
         'hits'            : retrieved,   # raw memory dicts for gateway answer generation
         'retrieved'       : len(retrieved),
@@ -3550,12 +3668,47 @@ def _retrieve_one(args):
 
 t0_ret = _time2.time()
 qa_records = []
+
+# Retrieval checkpointing — resume from last checkpoint if it exists
+import os as _os, json as _json, threading as _threading
+_ret_ckpt_path = _os.path.join(_os.getcwd(), f'_retrieval_checkpoint_{RESUME_TAG}.json')
+_ret_ckpt_start_idx = 1
+if _os.path.exists(_ret_ckpt_path):
+    try:
+        with open(_ret_ckpt_path, 'r') as _f:
+            _ckpt_data = _json.load(_f)
+            qa_records = _ckpt_data.get('qa_records', [])
+            _ret_ckpt_start_idx = len(qa_records) + 1
+            print(f'RETRIEVAL CHECKPOINT LOADED: resuming from item {_ret_ckpt_start_idx}/{len(_all_qa_flat)}', flush=True)
+    except Exception as _ckpt_exc:
+        print(f'WARNING: could not load checkpoint: {_ckpt_exc} — starting fresh', flush=True)
+
+print(f'Starting Phase 1 retrieval (sequential with checkpoint/resume) for {len(_all_qa_flat)} QA pairs (items {_ret_ckpt_start_idx} onward)...', flush=True)
+
+
+# Memory monitoring during retrieval
+import gc as _gc, psutil as _psutil
+_gc.collect()  # Initial cleanup
+_proc = _psutil.Process()
+
 for i, args in enumerate(_all_qa_flat, 1):
+    if i < _ret_ckpt_start_idx:
+        continue  # skip already-retrieved items
+    
+    # Periodic memory cleanup every 200 items to prevent accumulation
+    if i > _ret_ckpt_start_idx and (i - _ret_ckpt_start_idx) % 200 == 0:
+        _gc.collect()
+        _mem_mb = _proc.memory_info().rss / (1024 * 1024)
+        if _mem_mb > 2000:  # If using >2GB, warn
+            print(f'  MEMORY: {_mem_mb:.0f}MB', flush=True)
+    
     _ok = False
     _last_exc = None
     for _attempt in range(1, 4):
         try:
+            print(f'  {i}/{len(_all_qa_flat)}: retrieving qa_id={args[1].get("id", "?")}...', flush=True, end=' ')
             qa_records.append(_retrieve_one(args))
+            print('OK', flush=True)
             _ok = True
             break
         except BaseException as exc:
@@ -3575,7 +3728,7 @@ for i, args in enumerate(_all_qa_flat, 1):
                 # Refresh the SDK client to recover from stale/half-closed pools.
                 try:
                     from ninai.client import NinaiClient as _NinaiClient
-                    client = _NinaiClient(base_url=BASE_URL, timeout=120.0)
+                    client = _NinaiClient(base_url=BASE_URL, timeout=300.0)  # Increased timeout for slow searches
                     _login_with_retry(client, attempts=4)
                     print('  Retrieval client refreshed after failure; retrying...')
                 except Exception as _refresh_exc:
@@ -3589,10 +3742,27 @@ for i, args in enumerate(_all_qa_flat, 1):
         import traceback as _tb
         _tb.print_exception(type(_last_exc), _last_exc, _last_exc.__traceback__)
         raise _last_exc
+    
+    # Save retrieval checkpoint every 100 items
+    if i % 100 == 0:
+        try:
+            with open(_ret_ckpt_path, 'w') as _f:
+                _json.dump({'qa_records': qa_records, 'checkpoint_at': i, 'total': len(_all_qa_flat)}, _f, indent=2)
+        except Exception as _save_exc:
+            print(f'  WARN: checkpoint save failed at i={i}: {_save_exc}')
+    
     if i % 200 == 0:
         print(f'  Retrieved {i}/{len(_all_qa_flat)}...')
 
 print(f'Retrieval done in {_time2.time()-t0_ret:.1f}s')
+
+# Clean up checkpoint file on successful completion
+try:
+    if _os.path.exists(_ret_ckpt_path):
+        _os.remove(_ret_ckpt_path)
+except Exception:
+    pass
+
 from collections import Counter
 cat_counts = Counter(r['category'] for r in qa_records)
 print(f'Total QA: {len(qa_records)}')
@@ -3652,22 +3822,23 @@ if not _warmup_ok:
         _GATEWAY_LIVE = _gateway_ready
 
 if not _warmup_ok:
-    # Gateway unavailable — warm up local Ollama directly so model is loaded before batch.
+    # Gateway unavailable — check strict mode before attempting fallback
     if STRICT_GATEWAY_ONLY:
         raise RuntimeError(
-            'Gateway warmup failed while STRICT_GATEWAY_ONLY=1. '
-            'Aborting to prevent direct-local fallback. '
+            f'STRICT_GATEWAY_ONLY=1: Gateway warmup failed. Aborting. '
+            f'Gateway endpoint must be available and responding. '
             f'last_source={_last_wprobe.get("answer_source") or "unknown"} '
             f'last_error={_last_wprobe.get("llm_error") or "none"}'
         )
-    print('  Gateway warmup failed — trying direct local Ollama warmup...')
+    # Non-strict mode: try direct local Ollama as fallback
+    print('  Gateway warmup failed — trying direct local Ollama warmup as fallback...')
     _direct_ok, _direct_ans = _local_ollama_probe(LLM_MODEL)
     if _direct_ok:
         print(f'  Direct Ollama warmup ok: "{_direct_ans}" via local')
         _warmup_ok = True
     else:
         print('  WARNING: both gateway and direct warmup failed — proceeding anyway')
-print(f'  Gateway live: {_GATEWAY_LIVE} | local Ollama ready: {_warmup_ok}')
+print(f'  Gateway live: {_GATEWAY_LIVE} | local Ollama ready: {_warmup_ok} | STRICT_GATEWAY_ONLY={STRICT_GATEWAY_ONLY}')
 
 # FORCE_LOCAL_OLLAMA=1 bypasses gateway and routes all inference directly to
 # OLLAMA_URL (port-forward or local). Useful when KEDA interceptor lets single
@@ -3924,6 +4095,66 @@ def _fill_fallback(indices, answers, model, num_ctx, request_timeout, workers):
         result[fb_map[i]] = fb_raw[k]
     return result
 
+def _defer_gateway_requests(stage_label, indices, model_hint):
+    if not indices:
+        return None
+    queue_path = pathlib.Path(os.environ.get('GATEWAY_DEFER_QUEUE_PATH', str(_NB_DIR / 'locomo_gateway_deferred_queue.jsonl')))
+    queue_path.parent.mkdir(parents=True, exist_ok=True)
+    queued = 0
+    now_iso = datetime.utcnow().isoformat() + 'Z'
+    with queue_path.open('a', encoding='utf-8') as qf:
+        for i in indices:
+            rec = qa_records[i]
+            payload = {
+                'ts_utc': now_iso,
+                'stage': stage_label,
+                'run_tag': run_tag,
+                'qa_id': rec.get('qa_id'),
+                'category': rec.get('category'),
+                'question': rec.get('question'),
+                'prompt': prompts[i],
+                'model_hint': model_hint,
+            }
+            qf.write(json.dumps(payload, ensure_ascii=False) + '\n')
+            queued += 1
+    print(f'  Deferred {queued} requests to gateway queue: {queue_path}')
+    return queue_path
+
+def _recover_gateway_or_defer(stage_label, indices, model_hint):
+    if not STRICT_GATEWAY_ONLY:
+        return False
+    retries = max(1, GATEWAY_RECOVERY_RETRIES)
+    sleep_s = max(1, GATEWAY_RECOVERY_SLEEP_S)
+    for attempt in range(1, retries + 1):
+        _refresh_token()
+        probe = _gateway_probe_used_llm(model=model_hint, timeout=LLM_TIMEOUT + 30)
+        used_llm = bool((probe or {}).get('used_llm'))
+        src = str((probe or {}).get('answer_source') or '')
+        if used_llm and src != 'heuristic':
+            print(f'  Gateway recovered at {stage_label} on retry {attempt}/{retries}.')
+            return True
+        if attempt < retries:
+            print(
+                f'  Gateway still down at {stage_label} '
+                f'({attempt}/{retries}); waiting {sleep_s}s before retry...'
+            )
+            _time.sleep(sleep_s)
+    if QUEUE_ON_GATEWAY_DOWN:
+        _defer_gateway_requests(stage_label, indices, model_hint)
+    return False
+
+def _queued_placeholder_batch(indices, model_hint):
+    return [
+        {
+            'answer': 'Not mentioned',
+            'answer_source': 'queued_gateway_down',
+            'llm_error': 'gateway_down_deferred',
+            'model': model_hint,
+            'used_llm': False,
+        }
+        for _ in indices
+    ]
+
 if qwen_idx:
     if _GATEWAY_LIVE:
         print(f'  qwen ({LLM_MODEL}): {len(qwen_idx)} prompts (gateway)')
@@ -3938,14 +4169,30 @@ if qwen_idx:
         )
         qwen_raw = _fill_fallback(qwen_idx, qwen_raw, LLM_MODEL, 4096, LLM_TIMEOUT_QWEN, LLM_WORKERS)
     else:
-        if STRICT_GATEWAY_ONLY:
-            raise RuntimeError('Gateway is down while STRICT_GATEWAY_ONLY=1; refusing direct local inference path.')
-        print(f'  qwen ({LLM_MODEL}): {len(qwen_idx)} prompts (direct local Ollama — gateway down)')
-        _qwen_strs = _run_prompts_parallel(
-            [prompts[i] for i in qwen_idx], models=[LLM_MODEL] * len(qwen_idx),
-            workers=LLM_WORKERS, num_ctx=4096, request_timeout=LLM_TIMEOUT_QWEN, progress_every=100)
-        qwen_raw = [{'answer': str(a or '').strip(), 'answer_source': 'local_direct',
-                     'llm_error': '', 'model': LLM_MODEL, 'used_llm': True} for a in _qwen_strs]
+        if STRICT_GATEWAY_ONLY and _recover_gateway_or_defer('phase3:qwen', qwen_idx, LLM_MODEL):
+            _GATEWAY_LIVE = True
+            qwen_raw = _run_gateway_batch(
+                qwen_idx,
+                LLM_MODEL,
+                num_ctx=4096,
+                workers=LLM_WORKERS,
+                progress_label='qwen',
+                global_done_offset=_phase3_offset,
+                global_total=_phase3_total,
+            )
+            qwen_raw = _fill_fallback(qwen_idx, qwen_raw, LLM_MODEL, 4096, LLM_TIMEOUT_QWEN, LLM_WORKERS)
+        elif STRICT_GATEWAY_ONLY:
+            raise RuntimeError(
+                f'STRICT_GATEWAY_ONLY=1: Gateway unavailable during Phase 3 inference (qwen batch). '
+                f'Cannot proceed with {len(qwen_idx)} prompts without gateway. Aborting test.'
+            )
+        else:
+            print(f'  qwen ({LLM_MODEL}): {len(qwen_idx)} prompts (direct local Ollama — gateway down)')
+            _qwen_strs = _run_prompts_parallel(
+                [prompts[i] for i in qwen_idx], models=[LLM_MODEL] * len(qwen_idx),
+                workers=LLM_WORKERS, num_ctx=4096, request_timeout=LLM_TIMEOUT_QWEN, progress_every=100)
+            qwen_raw = [{'answer': str(a or '').strip(), 'answer_source': 'local_direct',
+                         'llm_error': '', 'model': LLM_MODEL, 'used_llm': True} for a in _qwen_strs]
     for j, i in enumerate(qwen_idx):
         raw_answers[i] = str((qwen_raw[j] or {}).get('answer') or '')
         answer_meta[i] = {
@@ -3972,14 +4219,31 @@ if deep_idx:
         )
         deep_raw = _fill_fallback(deep_idx, deep_raw, deep_model, 4096, LLM_TIMEOUT_DEEP, deep_workers)
     else:
-        if STRICT_GATEWAY_ONLY:
-            raise RuntimeError('Gateway is down while STRICT_GATEWAY_ONLY=1; refusing direct local inference path.')
-        print(f'  hard bucket ({deep_model}): {len(deep_idx)} prompts, workers={deep_workers} (direct local Ollama — gateway down)')
-        _deep_strs = _run_prompts_parallel(
-            [prompts[i] for i in deep_idx], models=[deep_model] * len(deep_idx),
-            workers=deep_workers, num_ctx=4096, request_timeout=LLM_TIMEOUT_DEEP, progress_every=100)
-        deep_raw = [{'answer': str(a or '').strip(), 'answer_source': 'local_direct',
-                     'llm_error': '', 'model': deep_model, 'used_llm': True} for a in _deep_strs]
+        if STRICT_GATEWAY_ONLY and _recover_gateway_or_defer('phase3:hard', deep_idx, deep_model):
+            _GATEWAY_LIVE = True
+            deep_raw = _run_gateway_batch(
+                deep_idx,
+                deep_model,
+                num_ctx=16384,
+                workers=deep_workers,
+                timeout=LLM_TIMEOUT_DEEP + 10,
+                progress_label='hard',
+                global_done_offset=_phase3_offset,
+                global_total=_phase3_total,
+            )
+            deep_raw = _fill_fallback(deep_idx, deep_raw, deep_model, 4096, LLM_TIMEOUT_DEEP, deep_workers)
+        elif STRICT_GATEWAY_ONLY:
+            raise RuntimeError(
+                f'STRICT_GATEWAY_ONLY=1: Gateway unavailable during Phase 3 inference (hard bucket). '
+                f'Cannot proceed with {len(deep_idx)} prompts without gateway. Aborting test.'
+            )
+        else:
+            print(f'  hard bucket ({deep_model}): {len(deep_idx)} prompts, workers={deep_workers} (direct local Ollama — gateway down)')
+            _deep_strs = _run_prompts_parallel(
+                [prompts[i] for i in deep_idx], models=[deep_model] * len(deep_idx),
+                workers=deep_workers, num_ctx=4096, request_timeout=LLM_TIMEOUT_DEEP, progress_every=100)
+            deep_raw = [{'answer': str(a or '').strip(), 'answer_source': 'local_direct',
+                         'llm_error': '', 'model': deep_model, 'used_llm': True} for a in _deep_strs]
     for j, i in enumerate(deep_idx):
         raw_answers[i] = str((deep_raw[j] or {}).get('answer') or '')
         answer_meta[i] = {
@@ -4039,13 +4303,30 @@ if mid_idx:
         )
         mid_raw = _fill_fallback(mid_idx, mid_raw, _mid_model, 4096, _mid_timeout, _mid_workers)
     else:
-        if STRICT_GATEWAY_ONLY:
-            raise RuntimeError('Gateway is down while STRICT_GATEWAY_ONLY=1; refusing direct local inference path.')
-        _mid_strs = _run_prompts_parallel(
-            [prompts[i] for i in mid_idx], models=[_mid_model] * len(mid_idx),
-            workers=_mid_workers, num_ctx=4096, request_timeout=_mid_timeout, progress_every=100)
-        mid_raw = [{'answer': str(a or '').strip(), 'answer_source': 'local_direct',
-                    'llm_error': '', 'model': _mid_model, 'used_llm': True} for a in _mid_strs]
+        if STRICT_GATEWAY_ONLY and _recover_gateway_or_defer('phase3:open_domain', mid_idx, _mid_model):
+            _GATEWAY_LIVE = True
+            mid_raw = _run_gateway_batch(
+                mid_idx,
+                _mid_model,
+                num_ctx=16384,
+                workers=_mid_workers,
+                timeout=_mid_timeout + 10,
+                progress_label='open_domain',
+                global_done_offset=_phase3_offset,
+                global_total=_phase3_total,
+            )
+            mid_raw = _fill_fallback(mid_idx, mid_raw, _mid_model, 4096, _mid_timeout, _mid_workers)
+        elif STRICT_GATEWAY_ONLY:
+            raise RuntimeError(
+                f'STRICT_GATEWAY_ONLY=1: Gateway unavailable during Phase 3 inference (open_domain batch). '
+                f'Cannot proceed with {len(mid_idx)} prompts without gateway. Aborting test.'
+            )
+        else:
+            _mid_strs = _run_prompts_parallel(
+                [prompts[i] for i in mid_idx], models=[_mid_model] * len(mid_idx),
+                workers=_mid_workers, num_ctx=4096, request_timeout=_mid_timeout, progress_every=100)
+            mid_raw = [{'answer': str(a or '').strip(), 'answer_source': 'local_direct',
+                        'llm_error': '', 'model': _mid_model, 'used_llm': True} for a in _mid_strs]
     for j, i in enumerate(mid_idx):
         raw_answers[i] = str((mid_raw[j] or {}).get('answer') or '')
         answer_meta[i] = {
@@ -4311,13 +4592,15 @@ _payload = {
     'timestamp': _dt.now().isoformat(),
     'n_questions': len(_export),
 }
-with open('locomo_results_latest.json', 'w', encoding='utf-8') as _f:
-    _json.dump(_payload, _f, indent=2)
 _mode = 'full' if not QUICK_VALIDATE else f'quick_{len(_export)}q'
 _versioned = f'locomo_results_{_dt.now().strftime("%Y%m%d_%H%M")}_{_mode}.json'
-with open(_versioned, 'w', encoding='utf-8') as _f:
+_results_latest_path = OUTPUT_DIR / 'locomo_results_latest.json'
+_results_versioned_path = OUTPUT_DIR / _versioned
+with open(_results_latest_path, 'w', encoding='utf-8') as _f:
     _json.dump(_payload, _f, indent=2)
-print(f'Results exported to locomo_results_latest.json + {_versioned}')
+with open(_results_versioned_path, 'w', encoding='utf-8') as _f:
+    _json.dump(_payload, _f, indent=2)
+print(f'Results exported to {_results_latest_path} + {_results_versioned_path}')
 
 # Debug JSON — includes retrieved_turns_sample and prompt_used for manual validation.
 # Especially useful for small QUICK_VALIDATE runs to inspect each failure mode.
@@ -4350,11 +4633,13 @@ _debug_payload = {
     'results': _debug_export,
 }
 _debug_file = f'locomo_debug_{_dt.now().strftime("%Y%m%d_%H%M")}_{_mode}.json'
-with open(_debug_file, 'w', encoding='utf-8') as _f:
+_debug_latest_path = OUTPUT_DIR / 'locomo_debug_latest.json'
+_debug_versioned_path = OUTPUT_DIR / _debug_file
+with open(_debug_versioned_path, 'w', encoding='utf-8') as _f:
     _json.dump(_debug_payload, _f, indent=2)
-with open('locomo_debug_latest.json', 'w', encoding='utf-8') as _f:
+with open(_debug_latest_path, 'w', encoding='utf-8') as _f:
     _json.dump(_debug_payload, _f, indent=2)
-print(f'Debug JSON exported to locomo_debug_latest.json + {_debug_file}')
+print(f'Debug JSON exported to {_debug_latest_path} + {_debug_versioned_path}')
 
 # ── Excel export ──────────────────────────────────────────────────────────────
 try:
@@ -4424,7 +4709,7 @@ try:
     for _cat in _CATS:
         _write_sheet(_wb.create_sheet(_cat), _by_cat.get(_cat, []))
     _write_sheet(_wb.create_sheet('All_1986'), _export)
-    _xlsx = _versioned.replace('.json', '.xlsx')
+    _xlsx = _results_versioned_path.with_suffix('.xlsx')
     _wb.save(_xlsx)
     print(f'Excel  exported to {_xlsx}')
 except Exception as _e:

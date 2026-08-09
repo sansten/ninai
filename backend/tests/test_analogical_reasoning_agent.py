@@ -392,10 +392,10 @@ def test_validate_outputs_skips_non_success():
 
 @pytest.mark.asyncio
 @patch("app.agents.analogical_reasoning_agent.settings")
-@patch("app.agents.analogical_reasoning_agent.create_ollama_client")
+@patch("app.agents.analogical_reasoning_agent.create_llm_client")
 async def test_llm_path_success(mock_client_factory, mock_settings):
     mock_settings.AGENT_STRATEGY = "llm"
-    mock_settings.OLLAMA_MODEL = "qwen2.5:7b"
+    mock_settings.VLLM_MODEL = "qwen2.5:7b"
 
     import json
     llm_resp = {
@@ -421,10 +421,10 @@ async def test_llm_path_success(mock_client_factory, mock_settings):
 
 @pytest.mark.asyncio
 @patch("app.agents.analogical_reasoning_agent.settings")
-@patch("app.agents.analogical_reasoning_agent.create_ollama_client")
+@patch("app.agents.analogical_reasoning_agent.create_llm_client")
 async def test_llm_falls_back_on_invalid_response(mock_client_factory, mock_settings):
     mock_settings.AGENT_STRATEGY = "llm"
-    mock_settings.OLLAMA_MODEL = "qwen2.5:7b"
+    mock_settings.VLLM_MODEL = "qwen2.5:7b"
 
     mock_client = AsyncMock()
     mock_client.generate = AsyncMock(return_value={"response": "not json"})
@@ -439,10 +439,10 @@ async def test_llm_falls_back_on_invalid_response(mock_client_factory, mock_sett
 
 @pytest.mark.asyncio
 @patch("app.agents.analogical_reasoning_agent.settings")
-@patch("app.agents.analogical_reasoning_agent.create_ollama_client")
+@patch("app.agents.analogical_reasoning_agent.create_llm_client")
 async def test_llm_falls_back_on_exception(mock_client_factory, mock_settings):
     mock_settings.AGENT_STRATEGY = "llm"
-    mock_settings.OLLAMA_MODEL = "qwen2.5:7b"
+    mock_settings.VLLM_MODEL = "qwen2.5:7b"
 
     mock_client = AsyncMock()
     mock_client.generate = AsyncMock(side_effect=ConnectionError("LLM down"))

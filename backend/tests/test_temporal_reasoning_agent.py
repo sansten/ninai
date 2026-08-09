@@ -603,14 +603,14 @@ class TestTemporalReasoningAgentLLM:
         mock_client = AsyncMock()
         mock_client.complete_json = AsyncMock(return_value=llm_resp)
 
-        with patch("app.agents.temporal_reasoning_agent.create_ollama_client", return_value=mock_client):
+        with patch("app.agents.temporal_reasoning_agent.create_llm_client", return_value=mock_client):
             with patch("app.core.config.settings") as mock_settings:
                 mock_settings.AGENT_STRATEGY = "llm"
                 mock_settings.TEMPORAL_REASONING_STRATEGY = "llm"
-                mock_settings.OLLAMA_BASE_URL = "http://localhost:11434"
-                mock_settings.OLLAMA_MODEL = "llama3.1:8b"
-                mock_settings.OLLAMA_TIMEOUT_SECONDS = 5.0
-                mock_settings.OLLAMA_MAX_CONCURRENCY = 2
+                mock_settings.VLLM_BASE_URL = "http://localhost:11434"
+                mock_settings.VLLM_MODEL = "llama3.1:8b"
+                mock_settings.VLLM_TIMEOUT_SECONDS = 5.0
+                mock_settings.VLLM_MAX_CONCURRENCY = 2
                 result = await agent.run("mem-llm-1", ctx)
 
         assert result.outputs["rationale"] == "llm"
@@ -623,14 +623,14 @@ class TestTemporalReasoningAgentLLM:
         mock_client = AsyncMock()
         mock_client.complete_json = AsyncMock(return_value={"garbage": True})
 
-        with patch("app.agents.temporal_reasoning_agent.create_ollama_client", return_value=mock_client):
+        with patch("app.agents.temporal_reasoning_agent.create_llm_client", return_value=mock_client):
             with patch("app.core.config.settings") as mock_settings:
                 mock_settings.AGENT_STRATEGY = "llm"
                 mock_settings.TEMPORAL_REASONING_STRATEGY = "llm"
-                mock_settings.OLLAMA_BASE_URL = "http://localhost:11434"
-                mock_settings.OLLAMA_MODEL = "llama3.1:8b"
-                mock_settings.OLLAMA_TIMEOUT_SECONDS = 5.0
-                mock_settings.OLLAMA_MAX_CONCURRENCY = 2
+                mock_settings.VLLM_BASE_URL = "http://localhost:11434"
+                mock_settings.VLLM_MODEL = "llama3.1:8b"
+                mock_settings.VLLM_TIMEOUT_SECONDS = 5.0
+                mock_settings.VLLM_MAX_CONCURRENCY = 2
                 result = await agent.run("mem-llm-2", ctx)
 
         assert result.outputs["rationale"] == "heuristic"
@@ -643,7 +643,7 @@ class TestTemporalReasoningAgentLLM:
         mock_client = AsyncMock()
         mock_client.complete_json = AsyncMock(side_effect=RuntimeError("should not be called"))
 
-        with patch("app.agents.temporal_reasoning_agent.create_ollama_client", return_value=mock_client):
+        with patch("app.agents.temporal_reasoning_agent.create_llm_client", return_value=mock_client):
             result = await agent.run("mem-llm-3", ctx)
 
         assert result.outputs["rationale"] == "heuristic"
@@ -655,14 +655,14 @@ class TestTemporalReasoningAgentLLM:
         mock_client = AsyncMock()
         mock_client.complete_json = AsyncMock(side_effect=RuntimeError("should not be called"))
 
-        with patch("app.agents.temporal_reasoning_agent.create_ollama_client", return_value=mock_client):
+        with patch("app.agents.temporal_reasoning_agent.create_llm_client", return_value=mock_client):
             with patch("app.core.config.settings") as mock_settings:
                 mock_settings.AGENT_STRATEGY = "llm"
                 mock_settings.TEMPORAL_REASONING_STRATEGY = None
-                mock_settings.OLLAMA_BASE_URL = "http://localhost:11434"
-                mock_settings.OLLAMA_MODEL = "llama3.1:8b"
-                mock_settings.OLLAMA_TIMEOUT_SECONDS = 5.0
-                mock_settings.OLLAMA_MAX_CONCURRENCY = 2
+                mock_settings.VLLM_BASE_URL = "http://localhost:11434"
+                mock_settings.VLLM_MODEL = "llama3.1:8b"
+                mock_settings.VLLM_TIMEOUT_SECONDS = 5.0
+                mock_settings.VLLM_MAX_CONCURRENCY = 2
                 result = await agent.run("mem-llm-4", ctx)
 
         assert result.outputs["rationale"] == "heuristic"

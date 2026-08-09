@@ -1,7 +1,7 @@
 """Admin API routes"""
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.api.v1.admin.dependencies import (
@@ -30,7 +30,7 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 @router.get("/dashboard", response_model=DashboardResponse)
 async def get_dashboard(
     admin: AdminUser = Depends(get_admin_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Get admin dashboard with KPIs, service health, and recent activities.
@@ -45,9 +45,9 @@ async def get_dashboard(
     from datetime import datetime
     
     # Get KPI data using dashboard service
-    user_kpis = DashboardService.get_user_kpis(db)
-    memory_kpis = DashboardService.get_memory_kpis(db)
-    system_kpis = DashboardService.get_system_kpis(db)
+    user_kpis = await DashboardService.get_user_kpis(db)
+    memory_kpis = await DashboardService.get_memory_kpis(db)
+    system_kpis = await DashboardService.get_system_kpis(db)
     
     # Convert KPI objects to response format
     kpis_response = {
@@ -84,7 +84,7 @@ async def get_dashboard(
     }
     
     # Get service health
-    services = DashboardService.get_service_health(db)
+    services = await DashboardService.get_service_health(db)
     services_response = [
         {
             "name": svc.name,
@@ -96,7 +96,7 @@ async def get_dashboard(
     ]
     
     # Get recent activities
-    activities = DashboardService.get_recent_activities(db, limit=10)
+    activities = await DashboardService.get_recent_activities(db, limit=10)
     
     return DashboardResponse(
         timestamp=datetime.utcnow(),
@@ -113,7 +113,7 @@ async def get_dashboard(
 async def create_role(
     role_create: AdminRoleCreate,
     admin: AdminUser = Depends(get_admin_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """Create new admin role"""
     if not admin.has_permission("roles:write"):
@@ -123,10 +123,10 @@ async def create_role(
         )
     
     try:
-        role = AdminRoleService.create_role(db, role_create, admin.user.id)
+        role = await AdminRoleService.create_role(db, role_create, admin.user.id)
         
         # Log action
-        AdminAuditService.log_action(
+        await AdminAuditService.log_action(
             db,
             admin_id=admin.user.id,
             action="create",
@@ -148,7 +148,7 @@ async def list_roles(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
     admin: AdminUser = Depends(get_admin_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """List all admin roles"""
     if not admin.has_permission("roles:read"):
@@ -157,7 +157,7 @@ async def list_roles(
             detail="Missing permission: roles:read"
         )
     
-    roles, _ = AdminRoleService.list_roles(db, skip, limit)
+    roles, _ = await AdminRoleService.list_roles(db, skip, limit)
     return [AdminRoleResponse.from_orm(role) for role in roles]
 
 
@@ -165,7 +165,7 @@ async def list_roles(
 async def get_role(
     role_id: str,
     admin: AdminUser = Depends(get_admin_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """Get role by ID"""
     if not admin.has_permission("roles:read"):
@@ -174,7 +174,7 @@ async def get_role(
             detail="Missing permission: roles:read"
         )
     
-    role = AdminRoleService.get_role(db, role_id)
+    role = await AdminRoleService.get_role(db, role_id)
     if not role:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -189,7 +189,7 @@ async def update_role(
     role_id: str,
     role_update: AdminRoleUpdate,
     admin: AdminUser = Depends(get_admin_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """Update admin role"""
     if not admin.has_permission("roles:write"):
@@ -198,7 +198,7 @@ async def update_role(
             detail="Missing permission: roles:write"
         )
     
-    role = AdminRoleService.get_role(db, role_id)
+    role = await AdminRoleService.get_role(db, role_id)
     if not role:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -216,10 +216,10 @@ async def update_role(
         "permissions": role.permissions
     }
     
-    updated_role = AdminRoleService.update_role(db, role_id, role_update)
+    updated_role = await AdminRoleService.update_role(db, role_id, role_update)
     
     # Log action
-    AdminAuditService.log_action(
+    await AdminAuditService.log_action(
         db,
         admin_id=admin.user.id,
         action="update",
@@ -239,7 +239,7 @@ async def update_role(
 async def delete_role(
     role_id: str,
     admin: AdminUser = Depends(get_admin_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """Delete admin role"""
     if not admin.has_permission("roles:delete"):
@@ -248,7 +248,7 @@ async def delete_role(
             detail="Missing permission: roles:delete"
         )
     
-    role = AdminRoleService.get_role(db, role_id)
+    role = await AdminRoleService.get_role(db, role_id)
     if not role:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -262,10 +262,10 @@ async def delete_role(
         )
     
     try:
-        AdminRoleService.delete_role(db, role_id)
+        await AdminRoleService.delete_role(db, role_id)
         
         # Log action
-        AdminAuditService.log_action(
+        await AdminAuditService.log_action(
             db,
             admin_id=admin.user.id,
             action="delete",
@@ -286,7 +286,7 @@ async def delete_role(
 async def create_setting(
     setting_create: AdminSettingCreate,
     admin: AdminUser = Depends(get_admin_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """Create new setting"""
     if not admin.has_permission("settings:write"):
@@ -296,9 +296,9 @@ async def create_setting(
         )
     
     try:
-        setting = AdminSettingService.create_setting(db, setting_create, admin.user.id)
+        setting = await AdminSettingService.create_setting(db, setting_create, admin.user.id)
         
-        AdminAuditService.log_action(
+        await AdminAuditService.log_action(
             db,
             admin_id=admin.user.id,
             action="create",
@@ -321,7 +321,7 @@ async def list_settings(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
     admin: AdminUser = Depends(get_admin_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """List settings"""
     if not admin.has_permission("settings:read"):
@@ -330,7 +330,7 @@ async def list_settings(
             detail="Missing permission: settings:read"
         )
     
-    settings, total = AdminSettingService.list_settings(db, category, skip, limit)
+    settings, total = await AdminSettingService.list_settings(db, category, skip, limit)
     
     return AdminSettingListResponse(
         items=[AdminSettingResponse.from_orm(s) for s in settings],
@@ -343,7 +343,7 @@ async def list_settings(
 async def get_setting(
     setting_id: str,
     admin: AdminUser = Depends(get_admin_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """Get setting by ID"""
     if not admin.has_permission("settings:read"):
@@ -352,7 +352,7 @@ async def get_setting(
             detail="Missing permission: settings:read"
         )
     
-    setting = AdminSettingService.get_setting_by_id(db, setting_id)
+    setting = await AdminSettingService.get_setting_by_id(db, setting_id)
     if not setting:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -367,7 +367,7 @@ async def update_setting(
     setting_id: str,
     setting_update: AdminSettingUpdate,
     admin: AdminUser = Depends(get_admin_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """Update setting"""
     if not admin.has_permission("settings:write"):
@@ -376,7 +376,7 @@ async def update_setting(
             detail="Missing permission: settings:write"
         )
     
-    setting = AdminSettingService.get_setting_by_id(db, setting_id)
+    setting = await AdminSettingService.get_setting_by_id(db, setting_id)
     if not setting:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -385,9 +385,9 @@ async def update_setting(
     
     old_value = setting.value
     
-    updated_setting = AdminSettingService.update_setting(db, setting_id, setting_update, admin.user.id)
+    updated_setting = await AdminSettingService.update_setting(db, setting_id, setting_update, admin.user.id)
     
-    AdminAuditService.log_action(
+    await AdminAuditService.log_action(
         db,
         admin_id=admin.user.id,
         action="update",
@@ -404,7 +404,7 @@ async def update_setting(
 async def delete_setting(
     setting_id: str,
     admin: AdminUser = Depends(get_admin_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """Delete setting"""
     if not admin.has_permission("settings:write"):
@@ -413,14 +413,14 @@ async def delete_setting(
             detail="Missing permission: settings:write"
         )
     
-    setting = AdminSettingService.get_setting_by_id(db, setting_id)
+    setting = await AdminSettingService.get_setting_by_id(db, setting_id)
     if not setting:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Setting not found"
         )
     
-    AdminAuditService.log_action(
+    await AdminAuditService.log_action(
         db,
         admin_id=admin.user.id,
         action="delete",
@@ -428,7 +428,7 @@ async def delete_setting(
         resource_id=f"{setting.category}:{setting.key}"
     )
     
-    AdminSettingService.delete_setting(db, setting_id)
+    await AdminSettingService.delete_setting(db, setting_id)
 
 
 # ==================== AUDIT LOG ENDPOINTS ====================
@@ -441,7 +441,7 @@ async def list_audit_logs(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
     admin: AdminUser = Depends(get_admin_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """List audit logs"""
     if not admin.has_permission("audit:read"):
@@ -456,7 +456,7 @@ async def list_audit_logs(
         resource_type=resource_type,
     )
     
-    logs, total = AdminAuditService.list_audit_logs(db, filter_params, skip, limit)
+    logs, total = await AdminAuditService.list_audit_logs(db, filter_params, skip, limit)
     
     return AdminAuditLogListResponse(
         items=[AdminAuditLogResponse.from_orm(log) for log in logs],
@@ -470,7 +470,7 @@ async def list_audit_logs(
 async def get_audit_log(
     log_id: str,
     admin: AdminUser = Depends(get_admin_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """Get audit log by ID"""
     if not admin.has_permission("audit:read"):
@@ -479,7 +479,7 @@ async def get_audit_log(
             detail="Missing permission: audit:read"
         )
     
-    log = AdminAuditService.get_audit_log(db, log_id)
+    log = await AdminAuditService.get_audit_log(db, log_id)
     if not log:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -538,7 +538,7 @@ async def list_users(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
     admin: AdminUser = Depends(get_admin_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """List users"""
     if not admin.has_permission("users:read"):
@@ -547,7 +547,7 @@ async def list_users(
             detail="Missing permission: users:read"
         )
     
-    users, total = AdminUserService.list_users(db, search, role_id, skip, limit)
+    users, total = await AdminUserService.list_users(db, search, role_id, skip, limit)
     
     return UserListResponse(
         items=[UserAdminResponse.from_orm(u) for u in users],
@@ -561,7 +561,7 @@ async def list_users(
 async def get_user(
     user_id: str,
     admin: AdminUser = Depends(get_admin_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """Get user by ID"""
     if not admin.has_permission("users:read"):
@@ -570,7 +570,7 @@ async def get_user(
             detail="Missing permission: users:read"
         )
     
-    user = AdminUserService.get_user(db, user_id)
+    user = await AdminUserService.get_user(db, user_id)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -584,7 +584,7 @@ async def get_user(
 async def disable_user(
     user_id: str,
     admin: AdminUser = Depends(get_admin_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """Disable user account"""
     if not admin.has_permission("users:write"):
@@ -593,14 +593,14 @@ async def disable_user(
             detail="Missing permission: users:write"
         )
     
-    user = AdminUserService.disable_user(db, user_id)
+    user = await AdminUserService.disable_user(db, user_id)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found"
         )
     
-    AdminAuditService.log_action(
+    await AdminAuditService.log_action(
         db,
         admin_id=admin.user.id,
         action="disable",
@@ -615,7 +615,7 @@ async def disable_user(
 async def enable_user(
     user_id: str,
     admin: AdminUser = Depends(get_admin_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """Enable user account"""
     if not admin.has_permission("users:write"):
@@ -624,14 +624,14 @@ async def enable_user(
             detail="Missing permission: users:write"
         )
     
-    user = AdminUserService.enable_user(db, user_id)
+    user = await AdminUserService.enable_user(db, user_id)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found"
         )
     
-    AdminAuditService.log_action(
+    await AdminAuditService.log_action(
         db,
         admin_id=admin.user.id,
         action="enable",

@@ -71,9 +71,9 @@ REDIS_URL=redis://user:pass@host:6379?ssl=true
 QDRANT_URL=https://host:6333
 QDRANT_API_KEY=<secure-key>
 
-# Ollama or External LLM
-OLLAMA_BASE_URL=http://localhost:11434
-OLLAMA_MODEL=qwen2.5:7b
+# vLLM or External LLM
+VLLM_BASE_URL=http://localhost:11434
+VLLM_MODEL=qwen2.5:7b
 # OR
 OPENAI_API_KEY=sk-...
 ANTHROPIC_API_KEY=sk-ant-...
