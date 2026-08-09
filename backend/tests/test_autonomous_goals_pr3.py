@@ -12,6 +12,7 @@ import pytest
 from datetime import datetime, timedelta
 from uuid import uuid4
 from unittest.mock import AsyncMock, MagicMock
+from types import SimpleNamespace
 
 from app.models import (
     AutonomousGoal,
@@ -327,6 +328,76 @@ class TestIntrinsicMotivationService:
         # In unit tests without database, we just verify the method signature exists
         assert hasattr(svc, 'get_goal_success_metrics')
         assert callable(getattr(svc, 'get_goal_success_metrics'))
+
+    @pytest.mark.asyncio
+    async def test_detect_knowledge_gaps_respects_min_confidence(self):
+        """Low-confidence gap rows below the threshold are filtered out."""
+        low_gap = SimpleNamespace(
+            id=str(uuid4()),
+            gap_type="low_confidence",
+            domain="ops",
+            description="weak signal",
+            confidence_in_gap=0.3,
+            related_memories=[],
+            suggested_learning_approach=None,
+            discovered_at=datetime.utcnow(),
+        )
+        high_gap = SimpleNamespace(
+            id=str(uuid4()),
+            gap_type="missing_fact",
+            domain="finance",
+            description="missing value",
+            confidence_in_gap=0.8,
+            related_memories=[],
+            suggested_learning_approach=None,
+            discovered_at=datetime.utcnow(),
+        )
+
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.all.return_value = [low_gap, high_gap]
+        mock_session = MagicMock()
+        mock_session.execute = AsyncMock(return_value=mock_result)
+
+        svc = IntrinsicMotivationService(session=mock_session)
+        gaps = await svc.detect_knowledge_gaps(org_id="org1", min_confidence=0.5)
+
+        assert len(gaps) == 1
+        assert gaps[0]["domain"] == "finance"
+
+    @pytest.mark.asyncio
+    async def test_get_goal_success_metrics_uses_goal_creation_time(self):
+        """Average outcome days is computed from goal.created_at to outcome.created_at."""
+        goal_id_1 = uuid4()
+        goal_id_2 = uuid4()
+        goal_1 = SimpleNamespace(id=goal_id_1, created_at=datetime.utcnow() - timedelta(days=5))
+        goal_2 = SimpleNamespace(id=goal_id_2, created_at=datetime.utcnow() - timedelta(days=2))
+        outcome_1 = SimpleNamespace(
+            goal_id=goal_id_1,
+            outcome_type="valuable",
+            was_user_expecting=True,
+            created_at=goal_1.created_at + timedelta(days=3),
+        )
+        outcome_2 = SimpleNamespace(
+            goal_id=goal_id_2,
+            outcome_type="not_valuable",
+            was_user_expecting=False,
+            created_at=goal_2.created_at + timedelta(days=1),
+        )
+
+        first_result = MagicMock()
+        first_result.scalars.return_value.all.return_value = [outcome_1, outcome_2]
+        second_result = MagicMock()
+        second_result.scalars.return_value.all.return_value = [goal_1, goal_2]
+        mock_session = MagicMock()
+        mock_session.execute = AsyncMock(side_effect=[first_result, second_result])
+
+        svc = IntrinsicMotivationService(session=mock_session)
+        metrics = await svc.get_goal_success_metrics(org_id="org1")
+
+        assert metrics["total_outcomes"] == 2
+        assert metrics["valuable_rate"] == pytest.approx(0.5)
+        assert metrics["user_expectation_alignment"] == pytest.approx(0.5)
+        assert metrics["average_outcome_days"] == pytest.approx(2.0)
 
 
 class TestGoalInitiators:

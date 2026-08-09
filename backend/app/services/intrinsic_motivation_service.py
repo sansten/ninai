@@ -82,6 +82,7 @@ class IntrinsicMotivationService:
                 "discovered_at": gap.discovered_at,
             }
             for gap in existing_gaps
+            if float(getattr(gap, "confidence_in_gap", 0.0) or 0.0) >= float(min_confidence)
         ]
         
         return gaps
@@ -309,8 +310,13 @@ class IntrinsicMotivationService:
         
         elif goal["initiator"] == "self_improvement":
             # Higher urgency for tools that fail often
-            target_rate = goal.get("metadata", {}).get("target_success_rate", 0.8)
-            current_rate = goal.get("metadata", {}).get("current_success_rate", 0.5)
+            meta = goal.get("metadata")
+            if not isinstance(meta, dict):
+                meta = goal.get("meta")
+            if not isinstance(meta, dict):
+                meta = {}
+            target_rate = meta.get("target_success_rate", 0.8)
+            current_rate = meta.get("current_success_rate", 0.5)
             importance = min(1.0, 1.0 - current_rate)  # Lower success = higher importance
             impact = target_rate - current_rate  # Potential improvement
             effort = 0.6  # Moderate learning curve
@@ -409,12 +415,37 @@ class IntrinsicMotivationService:
         
         valuable_count = sum(1 for o in outcomes if o.outcome_type == "valuable")
         user_expecting_count = sum(1 for o in outcomes if o.was_user_expecting)
+
+        goal_ids = [
+            str(o.goal_id) for o in outcomes
+            if getattr(o, "goal_id", None)
+        ]
+        goals_by_id = {}
+        if goal_ids:
+            goal_stmt = select(AutonomousGoal).where(
+                AutonomousGoal.organization_id == org_id,
+                AutonomousGoal.id.in_(goal_ids),
+            )
+            goal_result = await self.session.execute(goal_stmt)
+            goals_by_id = {
+                str(goal.id): goal
+                for goal in goal_result.scalars().all()
+            }
+
+        durations_days = []
+        for outcome in outcomes:
+            goal = goals_by_id.get(str(getattr(outcome, "goal_id", "") or ""))
+            outcome_created = getattr(outcome, "created_at", None)
+            goal_created = getattr(goal, "created_at", None) if goal is not None else None
+            if goal_created is None or outcome_created is None:
+                continue
+            durations_days.append(max((outcome_created - goal_created).days, 0))
         
         return {
             "total_outcomes": len(outcomes),
             "valuable_rate": valuable_count / len(outcomes) if outcomes else 0.0,
             "user_expectation_alignment": user_expecting_count / len(outcomes) if outcomes else 0.0,
-            "average_outcome_days": sum(
-                (o.created_at - o.created_at).days for o in outcomes
-            ) / len(outcomes) if outcomes else 0,
+            "average_outcome_days": (
+                sum(durations_days) / len(durations_days) if durations_days else 0
+            ),
         }
